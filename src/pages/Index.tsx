@@ -28,12 +28,16 @@ export default function Index() {
 
       <Card className="z-10 w-full max-w-md shadow-elevation border-0 bg-white/95 backdrop-blur-md">
         <CardHeader className="space-y-3 text-center pb-8 pt-8">
-          <div className="mx-auto bg-primary/10 w-16 h-16 rounded-full flex items-center justify-center mb-2">
-            <Hospital className="h-8 w-8 text-primary" />
+          <div className="mx-auto w-24 h-24 flex items-center justify-center mb-2">
+            <img
+              src="https://img.usecurling.com/i?q=sailboat&color=blue&shape=fill"
+              alt="Beneficência Portuguesa Logo"
+              className="w-full h-full object-contain"
+            />
           </div>
-          <CardTitle className="text-3xl font-bold text-slate-800">Hub IA BP</CardTitle>
-          <CardDescription className="text-base text-slate-600">
-            Portal Corporativo de Inteligência Artificial da Beneficência Portuguesa
+          <CardTitle className="text-3xl font-bold text-slate-800">HUB IA BP</CardTitle>
+          <CardDescription className="text-base font-medium text-slate-600">
+            São Caetano do Sul
           </CardDescription>
         </CardHeader>
         <CardContent className="pb-8">

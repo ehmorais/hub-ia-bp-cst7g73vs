@@ -169,7 +169,7 @@ export const AUDIT_LOGS = [
     timestamp: '2023-10-27 11:20:00',
     user: 'Dra. Ana Paula',
     role: 'Médico',
-    department: 'Oncologia',
+    department: 'Projetos Gerais',
     action: 'Revisão Protocolo',
     tokens: 2100,
   },

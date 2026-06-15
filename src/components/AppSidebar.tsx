@@ -21,17 +21,17 @@ export function AppSidebar() {
   return (
     <Sidebar variant="inset" className="border-r shadow-sm">
       <SidebarHeader className="p-4 flex flex-row items-center gap-3 border-b">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary p-1 shadow-sm">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center p-1">
           <img
-            src="https://img.usecurling.com/i?q=cross&color=white&shape=fill"
-            alt="BP Logo"
-            className="h-7 w-7 object-contain"
+            src="https://img.usecurling.com/i?q=sailboat&color=blue&shape=fill"
+            alt="Beneficência Portuguesa Logo"
+            className="h-full w-full object-contain"
           />
         </div>
         <div className="flex flex-col overflow-hidden">
-          <span className="font-bold text-lg leading-tight text-primary truncate">Hub IA BP</span>
+          <span className="font-bold text-lg leading-tight text-primary truncate">HUB IA BP</span>
           <span className="text-xs text-muted-foreground font-medium truncate">
-            Beneficência Portuguesa
+            São Caetano do Sul
           </span>
         </div>
       </SidebarHeader>

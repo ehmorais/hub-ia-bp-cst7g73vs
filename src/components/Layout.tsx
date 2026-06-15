@@ -12,8 +12,9 @@ export default function Layout() {
   const location = useLocation()
 
   useEffect(() => {
-    // Inicialização do cliente Skip Cloud para métricas e auditoria futura
-    skipCloud.collection('logs').then((col) => col.find())
+    // Inicialização do cliente Skip Cloud para métricas, auditoria futura e projetos
+    skipCloud.collection('logs').then((col: any) => col.find())
+    skipCloud.collection('projects').then((col: any) => col.find())
   }, [])
 
   // Do not render sidebar layout for the login page
@@ -31,7 +32,22 @@ export default function Layout() {
       <SidebarInset className="flex flex-col min-h-screen bg-slate-50/50">
         {/* Header */}
         <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6 shadow-sm">
-          <SidebarTrigger className="shrink-0 md:hidden" />
+          <div className="flex items-center gap-2 md:hidden">
+            <SidebarTrigger className="shrink-0" />
+            <div className="flex items-center gap-2">
+              <img
+                src="https://img.usecurling.com/i?q=sailboat&color=blue&shape=fill"
+                alt="Beneficência Portuguesa Logo"
+                className="h-8 w-8 object-contain"
+              />
+              <div className="flex flex-col">
+                <span className="font-bold text-sm leading-none text-primary">HUB IA BP</span>
+                <span className="text-[10px] text-muted-foreground font-medium">
+                  São Caetano do Sul
+                </span>
+              </div>
+            </div>
+          </div>
           <div className="flex-1">
             <div className="relative max-w-md hidden md:flex items-center">
               <Search className="absolute left-2.5 h-4 w-4 text-muted-foreground" />
@@ -90,7 +106,7 @@ export default function Layout() {
                 Reportar Problema
               </Button>
               <span>•</span>
-              <span>Hub IA BP v1.0.0</span>
+              <span>HUB IA BP v1.0.0</span>
             </div>
           </div>
         </footer>
