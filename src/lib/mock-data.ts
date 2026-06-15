@@ -17,6 +17,22 @@ export const DEPARTMENTS = [
     icon: FolderOpen,
     modelsActive: 5,
     color: 'bg-primary/10 text-primary',
+    subItems: [
+      {
+        id: 'escala-colaboradores',
+        name: 'Escala de Colaboradores',
+        path: '/department/escala-colaboradores',
+      },
+    ],
+  },
+  {
+    id: 'escala-colaboradores',
+    name: 'Escala de Colaboradores',
+    description: 'Gestão da escala de colaboradores do hub.',
+    icon: FolderOpen,
+    modelsActive: 0,
+    color: 'bg-primary/10 text-primary',
+    isHidden: true,
   },
   {
     id: 'radiologia',
