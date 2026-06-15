@@ -28,9 +28,7 @@ import { cn } from '@/lib/utils'
 export default function Department() {
   const { id } = useParams()
   const department = DEPARTMENTS.find((d) => d.id === id) || DEPARTMENTS[0]
-  const departmentTools = TOOLS.filter(
-    (t) => t.departmentId === department.id || t.departmentId === 'radiologia',
-  ) // Fallback para exibir mock
+  const departmentTools = TOOLS.filter((t) => t.departmentId === department.id)
   const Icon = department.icon
 
   return (
