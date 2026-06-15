@@ -120,7 +120,7 @@ export default function Department() {
 
               <CardFooter className="pt-4 border-t bg-slate-50/50">
                 <Button className="w-full gap-2 font-medium" asChild>
-                  <Link to={`/ai/${tool.id}`}>
+                  <Link to={(tool as any).path || `/ai/${tool.id}`}>
                     <Play className="h-4 w-4" fill="currentColor" />
                     Acessar Ferramenta
                   </Link>

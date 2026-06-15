@@ -17,13 +17,6 @@ export const DEPARTMENTS = [
     icon: FolderOpen,
     modelsActive: 5,
     color: 'bg-primary/10 text-primary',
-    subItems: [
-      {
-        id: 'escala-colaboradores',
-        name: 'Escala de Colaboradores',
-        path: '/department/escala-colaboradores',
-      },
-    ],
   },
   {
     id: 'escala-colaboradores',
@@ -76,6 +69,24 @@ export const TOOLS = [
       { day: 'Sex', calls: 130 },
       { day: 'Sab', calls: 40 },
       { day: 'Dom', calls: 35 },
+    ],
+  },
+  {
+    id: 'escala-colaboradores-tool',
+    departmentId: 'projetos-gerais',
+    name: 'Escala de Colaboradores',
+    status: 'Ativo',
+    model: 'Sistema',
+    description: 'Interface de gestão da escala de colaboradores do hub.',
+    path: '/department/escala-colaboradores',
+    usageData: [
+      { day: 'Seg', calls: 10 },
+      { day: 'Ter', calls: 12 },
+      { day: 'Qua', calls: 8 },
+      { day: 'Qui', calls: 15 },
+      { day: 'Sex', calls: 20 },
+      { day: 'Sab', calls: 5 },
+      { day: 'Dom', calls: 2 },
     ],
   },
   {
