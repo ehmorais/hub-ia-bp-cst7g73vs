@@ -20,15 +20,15 @@ export function AppSidebar() {
 
   return (
     <Sidebar variant="inset" className="border-r shadow-sm">
-      <SidebarHeader className="p-4 flex flex-row items-center gap-3 border-b">
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center p-1">
+      <SidebarHeader className="p-4 flex flex-col items-center gap-2 border-b bg-white">
+        <div className="flex w-full items-center justify-center p-2">
           <img
-            src="https://img.usecurling.com/i?q=sailboat&color=blue&shape=fill"
+            src="https://pub-2059a4c0a5bc4bfaad3c4c9b31d04130.r2.dev/projects/11751/1cd0cd6b-ccbd-4ed2-9642-e56ef382b6be.jpg"
             alt="Beneficência Portuguesa Logo"
-            className="h-full w-full object-contain"
+            className="h-14 w-auto object-contain mix-blend-multiply"
           />
         </div>
-        <div className="flex flex-col overflow-hidden">
+        <div className="flex flex-col overflow-hidden text-center w-full">
           <span className="font-bold text-lg leading-tight text-primary truncate">HUB IA BP</span>
           <span className="text-xs text-muted-foreground font-medium truncate">
             São Caetano do Sul

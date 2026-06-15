@@ -36,9 +36,9 @@ export default function Layout() {
             <SidebarTrigger className="shrink-0" />
             <div className="flex items-center gap-2">
               <img
-                src="https://img.usecurling.com/i?q=sailboat&color=blue&shape=fill"
+                src="https://pub-2059a4c0a5bc4bfaad3c4c9b31d04130.r2.dev/projects/11751/1cd0cd6b-ccbd-4ed2-9642-e56ef382b6be.jpg"
                 alt="Beneficência Portuguesa Logo"
-                className="h-8 w-8 object-contain"
+                className="h-8 w-auto object-contain mix-blend-multiply"
               />
               <div className="flex flex-col">
                 <span className="font-bold text-sm leading-none text-primary">HUB IA BP</span>

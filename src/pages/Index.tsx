@@ -28,11 +28,11 @@ export default function Index() {
 
       <Card className="z-10 w-full max-w-md shadow-elevation border-0 bg-white/95 backdrop-blur-md">
         <CardHeader className="space-y-3 text-center pb-8 pt-8">
-          <div className="mx-auto w-24 h-24 flex items-center justify-center mb-2">
+          <div className="mx-auto w-48 h-auto flex items-center justify-center mb-6">
             <img
-              src="https://img.usecurling.com/i?q=sailboat&color=blue&shape=fill"
+              src="https://pub-2059a4c0a5bc4bfaad3c4c9b31d04130.r2.dev/projects/11751/1cd0cd6b-ccbd-4ed2-9642-e56ef382b6be.jpg"
               alt="Beneficência Portuguesa Logo"
-              className="w-full h-full object-contain"
+              className="w-full h-full object-contain mix-blend-multiply"
             />
           </div>
           <CardTitle className="text-3xl font-bold text-slate-800">HUB IA BP</CardTitle>
