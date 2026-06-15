@@ -6,16 +6,25 @@ import {
   Microscope,
   FileText,
   ScanHeart,
+  FolderOpen,
 } from 'lucide-react'
 
 export const DEPARTMENTS = [
+  {
+    id: 'projetos-gerais',
+    name: 'Projetos Gerais',
+    description: 'Projetos transversais e inovação institucional.',
+    icon: FolderOpen,
+    modelsActive: 5,
+    color: 'bg-primary/10 text-primary',
+  },
   {
     id: 'radiologia',
     name: 'Radiologia e Diagnóstico',
     description: 'Modelos de IA para análise de imagens e laudos.',
     icon: ScanHeart,
     modelsActive: 4,
-    color: 'bg-blue-100 text-blue-700',
+    color: 'bg-primary/10 text-primary',
   },
   {
     id: 'enfermagem',
@@ -23,7 +32,7 @@ export const DEPARTMENTS = [
     description: 'Assistência à beira de leito e triagem de pacientes.',
     icon: Activity,
     modelsActive: 2,
-    color: 'bg-green-100 text-green-700',
+    color: 'bg-primary/10 text-primary',
   },
   {
     id: 'farmacia',
@@ -31,35 +40,28 @@ export const DEPARTMENTS = [
     description: 'Interações medicamentosas e farmacovigilância.',
     icon: Pill,
     modelsActive: 3,
-    color: 'bg-purple-100 text-purple-700',
-  },
-  {
-    id: 'oncologia',
-    name: 'Oncologia',
-    description: 'Análise de protocolos e estudos de caso.',
-    icon: HeartPulse,
-    modelsActive: 1,
-    color: 'bg-rose-100 text-rose-700',
-  },
-  {
-    id: 'patologia',
-    name: 'Patologia',
-    description: 'Análise de lâminas e emissão de pareceres.',
-    icon: Microscope,
-    modelsActive: 2,
-    color: 'bg-amber-100 text-amber-700',
-  },
-  {
-    id: 'auditoria',
-    name: 'Auditoria Médica',
-    description: 'Revisão de prontuários e faturamento.',
-    icon: FileText,
-    modelsActive: 5,
-    color: 'bg-slate-100 text-slate-700',
+    color: 'bg-primary/10 text-primary',
   },
 ]
 
 export const TOOLS = [
+  {
+    id: 'analise-dados-gerais',
+    departmentId: 'projetos-gerais',
+    name: 'Análise de Dados Institucionais',
+    status: 'Ativo',
+    model: 'GPT-4o',
+    description: 'Assistente para análise de métricas gerais e geração de relatórios transversais.',
+    usageData: [
+      { day: 'Seg', calls: 80 },
+      { day: 'Ter', calls: 95 },
+      { day: 'Qua', calls: 110 },
+      { day: 'Qui', calls: 105 },
+      { day: 'Sex', calls: 130 },
+      { day: 'Sab', calls: 40 },
+      { day: 'Dom', calls: 35 },
+    ],
+  },
   {
     id: 'assistente-laudos',
     departmentId: 'radiologia',

@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import { SidebarProvider, SidebarInset, SidebarTrigger } from '@/components/ui/sidebar'
 import { AppSidebar } from './AppSidebar'
@@ -5,9 +6,15 @@ import { Bell, Search, User, AlertCircle } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import { skipCloud } from '@/lib/skip-cloud'
 
 export default function Layout() {
   const location = useLocation()
+
+  useEffect(() => {
+    // Inicialização do cliente Skip Cloud para métricas e auditoria futura
+    skipCloud.collection('logs').then((col) => col.find())
+  }, [])
 
   // Do not render sidebar layout for the login page
   if (location.pathname === '/') {
@@ -37,7 +44,7 @@ export default function Layout() {
           </div>
           <div className="flex items-center gap-4">
             <div className="hidden lg:flex items-center gap-2 mr-4 text-sm">
-              <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse"></div>
+              <div className="h-2 w-2 rounded-full bg-primary animate-pulse"></div>
               <span className="text-muted-foreground font-medium">Sistemas Operacionais</span>
             </div>
             <Button variant="ghost" size="icon" className="relative">
