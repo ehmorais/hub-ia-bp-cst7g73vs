@@ -15,14 +15,13 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import pb from '@/lib/pocketbase/client'
-import { streamAgentChat, type DisplayMessage } from '@/lib/skipAi'
+import { parseChatStream, type DisplayMessage } from '@/lib/skipAi'
 import { Skeleton } from '@/components/ui/skeleton'
 
 export default function AiChat() {
   const { id } = useParams()
   const [tool, setTool] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [conversationId, setConversationId] = useState<string | null>(null)
 
   const [messages, setMessages] = useState<DisplayMessage[]>([])
   const [input, setInput] = useState('')
@@ -76,15 +75,14 @@ export default function AiChat() {
 
     const controller = new AbortController()
     try {
-      const res = await fetch(
-        `${import.meta.env.VITE_POCKETBASE_URL}/backend/v1/agent-chat/stream`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: pb.authStore.token },
-          body: JSON.stringify({ message: userText, conversation_id: conversationId, tool_id: id }),
-          signal: controller.signal,
-        },
-      )
+      const history = messages.map((m) => ({ role: m.role, content: m.content }))
+
+      const res = await fetch(`${import.meta.env.VITE_POCKETBASE_URL}/backend/v1/ai-chat/stream`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: pb.authStore.token },
+        body: JSON.stringify({ message: userText, tool_id: id, history }),
+        signal: controller.signal,
+      })
 
       let assistantId = Date.now().toString() + '-ai'
       setMessages((prev) => [
@@ -92,16 +90,18 @@ export default function AiChat() {
         { id: assistantId, role: 'assistant', content: '', created: new Date().toISOString() },
       ])
 
-      const result = await streamAgentChat(res, {
-        onChunk: (_delta, full) => {
+      if (res.ok) {
+        let fullContent = ''
+        for await (const chunk of parseChatStream(res, controller.signal)) {
+          const text = chunk.choices[0]?.delta?.content || ''
+          fullContent += text
           setMessages((prev) =>
-            prev.map((m) => (m.id === assistantId ? { ...m, content: full } : m)),
+            prev.map((m) => (m.id === assistantId ? { ...m, content: fullContent } : m)),
           )
-        },
-        signal: controller.signal,
-      })
-
-      setConversationId(res.headers.get('X-Conversation-Id') ?? result.conversation_id)
+        }
+      } else {
+        throw new Error('Falha ao obter resposta')
+      }
     } catch (err: any) {
       console.error(err)
     } finally {
@@ -140,8 +140,18 @@ export default function AiChat() {
           size="sm"
           className="text-xs h-8 text-slate-600"
           onClick={() => {
-            setMessages([])
-            setConversationId(null)
+            if (tool) {
+              setMessages([
+                {
+                  id: '1',
+                  role: 'assistant',
+                  content: `Olá! Sou o **${tool.name}**. Como posso ajudar com suas análises hoje? Forneça os dados ou o contexto para iniciarmos.`,
+                  created: new Date().toISOString(),
+                },
+              ])
+            } else {
+              setMessages([])
+            }
           }}
         >
           Novo Chamado
@@ -262,7 +272,7 @@ export default function AiChat() {
             <Card className="flex-1 border-slate-200 shadow-sm focus-within:ring-1 focus-within:ring-primary focus-within:border-primary transition-all overflow-hidden p-1">
               <textarea
                 className="w-full min-h-[60px] max-h-[200px] resize-none bg-transparent border-0 p-3 text-sm focus:outline-none focus:ring-0 text-slate-900 placeholder:text-slate-400"
-                placeholder="Descreva a solicitação da escala ou faça sua pergunta."
+                placeholder="Descreva sua solicitação ou faça uma pergunta..."
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => {
@@ -287,8 +297,7 @@ export default function AiChat() {
             </Button>
           </form>
           <p className="text-center text-[11px] text-slate-400 mt-3 font-medium">
-            Agentes baseados em IA podem cometer erros. Verifique as matrizes de dimensionamento
-            geradas.
+            A IA pode cometer erros. Considere verificar informações importantes.
           </p>
         </div>
       </div>

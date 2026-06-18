@@ -18,15 +18,7 @@ export const DEPARTMENTS = [
     modelsActive: 5,
     color: 'bg-primary/10 text-primary',
   },
-  {
-    id: 'escala-colaboradores',
-    name: 'Escala de Colaboradores',
-    description: 'Gestão da escala de colaboradores do hub.',
-    icon: FolderOpen,
-    modelsActive: 0,
-    color: 'bg-primary/10 text-primary',
-    isHidden: true,
-  },
+
   {
     id: 'radiologia',
     name: 'Radiologia e Diagnóstico',
@@ -71,24 +63,7 @@ export const TOOLS = [
       { day: 'Dom', calls: 35 },
     ],
   },
-  {
-    id: 'escala-colaboradores-tool',
-    departmentId: 'projetos-gerais',
-    name: 'Escala de Colaboradores',
-    status: 'Ativo',
-    model: 'Sistema',
-    description: 'Interface de gestão da escala de colaboradores do hub.',
-    path: '/department/escala-colaboradores',
-    usageData: [
-      { day: 'Seg', calls: 10 },
-      { day: 'Ter', calls: 12 },
-      { day: 'Qua', calls: 8 },
-      { day: 'Qui', calls: 15 },
-      { day: 'Sex', calls: 20 },
-      { day: 'Sab', calls: 5 },
-      { day: 'Dom', calls: 2 },
-    ],
-  },
+
   {
     id: 'assistente-laudos',
     departmentId: 'radiologia',
