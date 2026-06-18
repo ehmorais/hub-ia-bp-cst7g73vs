@@ -14,11 +14,12 @@ export const createDepartment = (data: {
   name: string
   description?: string
   sort_order?: number
+  icon?: string
 }) => pb.collection('departments').create(data)
 
 export const updateDepartment = (
   id: string,
-  data: Partial<{ name: string; description: string; sort_order: number }>,
+  data: Partial<{ name: string; description: string; sort_order: number; icon: string }>,
 ) => pb.collection('departments').update(id, data)
 
 export const deleteDepartment = (id: string) => pb.collection('departments').delete(id)

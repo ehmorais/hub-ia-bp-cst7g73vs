@@ -16,37 +16,56 @@ import {
   SidebarMenuSubButton,
 } from '@/components/ui/sidebar'
 import { LayoutDashboard, Settings, LogOut, ChevronRight, ShieldAlert } from 'lucide-react'
+import * as LucideIcons from 'lucide-react'
 import { useState, useEffect } from 'react'
 import pb from '@/lib/pocketbase/client'
 import { useRealtime } from '@/hooks/use-realtime'
 import { useAuth } from '@/hooks/use-auth'
-import { Folder } from 'lucide-react'
 
 export function AppSidebar() {
   const location = useLocation()
   const { signOut, isAuthenticated } = useAuth()
   const [departments, setDepartments] = useState<any[]>([])
+  const [projects, setProjects] = useState<any[]>([])
 
-  const loadDepartments = async () => {
+  const loadData = async () => {
     try {
-      const records = await pb.collection('departments').getFullList({ sort: 'sort_order,name' })
-      setDepartments(records)
+      const [depRecords, projRecords] = await Promise.all([
+        pb.collection('departments').getFullList({ sort: 'sort_order,name' }),
+        pb
+          .collection('projects')
+          .getFullList({ sort: 'sort_order,name', filter: 'status = "active"' }),
+      ])
+      setDepartments(depRecords)
+      setProjects(projRecords)
     } catch (e) {
       console.error(e)
     }
   }
 
   useEffect(() => {
-    if (isAuthenticated) loadDepartments()
+    if (isAuthenticated) loadData()
   }, [isAuthenticated])
 
   useRealtime(
     'departments',
     () => {
-      loadDepartments()
+      loadData()
     },
     isAuthenticated,
   )
+  useRealtime(
+    'projects',
+    () => {
+      loadData()
+    },
+    isAuthenticated,
+  )
+
+  const getIcon = (iconName: string) => {
+    const Icon = (LucideIcons as any)[iconName] || LucideIcons.Folder
+    return <Icon className="h-4 w-4" />
+  }
 
   return (
     <Sidebar variant="inset" className="border-r shadow-sm">
@@ -98,15 +117,32 @@ export function AppSidebar() {
             <SidebarMenu>
               {departments.map((dept: any) => {
                 const isDeptActive = location.pathname === `/department/${dept.id}`
+                const deptProjects = projects.filter((p) => p.department === dept.id)
 
                 return (
                   <SidebarMenuItem key={dept.id}>
                     <SidebarMenuButton asChild isActive={isDeptActive} tooltip={dept.name}>
                       <Link to={`/department/${dept.id}`}>
-                        <Folder className="h-4 w-4" />
+                        {getIcon(dept.icon)}
                         <span>{dept.name}</span>
                       </Link>
                     </SidebarMenuButton>
+                    {deptProjects.length > 0 && (
+                      <SidebarMenuSub>
+                        {deptProjects.map((proj: any) => {
+                          const isProjActive = location.pathname === `/project/${proj.id}`
+                          return (
+                            <SidebarMenuSubItem key={proj.id}>
+                              <SidebarMenuSubButton asChild isActive={isProjActive}>
+                                <Link to={`/project/${proj.id}`}>
+                                  <span>{proj.name}</span>
+                                </Link>
+                              </SidebarMenuSubButton>
+                            </SidebarMenuSubItem>
+                          )
+                        })}
+                      </SidebarMenuSub>
+                    )}
                   </SidebarMenuItem>
                 )
               })}

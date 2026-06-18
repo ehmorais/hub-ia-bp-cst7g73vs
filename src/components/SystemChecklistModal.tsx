@@ -5,7 +5,9 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
 } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
 import { CheckCircle2, PlayCircle } from 'lucide-react'
 import pb from '@/lib/pocketbase/client'
 
@@ -40,7 +42,7 @@ export function SystemChecklistModal() {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="text-xl">All System Go - Checklist</DialogTitle>
+          <DialogTitle className="text-xl">System Checklist</DialogTitle>
           <DialogDescription>
             Verificando integridade dos módulos de Inteligência Artificial...
           </DialogDescription>
@@ -76,6 +78,15 @@ export function SystemChecklistModal() {
             </div>
           )}
         </div>
+        <DialogFooter className="mt-4">
+          <Button
+            onClick={() => setOpen(false)}
+            disabled={visibleCount < tools.length}
+            className="w-full sm:w-auto"
+          >
+            Proceed
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )

@@ -66,6 +66,7 @@ export default function Admin() {
   const [depName, setDepName] = useState('')
   const [depDesc, setDepDesc] = useState('')
   const [depSortOrder, setDepSortOrder] = useState(0)
+  const [depIcon, setDepIcon] = useState('')
   const [isSubmittingDep, setIsSubmittingDep] = useState(false)
   const [editingDep, setEditingDep] = useState<any>(null)
 
@@ -146,10 +147,16 @@ export default function Admin() {
           name: depName,
           description: depDesc,
           sort_order: depSortOrder,
+          icon: depIcon,
         })
         toast({ title: 'Sucesso', description: 'Departamento atualizado com sucesso.' })
       } else {
-        await createDepartment({ name: depName, description: depDesc, sort_order: depSortOrder })
+        await createDepartment({
+          name: depName,
+          description: depDesc,
+          sort_order: depSortOrder,
+          icon: depIcon,
+        })
         toast({ title: 'Sucesso', description: 'Departamento criado com sucesso.' })
       }
       handleCancelEditDep()
@@ -165,6 +172,7 @@ export default function Admin() {
     setDepName(dep.name)
     setDepDesc(dep.description || '')
     setDepSortOrder(dep.sort_order || 0)
+    setDepIcon(dep.icon || '')
   }
 
   const handleCancelEditDep = () => {
@@ -172,6 +180,7 @@ export default function Admin() {
     setDepName('')
     setDepDesc('')
     setDepSortOrder(0)
+    setDepIcon('')
   }
 
   const handleSaveProj = async () => {
@@ -342,13 +351,23 @@ export default function Admin() {
                     placeholder="Opcional"
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label>Ordem de Exibição</Label>
-                  <Input
-                    type="number"
-                    value={depSortOrder}
-                    onChange={(e) => setDepSortOrder(Number(e.target.value))}
-                  />
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Ordem</Label>
+                    <Input
+                      type="number"
+                      value={depSortOrder}
+                      onChange={(e) => setDepSortOrder(Number(e.target.value))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Ícone (Lucide)</Label>
+                    <Input
+                      value={depIcon}
+                      onChange={(e) => setDepIcon(e.target.value)}
+                      placeholder="Ex: Users"
+                    />
+                  </div>
                 </div>
                 <div className="flex flex-col gap-2">
                   <Button
@@ -377,6 +396,7 @@ export default function Admin() {
                   <TableRow>
                     <TableHead>Nome</TableHead>
                     <TableHead>Descrição</TableHead>
+                    <TableHead>Ícone</TableHead>
                     <TableHead>Ordem</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
@@ -386,6 +406,9 @@ export default function Admin() {
                     <TableRow key={dep.id}>
                       <TableCell className="font-semibold text-slate-800">{dep.name}</TableCell>
                       <TableCell className="text-slate-500">{dep.description || '-'}</TableCell>
+                      <TableCell className="text-slate-500 font-mono text-xs">
+                        {dep.icon || '-'}
+                      </TableCell>
                       <TableCell className="text-slate-500">{dep.sort_order || 0}</TableCell>
                       <TableCell className="text-right space-x-2">
                         <Button variant="ghost" size="sm" onClick={() => handleEditDep(dep)}>
