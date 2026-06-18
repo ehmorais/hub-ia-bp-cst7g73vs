@@ -4,10 +4,11 @@ import { Button } from '@/components/ui/button'
 import { useEffect, useState } from 'react'
 import pb from '@/lib/pocketbase/client'
 import { useRealtime } from '@/hooks/use-realtime'
-import { Activity, Clock, Zap, ArrowRight, Folder } from 'lucide-react'
+import { Activity, Clock, Zap, ArrowRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/hooks/use-auth'
+import { getIcon } from '@/lib/icons'
 
 export default function Dashboard() {
   const { user, isAuthenticated } = useAuth()
@@ -15,13 +16,18 @@ export default function Dashboard() {
 
   const [tools, setTools] = useState<any[]>([])
   const [departments, setDepartments] = useState<any[]>([])
+  const [projects, setProjects] = useState<any[]>([])
 
   const loadData = async () => {
     try {
       const t = await pb.collection('ia_tools').getFullList({ sort: 'name' })
       setTools(t)
-      const d = await pb.collection('departments').getFullList({ sort: 'name' })
+      const d = await pb.collection('departments').getFullList({ sort: 'sort_order,name' })
       setDepartments(d)
+      const p = await pb
+        .collection('projects')
+        .getFullList({ sort: 'sort_order,name', expand: 'associated_departments' })
+      setProjects(p)
     } catch (err) {
       console.error(err)
     }
@@ -31,32 +37,21 @@ export default function Dashboard() {
     if (isAuthenticated) loadData()
   }, [isAuthenticated])
 
-  useRealtime(
-    'ia_tools',
-    () => {
-      loadData()
-    },
-    isAuthenticated,
-  )
-  useRealtime(
-    'departments',
-    () => {
-      loadData()
-    },
-    isAuthenticated,
-  )
+  useRealtime('ia_tools', () => loadData(), isAuthenticated)
+  useRealtime('departments', () => loadData(), isAuthenticated)
+  useRealtime('projects', () => loadData(), isAuthenticated)
 
   const topTools = tools.slice(0, 3)
 
   return (
-    <div className="container mx-auto p-4 md:p-8 space-y-8 max-w-7xl">
+    <div className="container mx-auto p-4 md:p-8 space-y-8 max-w-7xl animate-fade-in-up">
       {/* Welcome Section */}
       <div className="flex flex-col gap-2">
         <h1 className="text-3xl font-bold tracking-tight text-slate-900">
-          Olá, {name}. Bem-vindo(a) ao Hub de IA da BP.
+          Olá, {name}. Bem-vindo(a) ao All Systems Go.
         </h1>
         <p className="text-muted-foreground text-lg">
-          Aqui você encontra as ferramentas de inteligência artificial homologadas para o seu setor.
+          Visão consolidada da operação e saúde dos projetos.
         </p>
       </div>
 
@@ -65,65 +60,116 @@ export default function Dashboard() {
         <Card className="border-none shadow-sm bg-white">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Modelos Ativos na Instituição
+              Modelos Ativos
             </CardTitle>
             <Activity className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">17</div>
-            <p className="text-xs text-muted-foreground mt-1">+2 em homologação este mês</p>
+            <div className="text-2xl font-bold">
+              {tools.filter((t) => t.status === 'active').length}
+            </div>
           </CardContent>
         </Card>
         <Card className="border-none shadow-sm bg-white">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Interações Hoje (Global)
+              Projetos em Andamento
             </CardTitle>
             <Zap className="h-4 w-4 text-amber-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">1,482</div>
-            <p className="text-xs text-muted-foreground mt-1">Economia estimada: 45 horas</p>
+            <div className="text-2xl font-bold">
+              {projects.filter((p) => p.status === 'active').length}
+            </div>
           </CardContent>
         </Card>
         <Card className="border-none shadow-sm bg-white">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Tempo Médio de Resposta
+              Departamentos
             </CardTitle>
             <Clock className="h-4 w-4 text-blue-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">1.2s</div>
-            <p className="text-xs text-muted-foreground mt-1">Sistemas operando normalmente</p>
+            <div className="text-2xl font-bold">{departments.length}</div>
           </CardContent>
         </Card>
       </div>
 
       <div className="grid gap-8 md:grid-cols-[1fr_300px]">
-        {/* Main Area: Departments Grid */}
-        <div className="space-y-4">
-          <h2 className="text-xl font-semibold tracking-tight">Seus Departamentos</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {/* Main Area: Departments Macro View */}
+        <div className="space-y-6">
+          <h2 className="text-xl font-semibold tracking-tight">Visão Macro por Departamento</h2>
+          <div className="grid grid-cols-1 gap-6">
             {departments.map((dept) => {
+              const deptProjects = projects.filter(
+                (p) => p.associated_departments?.includes(dept.id) || p.department === dept.id,
+              )
+              const Icon = getIcon(dept.icon)
+
               return (
-                <Link to={`/department/${dept.id}`} key={dept.id} className="group">
-                  <Card className="h-full border-slate-200 transition-all duration-200 hover:shadow-md hover:border-primary/50 bg-white">
-                    <CardHeader className="pb-3">
-                      <div className="flex justify-between items-start mb-2">
-                        <div className="p-2.5 rounded-lg bg-blue-100 text-blue-700">
-                          <Folder className="h-5 w-5" />
-                        </div>
+                <Card
+                  key={dept.id}
+                  className="overflow-hidden border-slate-200 bg-white shadow-sm"
+                  style={{ borderTop: `4px solid ${dept.color || 'hsl(var(--primary))'}` }}
+                >
+                  <CardHeader className="pb-3 bg-slate-50/50">
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="p-2 rounded-lg bg-white shadow-sm"
+                        style={{ color: dept.color || 'inherit' }}
+                      >
+                        <Icon className="h-6 w-6" />
                       </div>
-                      <CardTitle className="text-lg group-hover:text-primary transition-colors">
-                        {dept.name}
-                      </CardTitle>
-                      <CardDescription className="line-clamp-2 mt-1 h-10">
-                        {dept.description}
-                      </CardDescription>
-                    </CardHeader>
-                  </Card>
-                </Link>
+                      <div>
+                        <CardTitle className="text-xl" style={{ color: dept.color || 'inherit' }}>
+                          {dept.name}
+                        </CardTitle>
+                        {dept.description && <CardDescription>{dept.description}</CardDescription>}
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="p-4">
+                    {deptProjects.length > 0 ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {deptProjects.map((proj) => (
+                          <div
+                            key={proj.id}
+                            className="p-3 border rounded-md bg-white flex flex-col justify-between hover:border-primary/50 transition-colors"
+                          >
+                            <div>
+                              <div className="flex justify-between items-start mb-1">
+                                <span className="font-semibold text-slate-800 text-sm truncate pr-2">
+                                  {proj.name}
+                                </span>
+                                <Badge
+                                  variant="outline"
+                                  className={cn(
+                                    'text-[10px] uppercase',
+                                    proj.status === 'active'
+                                      ? 'text-green-600 border-green-200 bg-green-50'
+                                      : 'text-amber-600 border-amber-200 bg-amber-50',
+                                  )}
+                                >
+                                  {proj.status === 'active' ? 'Ativo' : 'Inativo'}
+                                </Badge>
+                              </div>
+                              {proj.description && (
+                                <p className="text-xs text-muted-foreground line-clamp-2">
+                                  {proj.description}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground italic px-2">
+                        Nenhum projeto associado.
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
               )
             })}
             {departments.length === 0 && (
@@ -136,7 +182,7 @@ export default function Dashboard() {
 
         {/* Sidebar Area: Quick Access */}
         <div className="space-y-4">
-          <h2 className="text-xl font-semibold tracking-tight">Acesso Rápido</h2>
+          <h2 className="text-xl font-semibold tracking-tight">Ferramentas IA</h2>
           <div className="flex flex-col gap-3">
             {topTools.map((tool) => (
               <Card key={tool.id} className="bg-white border-slate-200">

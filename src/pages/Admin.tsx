@@ -96,7 +96,7 @@ export default function Admin() {
 
   const [projName, setProjName] = useState('')
   const [projDesc, setProjDesc] = useState('')
-  const [projDep, setProjDep] = useState('')
+  const [projDeps, setProjDeps] = useState<string[]>([])
   const [projSort, setProjSort] = useState(0)
   const [projStatus, setProjStatus] = useState('active')
   const [projMembers, setProjMembers] = useState<string[]>([])
@@ -166,9 +166,12 @@ export default function Admin() {
   const handleExportCSV = () => {
     const header = ['Projeto', 'Status', 'Departamento', 'Membros'].join(',')
     const rows = projects.map((p) => {
-      const depName = p.expand?.department?.name || '-'
+      const depNames =
+        p.expand?.associated_departments?.map((d: any) => d.name).join(' | ') ||
+        p.expand?.department?.name ||
+        '-'
       const members = (p.expand?.members || []).map((m: any) => m.name || m.email).join(' | ')
-      return `"${p.name}","${p.status}","${depName}","${members}"`
+      return `"${p.name}","${p.status}","${depNames}","${members}"`
     })
     const csv = [header, ...rows].join('\n')
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
@@ -239,20 +242,20 @@ export default function Admin() {
   const handleSaveProj = async () => {
     setIsSubmittingProj(true)
     try {
-      const depNameStr = departments.find((d) => d.id === projDep)?.name || 'Desconhecido'
       if (editingProj) {
         await updateProject(
           editingProj.id,
           {
             name: projName,
             description: projDesc,
-            department: projDep,
+            department: projDeps[0] || null,
+            associated_departments: projDeps,
             sort_order: projSort,
             status: projStatus,
             members: projMembers,
           },
           user?.id,
-          depNameStr,
+          'Múltiplos',
         )
         toast({ title: 'Sucesso', description: 'Projeto atualizado com sucesso.' })
       } else {
@@ -260,13 +263,14 @@ export default function Admin() {
           {
             name: projName,
             description: projDesc,
-            department: projDep,
+            department: projDeps[0] || null,
+            associated_departments: projDeps,
             sort_order: projSort,
             status: projStatus,
             members: projMembers,
           },
           user?.id,
-          depNameStr,
+          'Múltiplos',
         )
         toast({ title: 'Sucesso', description: 'Projeto criado com sucesso.' })
       }
@@ -282,7 +286,7 @@ export default function Admin() {
     setEditingProj(proj)
     setProjName(proj.name)
     setProjDesc(proj.description || '')
-    setProjDep(proj.department)
+    setProjDeps(proj.associated_departments || (proj.department ? [proj.department] : []))
     setProjSort(proj.sort_order || 0)
     setProjStatus(proj.status || 'active')
     setProjMembers(proj.members || [])
@@ -292,7 +296,7 @@ export default function Admin() {
     setEditingProj(null)
     setProjName('')
     setProjDesc('')
-    setProjDep('')
+    setProjDeps([])
     setProjSort(0)
     setProjStatus('active')
     setProjMembers([])
@@ -412,7 +416,9 @@ export default function Admin() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {departments.map((dep) => {
-              const depProjs = projects.filter((p) => p.department === dep.id)
+              const depProjs = projects.filter(
+                (p) => p.associated_departments?.includes(dep.id) || p.department === dep.id,
+              )
               const total = depProjs.length
               const active = depProjs.filter((p) => p.status === 'active').length
               const activePercent = total > 0 ? Math.round((active / total) * 100) : 0
@@ -430,7 +436,7 @@ export default function Admin() {
                         style={{ color: dep.color || 'inherit' }}
                       >
                         {(() => {
-                          const Icon = (Icons as any)[dep.icon] || Icons.Folder
+                          const Icon = getIcon(dep.icon)
                           return <Icon className="h-5 w-5" />
                         })()}
                       </div>
@@ -508,7 +514,7 @@ export default function Admin() {
                     <Label>Ícone</Label>
                     <div className="flex flex-wrap gap-2 p-2 border rounded-md bg-slate-50">
                       {ICONS_LIST.map((icon) => {
-                        const Icon = (Icons as any)[icon] || Icons.Folder
+                        const Icon = getIcon(icon)
                         return (
                           <Button
                             key={icon}
@@ -587,7 +593,7 @@ export default function Admin() {
                             style={{ color: dep.color || 'inherit' }}
                           >
                             {(() => {
-                              const Icon = (Icons as any)[dep.icon] || Icons.Folder
+                              const Icon = getIcon(dep.icon)
                               return <Icon className="h-4 w-4" />
                             })()}
                           </div>
@@ -861,19 +867,30 @@ export default function Admin() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Departamento</Label>
-                  <Select value={projDep} onValueChange={setProjDep}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {departments.map((d) => (
-                        <SelectItem key={d.id} value={d.id}>
+                  <Label>Departamentos Associados</Label>
+                  <div className="border rounded-md p-3 max-h-40 overflow-y-auto space-y-3 bg-slate-50">
+                    {departments.length === 0 && (
+                      <span className="text-xs text-muted-foreground">Nenhum departamento.</span>
+                    )}
+                    {departments.map((d) => (
+                      <div key={d.id} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`dept-${d.id}`}
+                          checked={projDeps.includes(d.id)}
+                          onCheckedChange={(c) => {
+                            if (c) setProjDeps([...projDeps, d.id])
+                            else setProjDeps(projDeps.filter((id) => id !== d.id))
+                          }}
+                        />
+                        <Label
+                          htmlFor={`dept-${d.id}`}
+                          className="text-sm font-normal cursor-pointer"
+                        >
                           {d.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                        </Label>
+                      </div>
+                    ))}
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -931,7 +948,7 @@ export default function Admin() {
                 <div className="flex flex-col gap-2 pt-2">
                   <Button
                     onClick={handleSaveProj}
-                    disabled={isSubmittingProj || !projName || !projDep}
+                    disabled={isSubmittingProj || !projName || projDeps.length === 0}
                     className="w-full"
                   >
                     {isSubmittingProj
@@ -972,7 +989,9 @@ export default function Admin() {
                         )}
                       </TableCell>
                       <TableCell className="text-slate-500">
-                        {proj.expand?.department?.name || '-'}
+                        {proj.expand?.associated_departments?.map((d: any) => d.name).join(', ') ||
+                          proj.expand?.department?.name ||
+                          '-'}
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-wrap gap-1">

@@ -35,7 +35,7 @@ export default function Index() {
               className="w-full h-full object-contain mix-blend-multiply"
             />
           </div>
-          <CardTitle className="text-3xl font-bold text-slate-800">HUB IA BP</CardTitle>
+          <CardTitle className="text-3xl font-bold text-slate-800">All Systems Go</CardTitle>
           <CardDescription className="text-base font-medium text-slate-600">
             São Caetano do Sul
           </CardDescription>

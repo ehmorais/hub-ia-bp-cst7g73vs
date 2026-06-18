@@ -34,7 +34,7 @@ export default function Login() {
           <div className="mx-auto bg-primary/10 p-3 rounded-full w-fit mb-2">
             <ShieldCheck className="h-8 w-8 text-primary" />
           </div>
-          <CardTitle className="text-2xl">Hub IA BP</CardTitle>
+          <CardTitle className="text-2xl">All Systems Go</CardTitle>
           <CardDescription>Faça login para acessar o portal</CardDescription>
         </CardHeader>
         <CardContent>

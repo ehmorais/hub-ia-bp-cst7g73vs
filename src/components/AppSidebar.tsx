@@ -16,11 +16,11 @@ import {
   SidebarMenuSubButton,
 } from '@/components/ui/sidebar'
 import { LayoutDashboard, Settings, LogOut, ChevronRight, ShieldAlert } from 'lucide-react'
-import * as LucideIcons from 'lucide-react'
 import { useState, useEffect } from 'react'
 import pb from '@/lib/pocketbase/client'
 import { useRealtime } from '@/hooks/use-realtime'
 import { useAuth } from '@/hooks/use-auth'
+import { getIcon } from '@/lib/icons'
 
 export function AppSidebar() {
   const location = useLocation()
@@ -62,8 +62,8 @@ export function AppSidebar() {
     isAuthenticated,
   )
 
-  const getIcon = (iconName: string) => {
-    const Icon = (LucideIcons as any)[iconName] || LucideIcons.Folder
+  const renderIcon = (iconName: string) => {
+    const Icon = getIcon(iconName)
     return <Icon className="h-4 w-4" />
   }
 
@@ -71,7 +71,9 @@ export function AppSidebar() {
     <Sidebar variant="inset" className="border-r shadow-sm">
       <SidebarHeader className="p-4 flex flex-col items-center justify-center gap-1 border-b bg-white min-h-[5rem]">
         <div className="flex flex-col overflow-hidden text-center w-full">
-          <span className="font-bold text-xl leading-tight text-primary truncate">HUB IA BP</span>
+          <span className="font-bold text-xl leading-tight text-primary truncate">
+            All Systems Go
+          </span>
           <span className="text-sm text-muted-foreground font-medium truncate">
             São Caetano do Sul
           </span>
@@ -117,7 +119,9 @@ export function AppSidebar() {
             <SidebarMenu>
               {departments.map((dept: any) => {
                 const isDeptActive = location.pathname === `/department/${dept.id}`
-                const deptProjects = projects.filter((p) => p.department === dept.id)
+                const deptProjects = projects.filter(
+                  (p) => p.associated_departments?.includes(dept.id) || p.department === dept.id,
+                )
 
                 return (
                   <SidebarMenuItem key={dept.id}>
@@ -127,7 +131,7 @@ export function AppSidebar() {
                           style={{ color: dept.color || 'inherit' }}
                           className="flex items-center justify-center"
                         >
-                          {getIcon(dept.icon)}
+                          {renderIcon(dept.icon)}
                         </div>
                         <span style={{ color: dept.color || 'inherit', fontWeight: 500 }}>
                           {dept.name}

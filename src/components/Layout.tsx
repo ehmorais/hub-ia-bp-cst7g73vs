@@ -89,7 +89,7 @@ export default function Layout() {
             <SidebarTrigger className="shrink-0" />
             <div className="flex items-center gap-2 ml-1">
               <div className="flex flex-col">
-                <span className="font-bold text-sm leading-none text-primary">HUB IA BP</span>
+                <span className="font-bold text-sm leading-none text-primary">All Systems Go</span>
                 <span className="text-[10px] text-muted-foreground font-medium">
                   São Caetano do Sul
                 </span>
@@ -221,7 +221,7 @@ export default function Layout() {
                 Reportar Problema
               </Button>
               <span>•</span>
-              <span>HUB IA BP v1.0.0</span>
+              <span>All Systems Go v1.0.0</span>
             </div>
           </div>
         </footer>

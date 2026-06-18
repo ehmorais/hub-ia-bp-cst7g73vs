@@ -44,7 +44,10 @@ export default function Department() {
         .catch(console.error)
 
       pb.collection('projects')
-        .getFullList({ filter: `department="${id}"`, sort: 'sort_order,name' })
+        .getFullList({
+          filter: `department="${id}" || associated_departments~"${id}"`,
+          sort: 'sort_order,name',
+        })
         .then(setProjects)
         .catch(console.error)
     }
@@ -53,7 +56,10 @@ export default function Department() {
   useRealtime('projects', () => {
     if (id) {
       pb.collection('projects')
-        .getFullList({ filter: `department="${id}"`, sort: 'sort_order,name' })
+        .getFullList({
+          filter: `department="${id}" || associated_departments~"${id}"`,
+          sort: 'sort_order,name',
+        })
         .then(setProjects)
         .catch(console.error)
     }
