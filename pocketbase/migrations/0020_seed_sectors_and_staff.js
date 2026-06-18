@@ -43,6 +43,7 @@ migrate(
         dept: psi.id,
         contract: '5x2',
         user_id: adminUser?.id,
+        contracted_hours: 200,
       },
       {
         name: 'Luciene Nurse',
@@ -51,6 +52,7 @@ migrate(
         dept: psi.id,
         contract: '12x36',
         user_id: null,
+        contracted_hours: 180,
       },
       {
         name: 'Henrique Tech',
@@ -59,6 +61,7 @@ migrate(
         dept: psi.id,
         contract: '12x36',
         user_id: null,
+        contracted_hours: 180,
       },
       {
         name: 'Ivani Tech',
@@ -67,6 +70,7 @@ migrate(
         dept: andar2.id,
         contract: '12x36',
         user_id: null,
+        contracted_hours: 180,
       },
     ]
 
@@ -80,6 +84,7 @@ migrate(
         record.set('registry_id', s.registry_id)
         record.set('department', s.dept)
         record.set('contract_type', s.contract)
+        record.set('contracted_hours', s.contracted_hours)
         if (s.user_id) record.set('user_id', s.user_id)
         app.save(record)
       }
