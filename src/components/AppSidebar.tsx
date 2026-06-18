@@ -10,12 +10,9 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarSeparator,
-  SidebarMenuSub,
-  SidebarMenuSubItem,
-  SidebarMenuSubButton,
 } from '@/components/ui/sidebar'
-import { LayoutDashboard, Settings, LogOut, ChevronRight, ShieldAlert } from 'lucide-react'
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
+import { LayoutDashboard, Settings, LogOut, ShieldAlert } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import pb from '@/lib/pocketbase/client'
 import { useRealtime } from '@/hooks/use-realtime'
@@ -67,6 +64,12 @@ export function AppSidebar() {
     return <Icon className="h-4 w-4" />
   }
 
+  const sortedDepartments = [...departments].sort((a, b) => {
+    if (a.name === 'Projetos Gerais HBPSCS') return -1
+    if (b.name === 'Projetos Gerais HBPSCS') return 1
+    return a.sort_order - b.sort_order
+  })
+
   return (
     <Sidebar variant="inset" className="border-r shadow-sm">
       <SidebarHeader className="p-4 flex flex-col items-center justify-center gap-1 border-b bg-white min-h-[5rem]">
@@ -89,11 +92,11 @@ export function AppSidebar() {
                 <SidebarMenuButton
                   asChild
                   isActive={location.pathname === '/dashboard'}
-                  tooltip="Projetos Gerais HBPSCS"
+                  tooltip="Dashboard"
                 >
                   <Link to="/dashboard">
                     <LayoutDashboard className="h-4 w-4" />
-                    <span>Projetos Gerais HBPSCS</span>
+                    <span>Dashboard</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -117,7 +120,7 @@ export function AppSidebar() {
           <SidebarGroupLabel>Departamentos</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {departments.map((dept: any) => {
+              {sortedDepartments.map((dept: any) => {
                 const isDeptActive = location.pathname === `/department/${dept.id}`
                 const deptProjects = projects.filter(
                   (p) => p.associated_departments?.includes(dept.id) || p.department === dept.id,
@@ -125,35 +128,48 @@ export function AppSidebar() {
 
                 return (
                   <SidebarMenuItem key={dept.id}>
-                    <SidebarMenuButton asChild isActive={isDeptActive} tooltip={dept.name}>
-                      <Link to={`/department/${dept.id}`}>
-                        <div
-                          style={{ color: dept.color || 'inherit' }}
-                          className="flex items-center justify-center"
-                        >
-                          {renderIcon(dept.icon)}
-                        </div>
-                        <span style={{ color: dept.color || 'inherit', fontWeight: 500 }}>
-                          {dept.name}
-                        </span>
-                      </Link>
-                    </SidebarMenuButton>
-                    {deptProjects.length > 0 && (
-                      <SidebarMenuSub>
-                        {deptProjects.map((proj: any) => {
-                          const isProjActive = location.pathname === `/project/${proj.id}`
-                          return (
-                            <SidebarMenuSubItem key={proj.id}>
-                              <SidebarMenuSubButton asChild isActive={isProjActive}>
-                                <Link to={`/project/${proj.id}`}>
-                                  <span>{proj.name}</span>
+                    <HoverCard openDelay={200} closeDelay={100}>
+                      <HoverCardTrigger asChild>
+                        <SidebarMenuButton asChild isActive={isDeptActive} tooltip={dept.name}>
+                          <Link to={`/department/${dept.id}`}>
+                            <div
+                              style={{ color: dept.color || 'inherit' }}
+                              className="flex items-center justify-center"
+                            >
+                              {renderIcon(dept.icon)}
+                            </div>
+                            <span style={{ color: dept.color || 'inherit', fontWeight: 500 }}>
+                              {dept.name}
+                            </span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </HoverCardTrigger>
+                      {deptProjects.length > 0 && (
+                        <HoverCardContent side="right" align="start" className="w-64 p-2 z-50">
+                          <div className="space-y-1">
+                            <h4 className="font-semibold text-sm mb-2 text-muted-foreground px-2">
+                              Projetos
+                            </h4>
+                            {deptProjects.map((proj: any) => {
+                              const isProjActive = location.pathname === `/project/${proj.id}`
+                              return (
+                                <Link
+                                  key={proj.id}
+                                  to={`/project/${proj.id}`}
+                                  className={`block px-2 py-1.5 text-sm rounded-md transition-colors hover:bg-muted ${
+                                    isProjActive
+                                      ? 'bg-muted font-medium text-foreground'
+                                      : 'text-muted-foreground'
+                                  }`}
+                                >
+                                  {proj.name}
                                 </Link>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                          )
-                        })}
-                      </SidebarMenuSub>
-                    )}
+                              )
+                            })}
+                          </div>
+                        </HoverCardContent>
+                      )}
+                    </HoverCard>
                   </SidebarMenuItem>
                 )
               })}
