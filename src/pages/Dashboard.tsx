@@ -5,16 +5,19 @@ import { Activity, Clock, Zap, ArrowRight } from 'lucide-react'
 import { DEPARTMENTS, TOOLS } from '@/lib/mock-data'
 import { Link } from 'react-router-dom'
 import { cn } from '@/lib/utils'
+import { useAuth } from '@/hooks/use-auth'
 
 export default function Dashboard() {
   const topTools = TOOLS.slice(0, 3)
+  const { user } = useAuth()
+  const name = user?.name || user?.email?.split('@')[0] || 'Usuário'
 
   return (
     <div className="container mx-auto p-4 md:p-8 space-y-8 max-w-7xl">
       {/* Welcome Section */}
       <div className="flex flex-col gap-2">
         <h1 className="text-3xl font-bold tracking-tight text-slate-900">
-          Olá, Marina. Bem-vinda ao Hub de IA da BP.
+          Olá, {name}. Bem-vindo(a) ao Hub de IA da BP.
         </h1>
         <p className="text-muted-foreground text-lg">
           Aqui você encontra as ferramentas de inteligência artificial homologadas para o seu setor.

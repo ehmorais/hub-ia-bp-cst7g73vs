@@ -17,9 +17,11 @@ import {
 } from '@/components/ui/sidebar'
 import { LayoutDashboard, Settings, LogOut, ChevronRight, ShieldAlert } from 'lucide-react'
 import { DEPARTMENTS } from '@/lib/mock-data'
+import { useAuth } from '@/hooks/use-auth'
 
 export function AppSidebar() {
   const location = useLocation()
+  const { signOut } = useAuth()
 
   return (
     <Sidebar variant="inset" className="border-r shadow-sm">
@@ -116,14 +118,12 @@ export function AppSidebar() {
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton
-                asChild
                 variant="default"
-                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                className="text-destructive hover:bg-destructive/10 hover:text-destructive cursor-pointer"
+                onClick={signOut}
               >
-                <Link to="/">
-                  <LogOut className="h-4 w-4" />
-                  <span>Sair do Sistema</span>
-                </Link>
+                <LogOut className="h-4 w-4" />
+                <span>Sair do Sistema</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>

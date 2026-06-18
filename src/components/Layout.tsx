@@ -7,9 +7,21 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { skipCloud } from '@/lib/skip-cloud'
+import { useAuth } from '@/hooks/use-auth'
+import pb from '@/lib/pocketbase/client'
 
 export default function Layout() {
   const location = useLocation()
+  const { user } = useAuth()
+
+  const avatarUrl = user?.avatar ? pb.files.getUrl(user, user.avatar) : ''
+  const name = user?.name || user?.email || 'Usuário'
+  const initials = name
+    .split(' ')
+    .map((n: string) => n[0])
+    .join('')
+    .substring(0, 2)
+    .toUpperCase()
 
   useEffect(() => {
     // Inicialização do cliente Skip Cloud para métricas, auditoria futura e projetos
@@ -67,15 +79,12 @@ export default function Layout() {
             </Button>
             <div className="flex items-center gap-3 pl-4 border-l">
               <div className="hidden md:flex flex-col items-end">
-                <span className="text-sm font-semibold leading-none">Enf. Marina Costa</span>
-                <span className="text-xs text-muted-foreground">Enfermeiro Sênior</span>
+                <span className="text-sm font-semibold leading-none">{name}</span>
+                <span className="text-xs text-muted-foreground">{user?.email}</span>
               </div>
               <Avatar className="h-9 w-9 border border-primary/20">
-                <AvatarImage
-                  src="https://img.usecurling.com/ppl/thumbnail?gender=female&seed=12"
-                  alt="Avatar"
-                />
-                <AvatarFallback>MC</AvatarFallback>
+                <AvatarImage src={avatarUrl} alt={name} />
+                <AvatarFallback>{initials}</AvatarFallback>
               </Avatar>
             </div>
           </div>
