@@ -1,18 +1,49 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import { SidebarProvider, SidebarInset, SidebarTrigger } from '@/components/ui/sidebar'
 import { AppSidebar } from './AppSidebar'
-import { Bell, Search, User, AlertCircle } from 'lucide-react'
+import { Bell, Search, User, AlertCircle, Activity } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { skipCloud } from '@/lib/skip-cloud'
 import { useAuth } from '@/hooks/use-auth'
 import pb from '@/lib/pocketbase/client'
+import { useRealtime } from '@/hooks/use-realtime'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 
 export default function Layout() {
   const location = useLocation()
-  const { user } = useAuth()
+  const { user, isAuthenticated } = useAuth()
+
+  const [tools, setTools] = useState<any[]>([])
+
+  const fetchTools = async () => {
+    try {
+      const records = await pb.collection('ia_tools').getFullList({ sort: 'name' })
+      setTools(records)
+    } catch (error) {
+      console.error('Failed to fetch IA tools:', error)
+    }
+  }
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchTools()
+    }
+  }, [isAuthenticated])
+
+  useRealtime(
+    'ia_tools',
+    () => {
+      fetchTools()
+    },
+    isAuthenticated,
+  )
+
+  const allActive = tools.length === 0 || tools.every((t) => t.status === 'active')
+  const statusColor = allActive ? 'bg-green-500' : 'bg-red-500'
+  const statusText = allActive ? 'All System Go' : 'System Alert'
 
   const avatarUrl = user?.avatar ? pb.files.getUrl(user, user.avatar) : ''
   const name = user?.name || user?.email || 'Usuário'
@@ -66,10 +97,47 @@ export default function Layout() {
             </div>
           </div>
           <div className="flex items-center gap-4">
-            <div className="hidden lg:flex items-center gap-2 mr-4 text-sm">
-              <div className="h-2 w-2 rounded-full bg-primary animate-pulse"></div>
-              <span className="text-muted-foreground font-medium">Sistemas Operacionais</span>
-            </div>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="ghost"
+                  className="hidden lg:flex items-center gap-2 mr-2 text-sm hover:bg-muted/50"
+                >
+                  <div
+                    className={`h-2 w-2 rounded-full ${statusColor} ${allActive ? '' : 'animate-pulse'}`}
+                  ></div>
+                  <span className="text-muted-foreground font-medium">{statusText}</span>
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-64 p-3 mr-4">
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 border-b pb-2">
+                    <Activity className="h-4 w-4 text-muted-foreground" />
+                    <h4 className="font-semibold text-sm">Status do Sistema</h4>
+                  </div>
+                  {tools.length === 0 ? (
+                    <p className="text-xs text-muted-foreground py-2 text-center">
+                      Nenhum módulo encontrado.
+                    </p>
+                  ) : (
+                    <div className="space-y-2 max-h-60 overflow-auto pr-1">
+                      {tools.map((tool) => (
+                        <div key={tool.id} className="flex items-center justify-between text-xs">
+                          <span className="font-medium truncate pr-2" title={tool.name}>
+                            {tool.name}
+                          </span>
+                          <span
+                            className={`px-2 py-0.5 rounded-full whitespace-nowrap ${tool.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}
+                          >
+                            {tool.status}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </PopoverContent>
+            </Popover>
             <Button variant="ghost" size="icon" className="relative">
               <Bell className="h-5 w-5 text-muted-foreground" />
               <span className="absolute top-1 right-1 flex h-2 w-2">
