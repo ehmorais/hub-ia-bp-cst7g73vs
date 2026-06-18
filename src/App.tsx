@@ -11,6 +11,8 @@ import Dashboard from './pages/Dashboard'
 import Department from './pages/Department'
 import AiChat from './pages/AiChat'
 import Admin from './pages/Admin'
+import EscalaManagement from './pages/EscalaManagement'
+import EscalaPortal from './pages/EscalaPortal'
 import Login from './pages/Login'
 import Profile from './pages/Profile'
 import { AuthProvider, useAuth } from './hooks/use-auth'
@@ -39,6 +41,8 @@ const App = () => (
               <Route path="/ai/:id" element={<AiChat />} />
               <Route path="/admin" element={<Admin />} />
               <Route path="/profile" element={<Profile />} />
+              <Route path="/escala" element={<EscalaManagement />} />
+              <Route path="/portal" element={<EscalaPortal />} />
             </Route>
           </Route>
           <Route path="*" element={<NotFound />} />

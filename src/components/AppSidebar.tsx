@@ -12,7 +12,14 @@ import {
   SidebarMenuItem,
 } from '@/components/ui/sidebar'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
-import { LayoutDashboard, Settings, LogOut, ShieldAlert } from 'lucide-react'
+import {
+  LayoutDashboard,
+  Settings,
+  LogOut,
+  ShieldAlert,
+  CalendarDays,
+  UserCircle,
+} from 'lucide-react'
 import { useState, useEffect } from 'react'
 import pb from '@/lib/pocketbase/client'
 import { useRealtime } from '@/hooks/use-realtime'
@@ -158,6 +165,30 @@ export function AppSidebar() {
                   <Link to="/admin">
                     <Settings className="h-4 w-4" />
                     <span>Administração</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={location.pathname === '/escala'}
+                  tooltip="Gestão de Escalas"
+                >
+                  <Link to="/escala">
+                    <CalendarDays className="h-4 w-4" />
+                    <span>Gestão de Escalas</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={location.pathname === '/portal'}
+                  tooltip="Meu Portal (RH)"
+                >
+                  <Link to="/portal">
+                    <UserCircle className="h-4 w-4" />
+                    <span>Meu Portal (RH)</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
