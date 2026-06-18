@@ -1,12 +1,8 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useEffect, useState } from 'react'
 import pb from '@/lib/pocketbase/client'
 import { useRealtime } from '@/hooks/use-realtime'
-import { Activity, Clock, Zap, ArrowRight } from 'lucide-react'
-import { Link } from 'react-router-dom'
-import { cn } from '@/lib/utils'
+import { Activity, Zap, FolderKanban } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { getIcon } from '@/lib/icons'
 
@@ -41,14 +37,12 @@ export default function Dashboard() {
   useRealtime('departments', () => loadData(), isAuthenticated)
   useRealtime('projects', () => loadData(), isAuthenticated)
 
-  const topTools = tools.slice(0, 3)
-
   return (
     <div className="container mx-auto p-4 md:p-8 space-y-8 max-w-7xl animate-fade-in-up">
       {/* Welcome Section */}
       <div className="flex flex-col gap-2">
         <h1 className="text-3xl font-bold tracking-tight text-slate-900">
-          Olá, {name}. Bem-vindo(a) ao All Systems Go.
+          Olá, {name}. Bem-vindo(a) ao HUB de IA BP.
         </h1>
         <p className="text-muted-foreground text-lg">
           Visão consolidada da operação e saúde dos projetos.
@@ -56,13 +50,13 @@ export default function Dashboard() {
       </div>
 
       {/* Global KPIs */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-3 mb-8">
         <Card className="border-none shadow-sm bg-white">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
               Modelos Ativos
             </CardTitle>
-            <Activity className="h-4 w-4 text-primary" />
+            <Zap className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
@@ -75,7 +69,7 @@ export default function Dashboard() {
             <CardTitle className="text-sm font-medium text-muted-foreground">
               Projetos em Andamento
             </CardTitle>
-            <Zap className="h-4 w-4 text-amber-500" />
+            <Activity className="h-4 w-4 text-amber-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
@@ -88,7 +82,7 @@ export default function Dashboard() {
             <CardTitle className="text-sm font-medium text-muted-foreground">
               Departamentos
             </CardTitle>
-            <Clock className="h-4 w-4 text-blue-500" />
+            <FolderKanban className="h-4 w-4 text-blue-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{departments.length}</div>
@@ -96,195 +90,63 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      <div className="grid gap-8 md:grid-cols-[1fr_300px]">
-        {/* Main Area: Departments Macro View */}
-        <div className="space-y-6">
-          <h2 className="text-xl font-semibold tracking-tight">Visão Macro por Departamento</h2>
-          <div className="grid grid-cols-1 gap-6">
-            {departments.map((dept) => {
-              const deptProjects = projects.filter(
-                (p) => p.associated_departments?.includes(dept.id) || p.department === dept.id,
-              )
-              const Icon = getIcon(dept.icon)
+      <div className="space-y-4">
+        <h2 className="text-xl font-semibold tracking-tight">Departamentos</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          {departments.map((dept) => {
+            const deptProjects = projects.filter(
+              (p) =>
+                p.status === 'active' &&
+                (p.associated_departments?.includes(dept.id) || p.department === dept.id),
+            )
+            const deptTools = tools.filter(
+              (t) => t.status === 'active' && t.associated_departments?.includes(dept.id),
+            )
+            const Icon = getIcon(dept.icon)
 
-              return (
-                <Card
-                  key={dept.id}
-                  className="overflow-hidden border-slate-200 bg-white shadow-sm"
-                  style={{ borderTop: `4px solid ${dept.color || 'hsl(var(--primary))'}` }}
-                >
-                  <CardHeader className="pb-3 bg-slate-50/50">
-                    <div className="flex items-center gap-3">
-                      <div
-                        className="p-2 rounded-lg bg-white shadow-sm"
-                        style={{ color: dept.color || 'inherit' }}
-                      >
-                        <Icon className="h-6 w-6" />
-                      </div>
-                      <div>
-                        <CardTitle className="text-xl" style={{ color: dept.color || 'inherit' }}>
-                          {dept.name}
-                        </CardTitle>
-                        {dept.description && <CardDescription>{dept.description}</CardDescription>}
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="p-4 space-y-5">
-                    {(() => {
-                      const deptTools = tools.filter((t) =>
-                        t.associated_departments?.includes(dept.id),
-                      )
-
-                      return (
-                        <>
-                          {deptTools.length > 0 && (
-                            <div className="space-y-3">
-                              <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-2">
-                                <Zap className="h-3.5 w-3.5 text-primary" /> Ferramentas IA
-                              </h4>
-                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                                {deptTools.map((tool) => (
-                                  <div
-                                    key={tool.id}
-                                    className="p-4 border border-slate-200 rounded-lg bg-white flex flex-col shadow-sm hover:shadow-md hover:border-primary/40 transition-all group"
-                                  >
-                                    <div className="flex-1">
-                                      <div className="flex justify-between items-start mb-2">
-                                        <span className="font-bold text-slate-900 text-sm line-clamp-1 pr-2 group-hover:text-primary transition-colors">
-                                          {tool.name}
-                                        </span>
-                                        <Badge
-                                          variant="outline"
-                                          className={cn(
-                                            'text-[9px] uppercase px-1.5 h-4',
-                                            tool.status === 'active'
-                                              ? 'text-primary border-primary/30 bg-primary/5'
-                                              : 'text-amber-600 border-amber-300 bg-amber-50',
-                                          )}
-                                        >
-                                          {tool.status === 'active' ? 'Ativo' : tool.status}
-                                        </Badge>
-                                      </div>
-                                      <div className="text-[10px] text-muted-foreground font-mono mb-2 bg-slate-100 w-fit px-1.5 py-0.5 rounded">
-                                        Modelo: {tool.model_alias}{' '}
-                                        {tool.version ? `| v${tool.version}` : ''}
-                                      </div>
-                                      {tool.description && (
-                                        <p className="text-xs text-slate-600 line-clamp-2 mt-1">
-                                          {tool.description}
-                                        </p>
-                                      )}
-                                    </div>
-                                    <Button
-                                      size="sm"
-                                      className="w-full mt-4 h-8 text-xs font-medium"
-                                      asChild
-                                      variant="secondary"
-                                    >
-                                      <Link to={`/ai/${tool.id}`}>Abrir Ferramenta</Link>
-                                    </Button>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-
-                          {deptProjects.length > 0 && (
-                            <div className="space-y-3">
-                              <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-2">
-                                <Activity className="h-3.5 w-3.5" /> Projetos
-                              </h4>
-                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                                {deptProjects.map((proj) => (
-                                  <div
-                                    key={proj.id}
-                                    className="p-3 border rounded-md bg-white flex flex-col justify-between hover:border-slate-300 transition-colors"
-                                  >
-                                    <div>
-                                      <div className="flex justify-between items-start mb-1">
-                                        <span className="font-semibold text-slate-800 text-sm truncate pr-2">
-                                          {proj.name}
-                                        </span>
-                                        <Badge
-                                          variant="outline"
-                                          className={cn(
-                                            'text-[10px] uppercase',
-                                            proj.status === 'active'
-                                              ? 'text-green-600 border-green-200 bg-green-50'
-                                              : 'text-amber-600 border-amber-200 bg-amber-50',
-                                          )}
-                                        >
-                                          {proj.status === 'active' ? 'Ativo' : 'Inativo'}
-                                        </Badge>
-                                      </div>
-                                      {proj.description && (
-                                        <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
-                                          {proj.description}
-                                        </p>
-                                      )}
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-
-                          {deptTools.length === 0 && deptProjects.length === 0 && (
-                            <p className="text-sm text-muted-foreground italic px-2">
-                              Nenhum recurso associado.
-                            </p>
-                          )}
-                        </>
-                      )
-                    })()}
-                  </CardContent>
-                </Card>
-              )
-            })}
-            {departments.length === 0 && (
-              <div className="text-muted-foreground text-sm py-4">
-                Nenhum departamento cadastrado.
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Sidebar Area: Quick Access */}
-        <div className="space-y-4">
-          <h2 className="text-xl font-semibold tracking-tight">Ferramentas IA</h2>
-          <div className="flex flex-col gap-3">
-            {topTools.map((tool) => (
-              <Card key={tool.id} className="bg-white border-slate-200">
-                <CardHeader className="p-4 pb-2">
-                  <div className="flex justify-between items-start">
-                    <CardTitle className="text-sm font-bold leading-tight">{tool.name}</CardTitle>
-                    <Badge
-                      variant="outline"
-                      className={cn(
-                        'text-[10px] uppercase px-1.5 py-0',
-                        tool.status === 'active'
-                          ? 'text-primary border-primary/30'
-                          : 'text-amber-600 border-amber-300',
-                      )}
-                    >
-                      {tool.status === 'active' ? 'Ativo' : tool.status}
-                    </Badge>
+            return (
+              <Card
+                key={dept.id}
+                className="border-slate-200 hover:border-primary/40 hover:shadow-md transition-all bg-white"
+              >
+                <CardHeader className="pb-2 pt-4 px-4 flex flex-row items-center gap-3 space-y-0">
+                  <div
+                    className="p-2 rounded-lg bg-slate-50 flex shrink-0"
+                    style={{ color: dept.color || 'inherit' }}
+                  >
+                    <Icon className="h-5 w-5" />
                   </div>
-                  <CardDescription className="text-xs mt-1 truncate">
-                    {tool.description}
-                  </CardDescription>
+                  <CardTitle
+                    className="text-sm font-semibold leading-tight line-clamp-2"
+                    style={{ color: dept.color || 'inherit' }}
+                  >
+                    {dept.name}
+                  </CardTitle>
                 </CardHeader>
-                <CardContent className="p-4 pt-0 mt-3">
-                  <Button size="sm" className="w-full text-xs h-8 group" asChild>
-                    <Link to={`/ai/${tool.id}`}>
-                      Acessar{' '}
-                      <ArrowRight className="ml-2 h-3 w-3 group-hover:translate-x-1 transition-transform" />
-                    </Link>
-                  </Button>
+                <CardContent className="px-4 pb-4 pt-2">
+                  <div className="flex flex-col gap-2 mt-2">
+                    <div className="flex items-center justify-between text-sm p-2 bg-slate-50 rounded-md">
+                      <span className="text-muted-foreground flex items-center gap-1.5 font-medium">
+                        <Activity className="h-3.5 w-3.5 text-blue-500" /> Projetos
+                      </span>
+                      <span className="font-bold text-slate-800">{deptProjects.length}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm p-2 bg-slate-50 rounded-md">
+                      <span className="text-muted-foreground flex items-center gap-1.5 font-medium">
+                        <Zap className="h-3.5 w-3.5 text-amber-500" /> Ferramentas IA
+                      </span>
+                      <span className="font-bold text-slate-800">{deptTools.length}</span>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
-            ))}
-          </div>
+            )
+          })}
+          {departments.length === 0 && (
+            <div className="col-span-full text-muted-foreground text-sm py-8 text-center bg-white rounded-lg border border-dashed">
+              Nenhum departamento cadastrado.
+            </div>
+          )}
         </div>
       </div>
     </div>

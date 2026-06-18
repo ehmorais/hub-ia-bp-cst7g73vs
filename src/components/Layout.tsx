@@ -53,7 +53,7 @@ export default function Layout() {
 
   const allActive = tools.length === 0 || tools.every((t) => t.status === 'active')
   const statusColor = allActive ? 'bg-green-500' : 'bg-red-500'
-  const statusText = allActive ? 'All Systems Go' : 'System Alert'
+  const statusText = allActive ? 'Sistemas Operantes' : 'System Alert'
 
   const avatarUrl = user?.avatar ? pb.files.getUrl(user, user.avatar, { thumb: '100x100' }) : ''
   const name = user?.name || 'Usuário'
@@ -89,7 +89,7 @@ export default function Layout() {
             <SidebarTrigger className="shrink-0" />
             <div className="flex items-center gap-2 ml-1">
               <div className="flex flex-col">
-                <span className="font-bold text-sm leading-none text-primary">All Systems Go</span>
+                <span className="font-bold text-sm leading-none text-primary">HUB de IA BP</span>
                 <span className="text-[10px] text-muted-foreground font-medium">
                   São Caetano do Sul
                 </span>
@@ -221,7 +221,7 @@ export default function Layout() {
                 Reportar Problema
               </Button>
               <span>•</span>
-              <span>All Systems Go v1.0.0</span>
+              <span>HUB de IA BP v1.0.0</span>
             </div>
           </div>
         </footer>

@@ -72,7 +72,7 @@ export function AppSidebar() {
       <SidebarHeader className="p-4 flex flex-col items-center justify-center gap-1 border-b bg-white min-h-[5rem]">
         <div className="flex flex-col overflow-hidden text-center w-full">
           <span className="font-bold text-xl leading-tight text-primary truncate">
-            All Systems Go
+            HUB de IA BP
           </span>
           <span className="text-sm text-muted-foreground font-medium truncate">
             São Caetano do Sul
@@ -89,11 +89,11 @@ export function AppSidebar() {
                 <SidebarMenuButton
                   asChild
                   isActive={location.pathname === '/dashboard'}
-                  tooltip="Dashboard"
+                  tooltip="Projetos Gerais HBPSCS"
                 >
                   <Link to="/dashboard">
                     <LayoutDashboard className="h-4 w-4" />
-                    <span>Dashboard</span>
+                    <span>Projetos Gerais HBPSCS</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
