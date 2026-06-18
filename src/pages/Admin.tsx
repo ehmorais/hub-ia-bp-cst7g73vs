@@ -22,7 +22,15 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
-import * as Icons from 'lucide-react'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command'
 import {
   Search,
   Download,
@@ -33,6 +41,9 @@ import {
   Building2,
   Trash2,
   Activity,
+  ChevronsUpDown,
+  Check,
+  X,
 } from 'lucide-react'
 import { useToast } from '@/components/ui/use-toast'
 import {
@@ -52,6 +63,7 @@ import {
 import { extractFieldErrors } from '@/lib/pocketbase/errors'
 import { useRealtime } from '@/hooks/use-realtime'
 import { cn } from '@/lib/utils'
+import { getIcon } from '@/lib/icons'
 
 const ICONS_LIST = [
   'Building2',
@@ -73,6 +85,7 @@ const ICONS_LIST = [
 export default function Admin() {
   const { toast } = useToast()
   const { user } = useAuth()
+  const isAdmin = user?.role === 'Admin'
 
   const [logs, setLogs] = useState<any[]>([])
   const [users, setUsers] = useState<any[]>([])
@@ -102,6 +115,7 @@ export default function Admin() {
   const [projMembers, setProjMembers] = useState<string[]>([])
   const [editingProj, setEditingProj] = useState<any>(null)
   const [isSubmittingProj, setIsSubmittingProj] = useState(false)
+  const [openProjDeps, setOpenProjDeps] = useState(false)
 
   const loadLogs = async () => {
     try {
@@ -366,7 +380,7 @@ export default function Admin() {
       </div>
 
       <Tabs defaultValue="performance" className="w-full">
-        <TabsList className="grid w-full grid-cols-6 max-w-5xl mb-8">
+        <TabsList className="grid w-full grid-cols-6 max-w-5xl mb-8 overflow-x-auto h-auto py-2">
           <TabsTrigger
             value="performance"
             className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
@@ -475,104 +489,118 @@ export default function Admin() {
         </TabsContent>
 
         <TabsContent value="departments" className="space-y-6">
-          <div className="grid lg:grid-cols-3 gap-6">
-            <Card className="border-slate-200 bg-white lg:col-span-1 h-fit">
-              <CardHeader className="bg-slate-50 border-b">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Building2 className="h-5 w-5" />{' '}
-                  {editingDep ? 'Editar Departamento' : 'Novo Departamento'}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4 pt-6">
-                <div className="space-y-2">
-                  <Label>Nome do Departamento</Label>
-                  <Input
-                    value={depName}
-                    onChange={(e) => setDepName(e.target.value)}
-                    placeholder="Ex: Recursos Humanos"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Descrição</Label>
-                  <Input
-                    value={depDesc}
-                    onChange={(e) => setDepDesc(e.target.value)}
-                    placeholder="Opcional"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Ordem de Exibição</Label>
-                  <Input
-                    type="number"
-                    value={depSortOrder}
-                    onChange={(e) => setDepSortOrder(Number(e.target.value))}
-                  />
-                </div>
+          <div className={`grid gap-6 ${isAdmin ? 'lg:grid-cols-3' : 'lg:grid-cols-1'}`}>
+            {isAdmin && (
+              <Card className="border-slate-200 bg-white lg:col-span-1 h-fit">
+                <CardHeader className="bg-slate-50 border-b">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Building2 className="h-5 w-5" />{' '}
+                    {editingDep ? 'Editar Departamento' : 'Novo Departamento'}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4 pt-6">
+                  <div className="space-y-2">
+                    <Label>Nome do Departamento</Label>
+                    <Input
+                      value={depName}
+                      onChange={(e) => setDepName(e.target.value)}
+                      placeholder="Ex: Recursos Humanos"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Descrição</Label>
+                    <Input
+                      value={depDesc}
+                      onChange={(e) => setDepDesc(e.target.value)}
+                      placeholder="Opcional"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Ordem de Exibição</Label>
+                    <Input
+                      type="number"
+                      value={depSortOrder}
+                      onChange={(e) => setDepSortOrder(Number(e.target.value))}
+                    />
+                  </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2 col-span-2">
-                    <Label>Ícone</Label>
-                    <div className="flex flex-wrap gap-2 p-2 border rounded-md bg-slate-50">
-                      {ICONS_LIST.map((icon) => {
-                        const Icon = getIcon(icon)
-                        return (
-                          <Button
-                            key={icon}
-                            type="button"
-                            variant={depIcon === icon ? 'default' : 'outline'}
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => setDepIcon(icon)}
-                          >
-                            <Icon className="h-4 w-4" />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2 col-span-2">
+                      <Label>Ícone</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button variant="outline" className="w-full justify-start gap-2 h-10">
+                            {(() => {
+                              const Icon = getIcon(depIcon)
+                              return <Icon className="h-4 w-4" />
+                            })()}
+                            {depIcon || 'Selecionar Ícone'}
                           </Button>
-                        )
-                      })}
+                        </PopoverTrigger>
+                        <PopoverContent className="w-64 p-2">
+                          <div className="grid grid-cols-4 gap-2 max-h-48 overflow-y-auto">
+                            {ICONS_LIST.map((icon) => {
+                              const Icon = getIcon(icon)
+                              return (
+                                <Button
+                                  key={icon}
+                                  type="button"
+                                  variant={depIcon === icon ? 'default' : 'ghost'}
+                                  size="icon"
+                                  onClick={() => setDepIcon(icon)}
+                                >
+                                  <Icon className="h-4 w-4" />
+                                </Button>
+                              )
+                            })}
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                    <div className="space-y-2 col-span-2">
+                      <Label>Cor de Identificação</Label>
+                      <div className="flex items-center gap-3">
+                        <Input
+                          type="color"
+                          value={depColor}
+                          onChange={(e) => setDepColor(e.target.value)}
+                          className="h-10 w-20 p-1 cursor-pointer"
+                        />
+                        <span className="text-sm text-muted-foreground uppercase">{depColor}</span>
+                      </div>
                     </div>
                   </div>
-                  <div className="space-y-2 col-span-2">
-                    <Label>Cor de Identificação</Label>
-                    <div className="flex items-center gap-3">
-                      <Input
-                        type="color"
-                        value={depColor}
-                        onChange={(e) => setDepColor(e.target.value)}
-                        className="h-10 w-20 p-1 cursor-pointer"
-                      />
-                      <span className="text-sm text-muted-foreground uppercase">{depColor}</span>
-                    </div>
-                  </div>
-                </div>
 
-                <div className="flex flex-col gap-2 pt-2">
-                  <Button
-                    onClick={handleSaveDep}
-                    disabled={isSubmittingDep || !depName}
-                    className="w-full"
-                  >
-                    {isSubmittingDep
-                      ? 'Salvando...'
-                      : editingDep
-                        ? 'Salvar Alterações'
-                        : 'Criar Departamento'}
-                  </Button>
-                  {editingDep && (
-                    <Button variant="outline" onClick={handleCancelEditDep} className="w-full">
-                      Cancelar
+                  <div className="flex flex-col gap-2 pt-2">
+                    <Button
+                      onClick={handleSaveDep}
+                      disabled={isSubmittingDep || !depName}
+                      className="w-full"
+                    >
+                      {isSubmittingDep
+                        ? 'Salvando...'
+                        : editingDep
+                          ? 'Salvar Alterações'
+                          : 'Criar Departamento'}
                     </Button>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+                    {editingDep && (
+                      <Button variant="outline" onClick={handleCancelEditDep} className="w-full">
+                        Cancelar
+                      </Button>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
-            <Card className="border-slate-200 lg:col-span-2">
+            <Card className={`border-slate-200 ${isAdmin ? 'lg:col-span-2' : ''}`}>
               <Table>
                 <TableHeader className="bg-slate-50">
                   <TableRow>
                     <TableHead>Nome</TableHead>
                     <TableHead>Ícone & Cor</TableHead>
                     <TableHead>Ordem</TableHead>
-                    <TableHead className="text-right">Ações</TableHead>
+                    {isAdmin && <TableHead className="text-right">Ações</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -603,24 +631,29 @@ export default function Admin() {
                         </div>
                       </TableCell>
                       <TableCell className="text-slate-500">{dep.sort_order || 0}</TableCell>
-                      <TableCell className="text-right space-x-2">
-                        <Button variant="ghost" size="sm" onClick={() => handleEditDep(dep)}>
-                          Editar
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDeleteDep(dep.id)}
-                          className="text-red-500 hover:text-red-700 hover:bg-red-50"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
+                      {isAdmin && (
+                        <TableCell className="text-right space-x-2">
+                          <Button variant="ghost" size="sm" onClick={() => handleEditDep(dep)}>
+                            Editar
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDeleteDep(dep.id)}
+                            className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                   {departments.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                      <TableCell
+                        colSpan={isAdmin ? 4 : 3}
+                        className="text-center text-muted-foreground py-8"
+                      >
                         Nenhum departamento cadastrado.
                       </TableCell>
                     </TableRow>
@@ -658,8 +691,8 @@ export default function Admin() {
                   <TableHead className="w-[100px]">ID</TableHead>
                   <TableHead>Data/Hora</TableHead>
                   <TableHead>Usuário</TableHead>
-                  <TableHead>Departamento</TableHead>
                   <TableHead>Ação</TableHead>
+                  <TableHead>Detalhes</TableHead>
                   <TableHead className="text-right">Tokens</TableHead>
                 </TableRow>
               </TableHeader>
@@ -678,8 +711,10 @@ export default function Admin() {
                         </span>
                       </div>
                     </TableCell>
-                    <TableCell>{log.department || '-'}</TableCell>
                     <TableCell>{log.action}</TableCell>
+                    <TableCell className="max-w-[200px] truncate" title={log.details}>
+                      {log.details || '-'}
+                    </TableCell>
                     <TableCell className="text-right font-mono text-primary">
                       {log.token_usage || 0}
                     </TableCell>
@@ -702,9 +737,11 @@ export default function Admin() {
             <h2 className="text-xl font-semibold flex items-center gap-2">
               <Users className="h-5 w-5" /> Gestão de Acessos
             </h2>
-            <Button className="gap-2">
-              <Plus className="h-4 w-4" /> Adicionar Usuário
-            </Button>
+            {isAdmin && (
+              <Button className="gap-2">
+                <Plus className="h-4 w-4" /> Adicionar Usuário
+              </Button>
+            )}
           </div>
           <Card className="border-slate-200">
             <Table>
@@ -712,36 +749,36 @@ export default function Admin() {
                 <TableRow>
                   <TableHead>Nome</TableHead>
                   <TableHead>Email</TableHead>
-                  <TableHead>Departamento</TableHead>
                   <TableHead>Nível de Acesso</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
+                  {isAdmin && <TableHead className="text-right">Ações</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {users.map((user) => (
-                  <TableRow key={user.id}>
+                {users.map((u) => (
+                  <TableRow key={u.id}>
                     <TableCell className="font-semibold text-slate-800">
-                      {user.name || 'Sem nome'}
+                      {u.name || 'Sem nome'}
                     </TableCell>
-                    <TableCell className="text-slate-500">{user.email}</TableCell>
-                    <TableCell>{user.department || '-'}</TableCell>
+                    <TableCell className="text-slate-500">{u.email}</TableCell>
                     <TableCell>
                       <Badge
                         variant="outline"
                         className={cn(
-                          user.role === 'Admin'
+                          u.role === 'Admin'
                             ? 'border-red-200 text-red-700 bg-red-50'
                             : 'border-slate-200 text-slate-700 bg-slate-50',
                         )}
                       >
-                        {user.role || 'Operador'}
+                        {u.role || 'Operador'}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="ghost" size="sm">
-                        Editar
-                      </Button>
-                    </TableCell>
+                    {isAdmin && (
+                      <TableCell className="text-right">
+                        <Button variant="ghost" size="sm">
+                          Editar
+                        </Button>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>
@@ -750,59 +787,61 @@ export default function Admin() {
         </TabsContent>
 
         <TabsContent value="ia_tools" className="space-y-6">
-          <div className="grid lg:grid-cols-2 gap-6">
-            <Card className="border-slate-200 bg-white h-fit">
-              <CardHeader className="bg-slate-50 border-b">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Settings2 className="h-5 w-5" /> Nova Ferramenta IA
-                </CardTitle>
-                <CardDescription>
-                  Defina os parâmetros do modelo para um novo projeto.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4 pt-6">
-                <div className="space-y-2">
-                  <Label>Nome do Projeto</Label>
-                  <Input
-                    value={toolName}
-                    onChange={(e) => setToolName(e.target.value)}
-                    placeholder="Ex: Análise de Prontuários"
-                  />
-                  {fieldErrors.name && <p className="text-sm text-red-500">{fieldErrors.name}</p>}
-                </div>
-                <div className="grid grid-cols-2 gap-4">
+          <div className={`grid gap-6 ${isAdmin ? 'lg:grid-cols-2' : 'lg:grid-cols-1'}`}>
+            {isAdmin && (
+              <Card className="border-slate-200 bg-white h-fit">
+                <CardHeader className="bg-slate-50 border-b">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Settings2 className="h-5 w-5" /> Nova Ferramenta IA
+                  </CardTitle>
+                  <CardDescription>
+                    Defina os parâmetros do modelo para um novo projeto.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4 pt-6">
                   <div className="space-y-2">
-                    <Label>Modelo Base</Label>
-                    <Select value={toolModel} onValueChange={setToolModel}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="fast">Fast</SelectItem>
-                        <SelectItem value="reasoning">Reasoning</SelectItem>
-                        <SelectItem value="embedding">Embedding</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <Label>Nome do Projeto</Label>
+                    <Input
+                      value={toolName}
+                      onChange={(e) => setToolName(e.target.value)}
+                      placeholder="Ex: Análise de Prontuários"
+                    />
+                    {fieldErrors.name && <p className="text-sm text-red-500">{fieldErrors.name}</p>}
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Modelo Base</Label>
+                      <Select value={toolModel} onValueChange={setToolModel}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="fast">Fast</SelectItem>
+                          <SelectItem value="reasoning">Reasoning</SelectItem>
+                          <SelectItem value="embedding">Embedding</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Temperatura</Label>
+                      <Input type="number" step="0.1" defaultValue="0.2" max="1" min="0" />
+                    </div>
                   </div>
                   <div className="space-y-2">
-                    <Label>Temperatura</Label>
-                    <Input type="number" step="0.1" defaultValue="0.2" max="1" min="0" />
+                    <Label>System Prompt / Descrição</Label>
+                    <textarea
+                      value={toolDesc}
+                      onChange={(e) => setToolDesc(e.target.value)}
+                      className="w-full min-h-[100px] p-3 text-sm border rounded-md focus:ring-1 focus:ring-primary focus:outline-none bg-slate-50 font-mono text-slate-600"
+                      placeholder="Descrição e instruções do assistente..."
+                    />
                   </div>
-                </div>
-                <div className="space-y-2">
-                  <Label>System Prompt / Descrição</Label>
-                  <textarea
-                    value={toolDesc}
-                    onChange={(e) => setToolDesc(e.target.value)}
-                    className="w-full min-h-[100px] p-3 text-sm border rounded-md focus:ring-1 focus:ring-primary focus:outline-none bg-slate-50 font-mono text-slate-600"
-                    placeholder="Descrição e instruções do assistente..."
-                  />
-                </div>
-                <Button onClick={handleCreateTool} disabled={isSubmitting} className="w-full">
-                  {isSubmitting ? 'Salvando...' : 'Salvar e Homologar'}
-                </Button>
-              </CardContent>
-            </Card>
+                  <Button onClick={handleCreateTool} disabled={isSubmitting} className="w-full">
+                    {isSubmitting ? 'Salvando...' : 'Salvar e Homologar'}
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
 
             <div className="space-y-4">
               <h3 className="text-lg font-semibold border-b pb-2">Ferramentas Ativas</h3>
@@ -841,132 +880,180 @@ export default function Admin() {
         </TabsContent>
 
         <TabsContent value="projects" className="space-y-6">
-          <div className="grid lg:grid-cols-3 gap-6">
-            <Card className="border-slate-200 bg-white lg:col-span-1 h-fit">
-              <CardHeader className="bg-slate-50 border-b">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Building2 className="h-5 w-5" />{' '}
-                  {editingProj ? 'Editar Projeto' : 'Novo Projeto'}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4 pt-6">
-                <div className="space-y-2">
-                  <Label>Nome do Projeto</Label>
-                  <Input
-                    value={projName}
-                    onChange={(e) => setProjName(e.target.value)}
-                    placeholder="Ex: Recrutamento AI"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Descrição</Label>
-                  <Input
-                    value={projDesc}
-                    onChange={(e) => setProjDesc(e.target.value)}
-                    placeholder="Opcional"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Departamentos Associados</Label>
-                  <div className="border rounded-md p-3 max-h-40 overflow-y-auto space-y-3 bg-slate-50">
-                    {departments.length === 0 && (
-                      <span className="text-xs text-muted-foreground">Nenhum departamento.</span>
-                    )}
-                    {departments.map((d) => (
-                      <div key={d.id} className="flex items-center space-x-2">
-                        <Checkbox
-                          id={`dept-${d.id}`}
-                          checked={projDeps.includes(d.id)}
-                          onCheckedChange={(c) => {
-                            if (c) setProjDeps([...projDeps, d.id])
-                            else setProjDeps(projDeps.filter((id) => id !== d.id))
-                          }}
-                        />
-                        <Label
-                          htmlFor={`dept-${d.id}`}
-                          className="text-sm font-normal cursor-pointer"
-                        >
-                          {d.name}
-                        </Label>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
+          <div className={`grid gap-6 ${isAdmin ? 'lg:grid-cols-3' : 'lg:grid-cols-1'}`}>
+            {isAdmin && (
+              <Card className="border-slate-200 bg-white lg:col-span-1 h-fit">
+                <CardHeader className="bg-slate-50 border-b">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Building2 className="h-5 w-5" />{' '}
+                    {editingProj ? 'Editar Projeto' : 'Novo Projeto'}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4 pt-6">
                   <div className="space-y-2">
-                    <Label>Ordem</Label>
+                    <Label>Nome do Projeto</Label>
                     <Input
-                      type="number"
-                      value={projSort}
-                      onChange={(e) => setProjSort(Number(e.target.value))}
+                      value={projName}
+                      onChange={(e) => setProjName(e.target.value)}
+                      placeholder="Ex: Recrutamento AI"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>Status</Label>
-                    <Select value={projStatus} onValueChange={setProjStatus}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="active">Ativo</SelectItem>
-                        <SelectItem value="inactive">Inativo</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <Label>Descrição</Label>
+                    <Input
+                      value={projDesc}
+                      onChange={(e) => setProjDesc(e.target.value)}
+                      placeholder="Opcional"
+                    />
                   </div>
-                </div>
-
-                <div className="space-y-2 pt-2">
-                  <Label>Membros Atribuídos</Label>
-                  <div className="border rounded-md p-3 max-h-40 overflow-y-auto space-y-3 bg-slate-50">
-                    {users.length === 0 && (
-                      <span className="text-xs text-muted-foreground">Nenhum usuário.</span>
-                    )}
-                    {users.map((u) => (
-                      <div key={u.id} className="flex items-center space-x-2">
-                        <Checkbox
-                          id={`user-${u.id}`}
-                          checked={projMembers.includes(u.id)}
-                          onCheckedChange={(c) => {
-                            if (c) setProjMembers([...projMembers, u.id])
-                            else setProjMembers(projMembers.filter((id) => id !== u.id))
-                          }}
-                        />
-                        <Label
-                          htmlFor={`user-${u.id}`}
-                          className="text-sm font-normal cursor-pointer"
+                  <div className="space-y-2">
+                    <Label>Departamentos Associados</Label>
+                    <Popover open={openProjDeps} onOpenChange={setOpenProjDeps}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={openProjDeps}
+                          className="w-full justify-between"
                         >
-                          {u.name || u.email}{' '}
-                          <span className="text-xs text-muted-foreground">
-                            ({u.role || 'Operador'})
-                          </span>
-                        </Label>
-                      </div>
-                    ))}
+                          {projDeps.length > 0
+                            ? `${projDeps.length} departamento(s) selecionado(s)`
+                            : 'Selecione os departamentos...'}
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[300px] p-0" align="start">
+                        <Command>
+                          <CommandInput placeholder="Buscar departamento..." />
+                          <CommandList>
+                            <CommandEmpty>Nenhum encontrado.</CommandEmpty>
+                            <CommandGroup>
+                              {departments.map((d) => (
+                                <CommandItem
+                                  key={d.id}
+                                  value={d.name}
+                                  onSelect={() => {
+                                    setProjDeps(
+                                      projDeps.includes(d.id)
+                                        ? projDeps.filter((id) => id !== d.id)
+                                        : [...projDeps, d.id],
+                                    )
+                                  }}
+                                >
+                                  <Check
+                                    className={cn(
+                                      'mr-2 h-4 w-4',
+                                      projDeps.includes(d.id) ? 'opacity-100' : 'opacity-0',
+                                    )}
+                                  />
+                                  {d.name}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                    <div className="flex flex-wrap gap-2 mt-3">
+                      {projDeps.map((id) => {
+                        const d = departments.find((x) => x.id === id)
+                        if (!d) return null
+                        return (
+                          <Badge
+                            key={d.id}
+                            variant="secondary"
+                            className="flex items-center gap-1 pr-1 py-1"
+                          >
+                            {d.name}
+                            <div
+                              role="button"
+                              tabIndex={0}
+                              className="ml-1 rounded-full hover:bg-muted p-0.5 cursor-pointer"
+                              onClick={() => setProjDeps(projDeps.filter((x) => x !== d.id))}
+                            >
+                              <X className="h-3 w-3" />
+                            </div>
+                          </Badge>
+                        )
+                      })}
+                    </div>
                   </div>
-                </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Ordem</Label>
+                      <Input
+                        type="number"
+                        value={projSort}
+                        onChange={(e) => setProjSort(Number(e.target.value))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Status</Label>
+                      <Select value={projStatus} onValueChange={setProjStatus}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="active">Ativo</SelectItem>
+                          <SelectItem value="inactive">Inativo</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
 
-                <div className="flex flex-col gap-2 pt-2">
-                  <Button
-                    onClick={handleSaveProj}
-                    disabled={isSubmittingProj || !projName || projDeps.length === 0}
-                    className="w-full"
-                  >
-                    {isSubmittingProj
-                      ? 'Salvando...'
-                      : editingProj
-                        ? 'Salvar Alterações'
-                        : 'Criar Projeto'}
-                  </Button>
-                  {editingProj && (
-                    <Button variant="outline" onClick={handleCancelEditProj} className="w-full">
-                      Cancelar
+                  <div className="space-y-2 pt-2">
+                    <Label>Membros Atribuídos</Label>
+                    <div className="border rounded-md p-3 max-h-40 overflow-y-auto space-y-3 bg-slate-50">
+                      {users.length === 0 && (
+                        <span className="text-xs text-muted-foreground">Nenhum usuário.</span>
+                      )}
+                      {users.map((u) => (
+                        <div key={u.id} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`user-${u.id}`}
+                            checked={projMembers.includes(u.id)}
+                            onCheckedChange={(c) => {
+                              if (c) setProjMembers([...projMembers, u.id])
+                              else setProjMembers(projMembers.filter((id) => id !== u.id))
+                            }}
+                          />
+                          <Label
+                            htmlFor={`user-${u.id}`}
+                            className="text-sm font-normal cursor-pointer"
+                          >
+                            {u.name || u.email}{' '}
+                            <span className="text-xs text-muted-foreground">
+                              ({u.role || 'Operador'})
+                            </span>
+                          </Label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-2 pt-2">
+                    <Button
+                      onClick={handleSaveProj}
+                      disabled={isSubmittingProj || !projName || projDeps.length === 0}
+                      className="w-full"
+                    >
+                      {isSubmittingProj
+                        ? 'Salvando...'
+                        : editingProj
+                          ? 'Salvar Alterações'
+                          : 'Criar Projeto'}
                     </Button>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+                    {editingProj && (
+                      <Button variant="outline" onClick={handleCancelEditProj} className="w-full">
+                        Cancelar
+                      </Button>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
-            <Card className="border-slate-200 lg:col-span-2">
+            <Card className={`border-slate-200 ${isAdmin ? 'lg:col-span-2' : ''}`}>
               <Table>
                 <TableHeader className="bg-slate-50">
                   <TableRow>
@@ -974,7 +1061,7 @@ export default function Admin() {
                     <TableHead>Departamento</TableHead>
                     <TableHead>Membros</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Ações</TableHead>
+                    {isAdmin && <TableHead className="text-right">Ações</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -989,9 +1076,19 @@ export default function Admin() {
                         )}
                       </TableCell>
                       <TableCell className="text-slate-500">
-                        {proj.expand?.associated_departments?.map((d: any) => d.name).join(', ') ||
-                          proj.expand?.department?.name ||
-                          '-'}
+                        <div className="flex flex-col gap-1">
+                          {proj.expand?.associated_departments?.map((d: any) => (
+                            <Badge key={d.id} variant="outline" className="w-fit text-[10px]">
+                              {d.name}
+                            </Badge>
+                          )) ||
+                            (proj.expand?.department?.name && (
+                              <Badge variant="outline" className="w-fit text-[10px]">
+                                {proj.expand?.department?.name}
+                              </Badge>
+                            )) ||
+                            '-'}
+                        </div>
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-wrap gap-1">
@@ -1022,24 +1119,29 @@ export default function Admin() {
                           {proj.status === 'active' ? 'Ativo' : 'Inativo'}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-right space-x-2">
-                        <Button variant="ghost" size="sm" onClick={() => handleEditProj(proj)}>
-                          Editar
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDeleteProj(proj.id)}
-                          className="text-red-500 hover:text-red-700 hover:bg-red-50"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
+                      {isAdmin && (
+                        <TableCell className="text-right space-x-2">
+                          <Button variant="ghost" size="sm" onClick={() => handleEditProj(proj)}>
+                            Editar
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDeleteProj(proj.id)}
+                            className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                   {projects.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                      <TableCell
+                        colSpan={isAdmin ? 5 : 4}
+                        className="text-center text-muted-foreground py-8"
+                      >
                         Nenhum projeto cadastrado.
                       </TableCell>
                     </TableRow>
