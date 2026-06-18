@@ -16,12 +16,37 @@ import {
   SidebarMenuSubButton,
 } from '@/components/ui/sidebar'
 import { LayoutDashboard, Settings, LogOut, ChevronRight, ShieldAlert } from 'lucide-react'
-import { DEPARTMENTS } from '@/lib/mock-data'
+import { useState, useEffect } from 'react'
+import pb from '@/lib/pocketbase/client'
+import { useRealtime } from '@/hooks/use-realtime'
 import { useAuth } from '@/hooks/use-auth'
+import { Folder } from 'lucide-react'
 
 export function AppSidebar() {
   const location = useLocation()
-  const { signOut } = useAuth()
+  const { signOut, isAuthenticated } = useAuth()
+  const [departments, setDepartments] = useState<any[]>([])
+
+  const loadDepartments = async () => {
+    try {
+      const records = await pb.collection('departments').getFullList({ sort: 'name' })
+      setDepartments(records)
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  useEffect(() => {
+    if (isAuthenticated) loadDepartments()
+  }, [isAuthenticated])
+
+  useRealtime(
+    'departments',
+    () => {
+      loadDepartments()
+    },
+    isAuthenticated,
+  )
 
   return (
     <Sidebar variant="inset" className="border-r shadow-sm">
@@ -71,34 +96,17 @@ export function AppSidebar() {
           <SidebarGroupLabel>Departamentos</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {DEPARTMENTS.filter((d: any) => !d.isHidden).map((dept: any) => {
-                const Icon = dept.icon
+              {departments.map((dept: any) => {
                 const isDeptActive = location.pathname === `/department/${dept.id}`
-                const isSubActive = dept.subItems?.some(
-                  (sub: any) => location.pathname === sub.path,
-                )
 
                 return (
                   <SidebarMenuItem key={dept.id}>
                     <SidebarMenuButton asChild isActive={isDeptActive} tooltip={dept.name}>
                       <Link to={`/department/${dept.id}`}>
-                        <Icon className="h-4 w-4" />
+                        <Folder className="h-4 w-4" />
                         <span>{dept.name}</span>
                       </Link>
                     </SidebarMenuButton>
-                    {dept.subItems && dept.subItems.length > 0 && (
-                      <SidebarMenuSub>
-                        {dept.subItems.map((sub: any) => (
-                          <SidebarMenuSubItem key={sub.id}>
-                            <SidebarMenuSubButton asChild isActive={location.pathname === sub.path}>
-                              <Link to={sub.path}>
-                                <span>{sub.name}</span>
-                              </Link>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                        ))}
-                      </SidebarMenuSub>
-                    )}
                   </SidebarMenuItem>
                 )
               })}

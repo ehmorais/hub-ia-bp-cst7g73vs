@@ -1,5 +1,7 @@
+import { useEffect, useState } from 'react'
+import pb from '@/lib/pocketbase/client'
 import { useParams, Link } from 'react-router-dom'
-import { DEPARTMENTS, TOOLS, RECENT_HISTORY } from '@/lib/mock-data'
+import { RECENT_HISTORY } from '@/lib/mock-data'
 import {
   Card,
   CardContent,
@@ -18,7 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { ArrowLeft, Play, History, BrainCircuit } from 'lucide-react'
+import { ArrowLeft, Play, History, BrainCircuit, Folder } from 'lucide-react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
@@ -27,9 +29,21 @@ import { cn } from '@/lib/utils'
 
 export default function Department() {
   const { id } = useParams()
-  const department = DEPARTMENTS.find((d) => d.id === id) || DEPARTMENTS[0]
-  const departmentTools = TOOLS.filter((t) => t.departmentId === department.id)
-  const Icon = department.icon
+  const [department, setDepartment] = useState<any>(null)
+  const [departmentTools, setDepartmentTools] = useState<any[]>([])
+
+  useEffect(() => {
+    if (id) {
+      pb.collection('departments').getOne(id).then(setDepartment).catch(console.error)
+
+      pb.collection('ia_tools')
+        .getFullList({ sort: 'name' })
+        .then(setDepartmentTools)
+        .catch(console.error)
+    }
+  }, [id])
+
+  if (!department) return null
 
   return (
     <div className="container mx-auto p-4 md:p-8 space-y-8 max-w-7xl animate-fade-in-up">
@@ -41,8 +55,8 @@ export default function Department() {
           </Link>
         </Button>
         <div className="flex items-center gap-3">
-          <div className={cn('p-3 rounded-xl hidden sm:block', department.color)}>
-            <Icon className="h-6 w-6" />
+          <div className="p-3 rounded-xl hidden sm:block bg-blue-100 text-blue-700">
+            <Folder className="h-6 w-6" />
           </div>
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-slate-900">{department.name}</h1>
@@ -69,16 +83,16 @@ export default function Department() {
                   <Badge
                     variant="outline"
                     className={cn(
-                      'bg-slate-50',
-                      tool.status === 'Ativo'
+                      'bg-slate-50 uppercase text-[10px]',
+                      tool.status === 'active'
                         ? 'text-primary border-primary/20'
                         : 'text-amber-600 border-amber-200',
                     )}
                   >
-                    {tool.status}
+                    {tool.status === 'active' ? 'Ativo' : tool.status}
                   </Badge>
                   <span className="text-xs text-muted-foreground font-mono bg-slate-100 px-2 py-0.5 rounded">
-                    {tool.model}
+                    {tool.model_alias}
                   </span>
                 </div>
                 <CardTitle className="text-xl">{tool.name}</CardTitle>
@@ -97,7 +111,17 @@ export default function Department() {
                     >
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart
-                          data={tool.usageData}
+                          data={
+                            tool.usageData || [
+                              { day: 'Seg', calls: 10 },
+                              { day: 'Ter', calls: 15 },
+                              { day: 'Qua', calls: 8 },
+                              { day: 'Qui', calls: 20 },
+                              { day: 'Sex', calls: 25 },
+                              { day: 'Sab', calls: 5 },
+                              { day: 'Dom', calls: 2 },
+                            ]
+                          }
                           margin={{ top: 0, right: 0, left: -20, bottom: 0 }}
                         >
                           <XAxis dataKey="day" fontSize={10} tickLine={false} axisLine={false} />

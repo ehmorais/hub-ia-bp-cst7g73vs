@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-06-18T15:05:52.342Z",
+  "generatedAt": "2026-06-18T15:15:10.369Z",
   "collections": [
     {
       "name": "users",
@@ -37,6 +37,13 @@
           "required": false,
           "system": false,
           "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "role",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["Admin", "Operador"]
         }
       ],
       "indexes": [
@@ -177,9 +184,9 @@
       "apiRules": {
         "list": "@request.auth.id != ''",
         "view": "@request.auth.id != ''",
-        "create": "@request.auth.id != ''",
-        "update": "@request.auth.id != ''",
-        "delete": "@request.auth.id != ''"
+        "create": "@request.auth.role = 'Admin'",
+        "update": "@request.auth.role = 'Admin'",
+        "delete": "@request.auth.role = 'Admin'"
       },
       "fields": [
         {

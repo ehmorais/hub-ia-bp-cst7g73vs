@@ -1,16 +1,52 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Activity, Clock, Zap, ArrowRight } from 'lucide-react'
-import { DEPARTMENTS, TOOLS } from '@/lib/mock-data'
+import { useEffect, useState } from 'react'
+import pb from '@/lib/pocketbase/client'
+import { useRealtime } from '@/hooks/use-realtime'
+import { Activity, Clock, Zap, ArrowRight, Folder } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/hooks/use-auth'
 
 export default function Dashboard() {
-  const topTools = TOOLS.slice(0, 3)
-  const { user } = useAuth()
+  const { user, isAuthenticated } = useAuth()
   const name = user?.name || user?.email?.split('@')[0] || 'Usuário'
+
+  const [tools, setTools] = useState<any[]>([])
+  const [departments, setDepartments] = useState<any[]>([])
+
+  const loadData = async () => {
+    try {
+      const t = await pb.collection('ia_tools').getFullList({ sort: 'name' })
+      setTools(t)
+      const d = await pb.collection('departments').getFullList({ sort: 'name' })
+      setDepartments(d)
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
+  useEffect(() => {
+    if (isAuthenticated) loadData()
+  }, [isAuthenticated])
+
+  useRealtime(
+    'ia_tools',
+    () => {
+      loadData()
+    },
+    isAuthenticated,
+  )
+  useRealtime(
+    'departments',
+    () => {
+      loadData()
+    },
+    isAuthenticated,
+  )
+
+  const topTools = tools.slice(0, 3)
 
   return (
     <div className="container mx-auto p-4 md:p-8 space-y-8 max-w-7xl">
@@ -69,22 +105,15 @@ export default function Dashboard() {
         <div className="space-y-4">
           <h2 className="text-xl font-semibold tracking-tight">Seus Departamentos</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {DEPARTMENTS.map((dept) => {
-              const Icon = dept.icon
+            {departments.map((dept) => {
               return (
                 <Link to={`/department/${dept.id}`} key={dept.id} className="group">
                   <Card className="h-full border-slate-200 transition-all duration-200 hover:shadow-md hover:border-primary/50 bg-white">
                     <CardHeader className="pb-3">
                       <div className="flex justify-between items-start mb-2">
-                        <div className={cn('p-2.5 rounded-lg', dept.color)}>
-                          <Icon className="h-5 w-5" />
+                        <div className="p-2.5 rounded-lg bg-blue-100 text-blue-700">
+                          <Folder className="h-5 w-5" />
                         </div>
-                        <Badge
-                          variant="secondary"
-                          className="bg-slate-100 text-slate-600 font-medium"
-                        >
-                          {dept.modelsActive} Modelos
-                        </Badge>
                       </div>
                       <CardTitle className="text-lg group-hover:text-primary transition-colors">
                         {dept.name}
@@ -97,6 +126,11 @@ export default function Dashboard() {
                 </Link>
               )
             })}
+            {departments.length === 0 && (
+              <div className="text-muted-foreground text-sm py-4">
+                Nenhum departamento cadastrado.
+              </div>
+            )}
           </div>
         </div>
 
@@ -113,12 +147,12 @@ export default function Dashboard() {
                       variant="outline"
                       className={cn(
                         'text-[10px] uppercase px-1.5 py-0',
-                        tool.status === 'Ativo'
+                        tool.status === 'active'
                           ? 'text-primary border-primary/30'
                           : 'text-amber-600 border-amber-300',
                       )}
                     >
-                      {tool.status}
+                      {tool.status === 'active' ? 'Ativo' : tool.status}
                     </Badge>
                   </div>
                   <CardDescription className="text-xs mt-1 truncate">

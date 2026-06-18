@@ -61,6 +61,7 @@ export default function Admin() {
   const [depName, setDepName] = useState('')
   const [depDesc, setDepDesc] = useState('')
   const [isSubmittingDep, setIsSubmittingDep] = useState(false)
+  const [editingDep, setEditingDep] = useState<any>(null)
 
   const loadLogs = async () => {
     try {
@@ -111,18 +112,34 @@ export default function Admin() {
     loadDepartments()
   })
 
-  const handleCreateDep = async () => {
+  const handleSaveDep = async () => {
     setIsSubmittingDep(true)
     try {
-      await createDepartment({ name: depName, description: depDesc })
-      toast({ title: 'Sucesso', description: 'Departamento criado com sucesso.' })
-      setDepName('')
-      setDepDesc('')
+      if (editingDep) {
+        await updateDepartment(editingDep.id, { name: depName, description: depDesc })
+        toast({ title: 'Sucesso', description: 'Departamento atualizado com sucesso.' })
+      } else {
+        await createDepartment({ name: depName, description: depDesc })
+        toast({ title: 'Sucesso', description: 'Departamento criado com sucesso.' })
+      }
+      handleCancelEditDep()
     } catch (err) {
-      toast({ title: 'Erro', description: 'Erro ao criar departamento.', variant: 'destructive' })
+      toast({ title: 'Erro', description: 'Erro ao salvar departamento.', variant: 'destructive' })
     } finally {
       setIsSubmittingDep(false)
     }
+  }
+
+  const handleEditDep = (dep: any) => {
+    setEditingDep(dep)
+    setDepName(dep.name)
+    setDepDesc(dep.description || '')
+  }
+
+  const handleCancelEditDep = () => {
+    setEditingDep(null)
+    setDepName('')
+    setDepDesc('')
   }
 
   const handleDeleteDep = async (id: string) => {
@@ -207,7 +224,8 @@ export default function Admin() {
             <Card className="border-slate-200 bg-white md:col-span-1 h-fit">
               <CardHeader className="bg-slate-50 border-b">
                 <CardTitle className="text-lg flex items-center gap-2">
-                  <Building2 className="h-5 w-5" /> Novo Departamento
+                  <Building2 className="h-5 w-5" />{' '}
+                  {editingDep ? 'Editar Departamento' : 'Novo Departamento'}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4 pt-6">
@@ -227,13 +245,24 @@ export default function Admin() {
                     placeholder="Opcional"
                   />
                 </div>
-                <Button
-                  onClick={handleCreateDep}
-                  disabled={isSubmittingDep || !depName}
-                  className="w-full"
-                >
-                  {isSubmittingDep ? 'Salvando...' : 'Criar Departamento'}
-                </Button>
+                <div className="flex flex-col gap-2">
+                  <Button
+                    onClick={handleSaveDep}
+                    disabled={isSubmittingDep || !depName}
+                    className="w-full"
+                  >
+                    {isSubmittingDep
+                      ? 'Salvando...'
+                      : editingDep
+                        ? 'Salvar Alterações'
+                        : 'Criar Departamento'}
+                  </Button>
+                  {editingDep && (
+                    <Button variant="outline" onClick={handleCancelEditDep} className="w-full">
+                      Cancelar
+                    </Button>
+                  )}
+                </div>
               </CardContent>
             </Card>
 
@@ -251,7 +280,10 @@ export default function Admin() {
                     <TableRow key={dep.id}>
                       <TableCell className="font-semibold text-slate-800">{dep.name}</TableCell>
                       <TableCell className="text-slate-500">{dep.description || '-'}</TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right space-x-2">
+                        <Button variant="ghost" size="sm" onClick={() => handleEditDep(dep)}>
+                          Editar
+                        </Button>
                         <Button
                           variant="ghost"
                           size="icon"
