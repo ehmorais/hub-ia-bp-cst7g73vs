@@ -2,7 +2,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useEffect, useState } from 'react'
 import pb from '@/lib/pocketbase/client'
 import { useRealtime } from '@/hooks/use-realtime'
-import { Activity, Zap, FolderKanban } from 'lucide-react'
+import { Activity, Zap, FolderKanban, BrainCircuit } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '@/hooks/use-auth'
 import { getIcon } from '@/lib/icons'
 import { SystemChecklistModal } from '@/components/SystemChecklistModal'
@@ -147,6 +148,20 @@ export default function Dashboard() {
                       </span>
                       <span className="font-bold text-slate-800 text-base">{deptTools.length}</span>
                     </div>
+                    {deptTools.length > 0 && (
+                      <div className="flex flex-col gap-1 mt-2">
+                        {deptTools.map((t) => (
+                          <Link
+                            key={t.id}
+                            to={`/ai/${t.id}`}
+                            className="text-[13px] font-medium text-slate-600 hover:text-green-700 flex items-center gap-1.5 py-1.5 px-3 rounded-lg hover:bg-green-50/50 transition-colors"
+                          >
+                            <BrainCircuit className="h-3.5 w-3.5" />
+                            {t.name}
+                          </Link>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>

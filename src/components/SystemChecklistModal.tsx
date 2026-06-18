@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
   Dialog,
   DialogContent,
@@ -51,15 +52,17 @@ export function SystemChecklistModal({ tools }: { tools: any[] }) {
           ) : (
             <>
               {tools.map((tool, idx) => (
-                <div
+                <Link
                   key={tool.id}
-                  className={`flex items-center justify-between p-3 border rounded-lg transition-all duration-500 ease-in-out ${
+                  to={`/ai/${tool.id}`}
+                  onClick={() => setOpen(false)}
+                  className={`flex items-center justify-between p-3 border rounded-lg transition-all duration-500 ease-in-out hover:bg-slate-100 cursor-pointer ${
                     idx < visibleCount ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
                   } ${tool.status === 'active' ? 'bg-slate-50' : 'bg-red-50/50 border-red-100'}`}
                 >
                   <div className="flex items-center gap-3">
                     <PlayCircle className="h-5 w-5 text-primary" />
-                    <span className="font-medium text-sm">{tool.name}</span>
+                    <span className="font-medium text-sm text-slate-700">{tool.name}</span>
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-200/80 text-slate-600 font-mono tracking-wider font-semibold">
                       GO
                     </span>
@@ -69,7 +72,7 @@ export function SystemChecklistModal({ tools }: { tools: any[] }) {
                       className={`h-5 w-5 animate-in zoom-in spin-in-12 duration-300 ${tool.status === 'active' ? 'text-green-500' : 'text-amber-500'}`}
                     />
                   )}
-                </div>
+                </Link>
               ))}
               {visibleCount === tools.length && tools.length > 0 && (
                 <div className="text-center p-4 mt-2 bg-green-50 text-green-700 rounded-lg border border-green-200 animate-in fade-in slide-in-from-bottom-2 duration-500">

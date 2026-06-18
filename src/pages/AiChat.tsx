@@ -1,9 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { TOOLS } from '@/lib/mock-data'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import {
   ArrowLeft,
@@ -16,27 +14,42 @@ import {
   BrainCircuit,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-
-type Message = {
-  id: string
-  role: 'user' | 'ai'
-  content: string
-}
+import pb from '@/lib/pocketbase/client'
+import { streamAgentChat, type DisplayMessage } from '@/lib/skipAi'
+import { Skeleton } from '@/components/ui/skeleton'
 
 export default function AiChat() {
   const { id } = useParams()
-  const tool = TOOLS.find((t) => t.id === id) || TOOLS[0]
+  const [tool, setTool] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+  const [conversationId, setConversationId] = useState<string | null>(null)
 
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: '1',
-      role: 'ai',
-      content: `Olá! Sou o **${tool.name}**. Como posso ajudar com suas análises hoje? Forneça os dados ou o contexto clínico para iniciarmos.`,
-    },
-  ])
+  const [messages, setMessages] = useState<DisplayMessage[]>([])
   const [input, setInput] = useState('')
   const [isTyping, setIsTyping] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!id) return
+    pb.collection('ia_tools')
+      .getOne(id)
+      .then((t) => {
+        setTool(t)
+        setMessages([
+          {
+            id: '1',
+            role: 'assistant',
+            content: `Olá! Sou o **${t.name}**. Como posso ajudar com suas análises hoje? Forneça os dados ou o contexto para iniciarmos.`,
+            created: new Date().toISOString(),
+          },
+        ])
+        setLoading(false)
+      })
+      .catch((err) => {
+        console.error(err)
+        setLoading(false)
+      })
+  }, [id])
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -46,52 +59,91 @@ export default function AiChat() {
     scrollToBottom()
   }, [messages, isTyping])
 
-  const handleSend = (e: React.FormEvent) => {
+  const handleSend = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!input.trim()) return
+    if (!input.trim() || isTyping) return
 
-    const userMsg: Message = { id: Date.now().toString(), role: 'user', content: input }
+    const userText = input.trim()
+    const userMsg: DisplayMessage = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: userText,
+      created: new Date().toISOString(),
+    }
     setMessages((prev) => [...prev, userMsg])
     setInput('')
     setIsTyping(true)
 
-    // Simulate AI response
-    setTimeout(() => {
-      const aiMsg: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'ai',
-        content: `Baseado nas informações fornecidas, observei os seguintes pontos:\n\n1. **Análise Primária**: Não há achados críticos evidentes no primeiro momento.\n2. **Recomendação**: Sugere-se correlação clínica e acompanhamento padrão.\n\n*Nota: Esta é uma simulação de resposta estruturada em Markdown.*`,
-      }
-      setMessages((prev) => [...prev, aiMsg])
+    const controller = new AbortController()
+    try {
+      const res = await fetch(
+        `${import.meta.env.VITE_POCKETBASE_URL}/backend/v1/agent-chat/stream`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: pb.authStore.token },
+          body: JSON.stringify({ message: userText, conversation_id: conversationId, tool_id: id }),
+          signal: controller.signal,
+        },
+      )
+
+      let assistantId = Date.now().toString() + '-ai'
+      setMessages((prev) => [
+        ...prev,
+        { id: assistantId, role: 'assistant', content: '', created: new Date().toISOString() },
+      ])
+
+      const result = await streamAgentChat(res, {
+        onChunk: (_delta, full) => {
+          setMessages((prev) =>
+            prev.map((m) => (m.id === assistantId ? { ...m, content: full } : m)),
+          )
+        },
+        signal: controller.signal,
+      })
+
+      setConversationId(res.headers.get('X-Conversation-Id') ?? result.conversation_id)
+    } catch (err: any) {
+      console.error(err)
+    } finally {
       setIsTyping(false)
-    }, 1500)
+    }
   }
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem-4rem)] bg-slate-50/50">
-      {' '}
-      {/* subtract header and footer approx */}
       {/* Top Bar */}
       <div className="bg-white border-b px-4 py-3 flex items-center justify-between shrink-0 shadow-sm z-10">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" asChild className="h-8 w-8">
-            <Link to={`/department/${tool.departmentId}`}>
+            <Link to="/dashboard">
               <ArrowLeft className="h-4 w-4" />
             </Link>
           </Button>
-          <div>
-            <h2 className="font-semibold text-sm flex items-center gap-2">
-              {tool.name}
-              <Badge
-                variant="outline"
-                className="text-[10px] font-normal py-0 px-1 border-primary/20 text-primary bg-primary/5"
-              >
-                {tool.model}
-              </Badge>
-            </h2>
-          </div>
+          {loading ? (
+            <Skeleton className="h-6 w-48" />
+          ) : tool ? (
+            <div>
+              <h2 className="font-semibold text-sm flex items-center gap-2">
+                {tool.name}
+                <Badge
+                  variant="outline"
+                  className="text-[10px] font-normal py-0 px-1 border-primary/20 text-primary bg-primary/5"
+                >
+                  {tool.model_alias || 'agent'}
+                </Badge>
+              </h2>
+            </div>
+          ) : null}
         </div>
-        <Button variant="outline" size="sm" className="text-xs h-8 text-slate-600">
+        <Button
+          variant="outline"
+          size="sm"
+          className="text-xs h-8 text-slate-600"
+          onClick={() => {
+            setMessages([])
+            setConversationId(null)
+          }}
+        >
           Novo Chamado
         </Button>
       </div>
@@ -146,13 +198,14 @@ export default function AiChat() {
                 </div>
 
                 {/* AI Actions */}
-                {msg.role === 'ai' && msg.id !== '1' && (
+                {msg.role === 'assistant' && msg.id !== '1' && (
                   <div className="flex items-center gap-2 pl-2">
                     <Button
                       variant="ghost"
                       size="icon"
                       className="h-7 w-7 text-slate-400 hover:text-slate-600"
                       title="Copiar Resposta"
+                      onClick={() => navigator.clipboard.writeText(msg.content)}
                     >
                       <Copy className="h-3.5 w-3.5" />
                     </Button>
@@ -209,7 +262,7 @@ export default function AiChat() {
             <Card className="flex-1 border-slate-200 shadow-sm focus-within:ring-1 focus-within:ring-primary focus-within:border-primary transition-all overflow-hidden p-1">
               <textarea
                 className="w-full min-h-[60px] max-h-[200px] resize-none bg-transparent border-0 p-3 text-sm focus:outline-none focus:ring-0 text-slate-900 placeholder:text-slate-400"
-                placeholder="Descreva o caso clínico, cole o laudo ou faça sua pergunta. Não inclua dados sensíveis do paciente (Nome, CPF, etc)."
+                placeholder="Descreva a solicitação da escala ou faça sua pergunta."
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => {
@@ -225,7 +278,7 @@ export default function AiChat() {
               size="icon"
               className={cn(
                 'h-[68px] w-[68px] rounded-xl shrink-0 transition-all',
-                input.trim()
+                input.trim() && !isTyping
                   ? 'bg-primary hover:bg-primary/90'
                   : 'bg-slate-200 text-slate-400 pointer-events-none',
               )}
@@ -234,8 +287,8 @@ export default function AiChat() {
             </Button>
           </form>
           <p className="text-center text-[11px] text-slate-400 mt-3 font-medium">
-            LLMs podem cometer erros. Verifique informações importantes com protocolos
-            institucionais.
+            Agentes baseados em IA podem cometer erros. Verifique as matrizes de dimensionamento
+            geradas.
           </p>
         </div>
       </div>
