@@ -123,8 +123,15 @@ export function AppSidebar() {
                   <SidebarMenuItem key={dept.id}>
                     <SidebarMenuButton asChild isActive={isDeptActive} tooltip={dept.name}>
                       <Link to={`/department/${dept.id}`}>
-                        {getIcon(dept.icon)}
-                        <span>{dept.name}</span>
+                        <div
+                          style={{ color: dept.color || 'inherit' }}
+                          className="flex items-center justify-center"
+                        >
+                          {getIcon(dept.icon)}
+                        </div>
+                        <span style={{ color: dept.color || 'inherit', fontWeight: 500 }}>
+                          {dept.name}
+                        </span>
                       </Link>
                     </SidebarMenuButton>
                     {deptProjects.length > 0 && (

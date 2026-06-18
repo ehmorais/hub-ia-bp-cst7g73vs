@@ -42,7 +42,7 @@ export function SystemChecklistModal() {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="text-xl">System Checklist</DialogTitle>
+          <DialogTitle className="text-xl">All Systems Go - Checklist</DialogTitle>
           <DialogDescription>
             Verificando integridade dos módulos de Inteligência Artificial...
           </DialogDescription>
@@ -73,7 +73,7 @@ export function SystemChecklistModal() {
             <div className="text-center p-4 mt-2 bg-green-50 text-green-700 rounded-lg border border-green-200 animate-in fade-in slide-in-from-bottom-2 duration-500">
               <p className="text-sm font-semibold flex items-center justify-center gap-2">
                 <CheckCircle2 className="h-5 w-5" />
-                All systems verified and operational
+                All Systems Go: Verified and operational
               </p>
             </div>
           )}

@@ -53,7 +53,7 @@ export default function Layout() {
 
   const allActive = tools.length === 0 || tools.every((t) => t.status === 'active')
   const statusColor = allActive ? 'bg-green-500' : 'bg-red-500'
-  const statusText = allActive ? 'All System Go' : 'System Alert'
+  const statusText = allActive ? 'All Systems Go' : 'System Alert'
 
   const avatarUrl = user?.avatar ? pb.files.getUrl(user, user.avatar, { thumb: '100x100' }) : ''
   const name = user?.name || 'Usuário'

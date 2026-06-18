@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useAuth } from '@/hooks/use-auth'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
@@ -20,6 +21,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Checkbox } from '@/components/ui/checkbox'
+import * as Icons from 'lucide-react'
 import {
   Search,
   Download,
@@ -29,6 +32,7 @@ import {
   Users,
   Building2,
   Trash2,
+  Activity,
 } from 'lucide-react'
 import { useToast } from '@/components/ui/use-toast'
 import {
@@ -49,13 +53,32 @@ import { extractFieldErrors } from '@/lib/pocketbase/errors'
 import { useRealtime } from '@/hooks/use-realtime'
 import { cn } from '@/lib/utils'
 
+const ICONS_LIST = [
+  'Building2',
+  'Users',
+  'Activity',
+  'ShieldCheck',
+  'Stethoscope',
+  'HeartPulse',
+  'Microscope',
+  'Briefcase',
+  'Folder',
+  'Settings',
+  'Database',
+  'Globe',
+  'Zap',
+  'Lightbulb',
+]
+
 export default function Admin() {
   const { toast } = useToast()
+  const { user } = useAuth()
 
   const [logs, setLogs] = useState<any[]>([])
   const [users, setUsers] = useState<any[]>([])
   const [tools, setTools] = useState<any[]>([])
   const [departments, setDepartments] = useState<any[]>([])
+  const [projects, setProjects] = useState<any[]>([])
 
   const [toolName, setToolName] = useState('')
   const [toolModel, setToolModel] = useState('fast')
@@ -66,16 +89,17 @@ export default function Admin() {
   const [depName, setDepName] = useState('')
   const [depDesc, setDepDesc] = useState('')
   const [depSortOrder, setDepSortOrder] = useState(0)
-  const [depIcon, setDepIcon] = useState('')
+  const [depIcon, setDepIcon] = useState('Folder')
+  const [depColor, setDepColor] = useState('#0f172a')
   const [isSubmittingDep, setIsSubmittingDep] = useState(false)
   const [editingDep, setEditingDep] = useState<any>(null)
 
-  const [projects, setProjects] = useState<any[]>([])
   const [projName, setProjName] = useState('')
   const [projDesc, setProjDesc] = useState('')
   const [projDep, setProjDep] = useState('')
   const [projSort, setProjSort] = useState(0)
   const [projStatus, setProjStatus] = useState('active')
+  const [projMembers, setProjMembers] = useState<string[]>([])
   const [editingProj, setEditingProj] = useState<any>(null)
   const [isSubmittingProj, setIsSubmittingProj] = useState(false)
 
@@ -139,24 +163,51 @@ export default function Admin() {
     loadProjects()
   })
 
+  const handleExportCSV = () => {
+    const header = ['Projeto', 'Status', 'Departamento', 'Membros'].join(',')
+    const rows = projects.map((p) => {
+      const depName = p.expand?.department?.name || '-'
+      const members = (p.expand?.members || []).map((m: any) => m.name || m.email).join(' | ')
+      return `"${p.name}","${p.status}","${depName}","${members}"`
+    })
+    const csv = [header, ...rows].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', 'relatorio_projetos.csv')
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
   const handleSaveDep = async () => {
     setIsSubmittingDep(true)
     try {
       if (editingDep) {
-        await updateDepartment(editingDep.id, {
-          name: depName,
-          description: depDesc,
-          sort_order: depSortOrder,
-          icon: depIcon,
-        })
+        await updateDepartment(
+          editingDep.id,
+          {
+            name: depName,
+            description: depDesc,
+            sort_order: depSortOrder,
+            icon: depIcon,
+            color: depColor,
+          },
+          user?.id,
+        )
         toast({ title: 'Sucesso', description: 'Departamento atualizado com sucesso.' })
       } else {
-        await createDepartment({
-          name: depName,
-          description: depDesc,
-          sort_order: depSortOrder,
-          icon: depIcon,
-        })
+        await createDepartment(
+          {
+            name: depName,
+            description: depDesc,
+            sort_order: depSortOrder,
+            icon: depIcon,
+            color: depColor,
+          },
+          user?.id,
+        )
         toast({ title: 'Sucesso', description: 'Departamento criado com sucesso.' })
       }
       handleCancelEditDep()
@@ -172,7 +223,8 @@ export default function Admin() {
     setDepName(dep.name)
     setDepDesc(dep.description || '')
     setDepSortOrder(dep.sort_order || 0)
-    setDepIcon(dep.icon || '')
+    setDepIcon(dep.icon || 'Folder')
+    setDepColor(dep.color || '#0f172a')
   }
 
   const handleCancelEditDep = () => {
@@ -180,29 +232,42 @@ export default function Admin() {
     setDepName('')
     setDepDesc('')
     setDepSortOrder(0)
-    setDepIcon('')
+    setDepIcon('Folder')
+    setDepColor('#0f172a')
   }
 
   const handleSaveProj = async () => {
     setIsSubmittingProj(true)
     try {
+      const depNameStr = departments.find((d) => d.id === projDep)?.name || 'Desconhecido'
       if (editingProj) {
-        await updateProject(editingProj.id, {
-          name: projName,
-          description: projDesc,
-          department: projDep,
-          sort_order: projSort,
-          status: projStatus,
-        })
+        await updateProject(
+          editingProj.id,
+          {
+            name: projName,
+            description: projDesc,
+            department: projDep,
+            sort_order: projSort,
+            status: projStatus,
+            members: projMembers,
+          },
+          user?.id,
+          depNameStr,
+        )
         toast({ title: 'Sucesso', description: 'Projeto atualizado com sucesso.' })
       } else {
-        await createProject({
-          name: projName,
-          description: projDesc,
-          department: projDep,
-          sort_order: projSort,
-          status: projStatus,
-        })
+        await createProject(
+          {
+            name: projName,
+            description: projDesc,
+            department: projDep,
+            sort_order: projSort,
+            status: projStatus,
+            members: projMembers,
+          },
+          user?.id,
+          depNameStr,
+        )
         toast({ title: 'Sucesso', description: 'Projeto criado com sucesso.' })
       }
       handleCancelEditProj()
@@ -220,6 +285,7 @@ export default function Admin() {
     setProjDep(proj.department)
     setProjSort(proj.sort_order || 0)
     setProjStatus(proj.status || 'active')
+    setProjMembers(proj.members || [])
   }
 
   const handleCancelEditProj = () => {
@@ -229,12 +295,15 @@ export default function Admin() {
     setProjDep('')
     setProjSort(0)
     setProjStatus('active')
+    setProjMembers([])
   }
 
   const handleDeleteProj = async (id: string) => {
     if (confirm('Tem certeza que deseja remover este projeto?')) {
       try {
-        await deleteProject(id)
+        const p = projects.find((x) => x.id === id)
+        const depNameStr = departments.find((d) => d.id === p?.department)?.name || 'Desconhecido'
+        await deleteProject(id, p?.name || '', user?.id, depNameStr)
         toast({ title: 'Sucesso', description: 'Projeto removido.' })
       } catch (err) {
         toast({ title: 'Erro', description: 'Erro ao remover projeto.', variant: 'destructive' })
@@ -245,7 +314,8 @@ export default function Admin() {
   const handleDeleteDep = async (id: string) => {
     if (confirm('Tem certeza que deseja remover este departamento?')) {
       try {
-        await deleteDepartment(id)
+        const d = departments.find((x) => x.id === id)
+        await deleteDepartment(id, d?.name || '', user?.id)
         toast({ title: 'Sucesso', description: 'Departamento removido.' })
       } catch (err) {
         toast({ title: 'Erro', description: 'Erro ao remover.', variant: 'destructive' })
@@ -280,7 +350,7 @@ export default function Admin() {
   }
 
   return (
-    <div className="container mx-auto p-4 md:p-8 space-y-8 max-w-7xl animate-fade-in">
+    <div className="container mx-auto p-4 md:p-8 space-y-8 max-w-[1400px] animate-fade-in">
       <div className="flex flex-col gap-2">
         <h1 className="text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-3">
           <ShieldCheck className="h-8 w-8 text-primary" />
@@ -291,8 +361,14 @@ export default function Admin() {
         </p>
       </div>
 
-      <Tabs defaultValue="audit" className="w-full">
-        <TabsList className="grid w-full grid-cols-5 max-w-4xl mb-8">
+      <Tabs defaultValue="performance" className="w-full">
+        <TabsList className="grid w-full grid-cols-6 max-w-5xl mb-8">
+          <TabsTrigger
+            value="performance"
+            className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+          >
+            Performance
+          </TabsTrigger>
           <TabsTrigger
             value="audit"
             className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
@@ -325,9 +401,76 @@ export default function Admin() {
           </TabsTrigger>
         </TabsList>
 
+        <TabsContent value="performance" className="space-y-6">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-semibold flex items-center gap-2">
+              <Activity className="h-5 w-5" /> Performance Dashboard
+            </h2>
+            <Button onClick={handleExportCSV} className="gap-2">
+              <Download className="h-4 w-4" /> Exportar Relatório (CSV)
+            </Button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {departments.map((dep) => {
+              const depProjs = projects.filter((p) => p.department === dep.id)
+              const total = depProjs.length
+              const active = depProjs.filter((p) => p.status === 'active').length
+              const activePercent = total > 0 ? Math.round((active / total) * 100) : 0
+              const depColorHex = dep.color || 'hsl(var(--primary))'
+
+              return (
+                <Card key={dep.id} className="border-slate-200">
+                  <CardHeader className="pb-2">
+                    <CardTitle
+                      className="text-lg flex items-center gap-2"
+                      style={{ color: dep.color || 'inherit' }}
+                    >
+                      <div
+                        className="p-2 rounded-lg bg-slate-100 flex items-center justify-center"
+                        style={{ color: dep.color || 'inherit' }}
+                      >
+                        {(() => {
+                          const Icon = (Icons as any)[dep.icon] || Icons.Folder
+                          return <Icon className="h-5 w-5" />
+                        })()}
+                      </div>
+                      {dep.name}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4 mt-2">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-slate-500">Projetos Totais</span>
+                        <span className="font-semibold">{total}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-slate-500">Projetos Ativos</span>
+                        <span className="font-semibold text-green-600">
+                          {active} ({activePercent}%)
+                        </span>
+                      </div>
+                      <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                        <div
+                          className="h-full transition-all"
+                          style={{ width: `${activePercent}%`, backgroundColor: depColorHex }}
+                        />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )
+            })}
+            {departments.length === 0 && (
+              <div className="col-span-full text-center text-muted-foreground py-8">
+                Nenhum departamento cadastrado.
+              </div>
+            )}
+          </div>
+        </TabsContent>
+
         <TabsContent value="departments" className="space-y-6">
-          <div className="grid md:grid-cols-3 gap-6">
-            <Card className="border-slate-200 bg-white md:col-span-1 h-fit">
+          <div className="grid lg:grid-cols-3 gap-6">
+            <Card className="border-slate-200 bg-white lg:col-span-1 h-fit">
               <CardHeader className="bg-slate-50 border-b">
                 <CardTitle className="text-lg flex items-center gap-2">
                   <Building2 className="h-5 w-5" />{' '}
@@ -351,25 +494,51 @@ export default function Admin() {
                     placeholder="Opcional"
                   />
                 </div>
+                <div className="space-y-2">
+                  <Label>Ordem de Exibição</Label>
+                  <Input
+                    type="number"
+                    value={depSortOrder}
+                    onChange={(e) => setDepSortOrder(Number(e.target.value))}
+                  />
+                </div>
+
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Ordem</Label>
-                    <Input
-                      type="number"
-                      value={depSortOrder}
-                      onChange={(e) => setDepSortOrder(Number(e.target.value))}
-                    />
+                  <div className="space-y-2 col-span-2">
+                    <Label>Ícone</Label>
+                    <div className="flex flex-wrap gap-2 p-2 border rounded-md bg-slate-50">
+                      {ICONS_LIST.map((icon) => {
+                        const Icon = (Icons as any)[icon] || Icons.Folder
+                        return (
+                          <Button
+                            key={icon}
+                            type="button"
+                            variant={depIcon === icon ? 'default' : 'outline'}
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => setDepIcon(icon)}
+                          >
+                            <Icon className="h-4 w-4" />
+                          </Button>
+                        )
+                      })}
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label>Ícone (Lucide)</Label>
-                    <Input
-                      value={depIcon}
-                      onChange={(e) => setDepIcon(e.target.value)}
-                      placeholder="Ex: Users"
-                    />
+                  <div className="space-y-2 col-span-2">
+                    <Label>Cor de Identificação</Label>
+                    <div className="flex items-center gap-3">
+                      <Input
+                        type="color"
+                        value={depColor}
+                        onChange={(e) => setDepColor(e.target.value)}
+                        className="h-10 w-20 p-1 cursor-pointer"
+                      />
+                      <span className="text-sm text-muted-foreground uppercase">{depColor}</span>
+                    </div>
                   </div>
                 </div>
-                <div className="flex flex-col gap-2">
+
+                <div className="flex flex-col gap-2 pt-2">
                   <Button
                     onClick={handleSaveDep}
                     disabled={isSubmittingDep || !depName}
@@ -390,13 +559,12 @@ export default function Admin() {
               </CardContent>
             </Card>
 
-            <Card className="border-slate-200 md:col-span-2">
+            <Card className="border-slate-200 lg:col-span-2">
               <Table>
                 <TableHeader className="bg-slate-50">
                   <TableRow>
                     <TableHead>Nome</TableHead>
-                    <TableHead>Descrição</TableHead>
-                    <TableHead>Ícone</TableHead>
+                    <TableHead>Ícone & Cor</TableHead>
                     <TableHead>Ordem</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
@@ -404,10 +572,29 @@ export default function Admin() {
                 <TableBody>
                   {departments.map((dep) => (
                     <TableRow key={dep.id}>
-                      <TableCell className="font-semibold text-slate-800">{dep.name}</TableCell>
-                      <TableCell className="text-slate-500">{dep.description || '-'}</TableCell>
-                      <TableCell className="text-slate-500 font-mono text-xs">
-                        {dep.icon || '-'}
+                      <TableCell className="font-semibold text-slate-800">
+                        {dep.name}
+                        {dep.description && (
+                          <p className="text-xs text-slate-500 font-normal mt-0.5">
+                            {dep.description}
+                          </p>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="p-1.5 rounded bg-slate-100 flex items-center justify-center"
+                            style={{ color: dep.color || 'inherit' }}
+                          >
+                            {(() => {
+                              const Icon = (Icons as any)[dep.icon] || Icons.Folder
+                              return <Icon className="h-4 w-4" />
+                            })()}
+                          </div>
+                          <span className="text-xs text-slate-500 uppercase">
+                            {dep.color || '#000'}
+                          </span>
+                        </div>
                       </TableCell>
                       <TableCell className="text-slate-500">{dep.sort_order || 0}</TableCell>
                       <TableCell className="text-right space-x-2">
@@ -427,7 +614,7 @@ export default function Admin() {
                   ))}
                   {departments.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={3} className="text-center text-muted-foreground py-8">
+                      <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
                         Nenhum departamento cadastrado.
                       </TableCell>
                     </TableRow>
@@ -456,12 +643,6 @@ export default function Admin() {
                 </SelectContent>
               </Select>
             </div>
-            <Button
-              variant="outline"
-              className="gap-2 text-primary border-primary hover:bg-primary hover:text-primary-foreground"
-            >
-              <Download className="h-4 w-4" /> Exportar PDF (LGPD)
-            </Button>
           </div>
 
           <Card className="border-slate-200">
@@ -473,7 +654,7 @@ export default function Admin() {
                   <TableHead>Usuário</TableHead>
                   <TableHead>Departamento</TableHead>
                   <TableHead>Ação</TableHead>
-                  <TableHead className="text-right">Tokens Úteis</TableHead>
+                  <TableHead className="text-right">Tokens</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -563,11 +744,11 @@ export default function Admin() {
         </TabsContent>
 
         <TabsContent value="ia_tools" className="space-y-6">
-          <div className="grid md:grid-cols-2 gap-6">
-            <Card className="border-slate-200 bg-white">
+          <div className="grid lg:grid-cols-2 gap-6">
+            <Card className="border-slate-200 bg-white h-fit">
               <CardHeader className="bg-slate-50 border-b">
                 <CardTitle className="text-lg flex items-center gap-2">
-                  <Settings2 className="h-5 w-5" /> Configurar Nova Ferramenta IA
+                  <Settings2 className="h-5 w-5" /> Nova Ferramenta IA
                 </CardTitle>
                 <CardDescription>
                   Defina os parâmetros do modelo para um novo projeto.
@@ -596,12 +777,9 @@ export default function Admin() {
                         <SelectItem value="embedding">Embedding</SelectItem>
                       </SelectContent>
                     </Select>
-                    {fieldErrors.model_alias && (
-                      <p className="text-sm text-red-500">{fieldErrors.model_alias}</p>
-                    )}
                   </div>
                   <div className="space-y-2">
-                    <Label>Temperatura (Criatividade)</Label>
+                    <Label>Temperatura</Label>
                     <Input type="number" step="0.1" defaultValue="0.2" max="1" min="0" />
                   </div>
                 </div>
@@ -613,9 +791,6 @@ export default function Admin() {
                     className="w-full min-h-[100px] p-3 text-sm border rounded-md focus:ring-1 focus:ring-primary focus:outline-none bg-slate-50 font-mono text-slate-600"
                     placeholder="Descrição e instruções do assistente..."
                   />
-                  {fieldErrors.description && (
-                    <p className="text-sm text-red-500">{fieldErrors.description}</p>
-                  )}
                 </div>
                 <Button onClick={handleCreateTool} disabled={isSubmitting} className="w-full">
                   {isSubmitting ? 'Salvando...' : 'Salvar e Homologar'}
@@ -660,8 +835,8 @@ export default function Admin() {
         </TabsContent>
 
         <TabsContent value="projects" className="space-y-6">
-          <div className="grid md:grid-cols-3 gap-6">
-            <Card className="border-slate-200 bg-white md:col-span-1 h-fit">
+          <div className="grid lg:grid-cols-3 gap-6">
+            <Card className="border-slate-200 bg-white lg:col-span-1 h-fit">
               <CardHeader className="bg-slate-50 border-b">
                 <CardTitle className="text-lg flex items-center gap-2">
                   <Building2 className="h-5 w-5" />{' '}
@@ -722,7 +897,38 @@ export default function Admin() {
                     </Select>
                   </div>
                 </div>
-                <div className="flex flex-col gap-2">
+
+                <div className="space-y-2 pt-2">
+                  <Label>Membros Atribuídos</Label>
+                  <div className="border rounded-md p-3 max-h-40 overflow-y-auto space-y-3 bg-slate-50">
+                    {users.length === 0 && (
+                      <span className="text-xs text-muted-foreground">Nenhum usuário.</span>
+                    )}
+                    {users.map((u) => (
+                      <div key={u.id} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`user-${u.id}`}
+                          checked={projMembers.includes(u.id)}
+                          onCheckedChange={(c) => {
+                            if (c) setProjMembers([...projMembers, u.id])
+                            else setProjMembers(projMembers.filter((id) => id !== u.id))
+                          }}
+                        />
+                        <Label
+                          htmlFor={`user-${u.id}`}
+                          className="text-sm font-normal cursor-pointer"
+                        >
+                          {u.name || u.email}{' '}
+                          <span className="text-xs text-muted-foreground">
+                            ({u.role || 'Operador'})
+                          </span>
+                        </Label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-2 pt-2">
                   <Button
                     onClick={handleSaveProj}
                     disabled={isSubmittingProj || !projName || !projDep}
@@ -743,13 +949,13 @@ export default function Admin() {
               </CardContent>
             </Card>
 
-            <Card className="border-slate-200 md:col-span-2">
+            <Card className="border-slate-200 lg:col-span-2">
               <Table>
                 <TableHeader className="bg-slate-50">
                   <TableRow>
                     <TableHead>Nome</TableHead>
                     <TableHead>Departamento</TableHead>
-                    <TableHead>Ordem</TableHead>
+                    <TableHead>Membros</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
@@ -757,11 +963,34 @@ export default function Admin() {
                 <TableBody>
                   {projects.map((proj) => (
                     <TableRow key={proj.id}>
-                      <TableCell className="font-semibold text-slate-800">{proj.name}</TableCell>
+                      <TableCell className="font-semibold text-slate-800">
+                        {proj.name}
+                        {proj.description && (
+                          <p className="text-xs text-slate-500 font-normal mt-0.5">
+                            {proj.description}
+                          </p>
+                        )}
+                      </TableCell>
                       <TableCell className="text-slate-500">
                         {proj.expand?.department?.name || '-'}
                       </TableCell>
-                      <TableCell>{proj.sort_order || 0}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1">
+                          {proj.expand?.members && proj.expand.members.length > 0 ? (
+                            proj.expand.members.map((m: any) => (
+                              <Badge
+                                key={m.id}
+                                variant="secondary"
+                                className="text-[10px] font-normal px-1.5"
+                              >
+                                {m.name || m.email.split('@')[0]}
+                              </Badge>
+                            ))
+                          ) : (
+                            <span className="text-xs text-muted-foreground">-</span>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell>
                         <Badge
                           variant="outline"
