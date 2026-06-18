@@ -20,9 +20,26 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Search, Download, Plus, ShieldCheck, Settings2, Users } from 'lucide-react'
+import {
+  Search,
+  Download,
+  Plus,
+  ShieldCheck,
+  Settings2,
+  Users,
+  Building2,
+  Trash2,
+} from 'lucide-react'
 import { useToast } from '@/components/ui/use-toast'
-import { getAuditLogs, getIaTools, getUsers, createIaTool } from '@/services/admin'
+import {
+  getAuditLogs,
+  getIaTools,
+  getUsers,
+  createIaTool,
+  getDepartments,
+  createDepartment,
+  deleteDepartment,
+} from '@/services/admin'
 import { extractFieldErrors } from '@/lib/pocketbase/errors'
 import { useRealtime } from '@/hooks/use-realtime'
 import { cn } from '@/lib/utils'
@@ -33,12 +50,17 @@ export default function Admin() {
   const [logs, setLogs] = useState<any[]>([])
   const [users, setUsers] = useState<any[]>([])
   const [tools, setTools] = useState<any[]>([])
+  const [departments, setDepartments] = useState<any[]>([])
 
   const [toolName, setToolName] = useState('')
   const [toolModel, setToolModel] = useState('fast')
   const [toolDesc, setToolDesc] = useState('')
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const [depName, setDepName] = useState('')
+  const [depDesc, setDepDesc] = useState('')
+  const [isSubmittingDep, setIsSubmittingDep] = useState(false)
 
   const loadLogs = async () => {
     try {
@@ -61,11 +83,19 @@ export default function Admin() {
       console.error(e)
     }
   }
+  const loadDepartments = async () => {
+    try {
+      setDepartments(await getDepartments())
+    } catch (e) {
+      console.error(e)
+    }
+  }
 
   useEffect(() => {
     loadLogs()
     loadUsers()
     loadTools()
+    loadDepartments()
   }, [])
 
   useRealtime('audit_logs', () => {
@@ -77,6 +107,34 @@ export default function Admin() {
   useRealtime('ia_tools', () => {
     loadTools()
   })
+  useRealtime('departments', () => {
+    loadDepartments()
+  })
+
+  const handleCreateDep = async () => {
+    setIsSubmittingDep(true)
+    try {
+      await createDepartment({ name: depName, description: depDesc })
+      toast({ title: 'Sucesso', description: 'Departamento criado com sucesso.' })
+      setDepName('')
+      setDepDesc('')
+    } catch (err) {
+      toast({ title: 'Erro', description: 'Erro ao criar departamento.', variant: 'destructive' })
+    } finally {
+      setIsSubmittingDep(false)
+    }
+  }
+
+  const handleDeleteDep = async (id: string) => {
+    if (confirm('Tem certeza que deseja remover este departamento?')) {
+      try {
+        await deleteDepartment(id)
+        toast({ title: 'Sucesso', description: 'Departamento removido.' })
+      } catch (err) {
+        toast({ title: 'Erro', description: 'Erro ao remover.', variant: 'destructive' })
+      }
+    }
+  }
 
   const handleCreateTool = async () => {
     setFieldErrors({})
@@ -117,7 +175,7 @@ export default function Admin() {
       </div>
 
       <Tabs defaultValue="audit" className="w-full">
-        <TabsList className="grid w-full grid-cols-3 max-w-md mb-8">
+        <TabsList className="grid w-full grid-cols-4 max-w-2xl mb-8">
           <TabsTrigger
             value="audit"
             className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
@@ -136,7 +194,87 @@ export default function Admin() {
           >
             Projetos IA
           </TabsTrigger>
+          <TabsTrigger
+            value="departments"
+            className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+          >
+            Departamentos
+          </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="departments" className="space-y-6">
+          <div className="grid md:grid-cols-3 gap-6">
+            <Card className="border-slate-200 bg-white md:col-span-1 h-fit">
+              <CardHeader className="bg-slate-50 border-b">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Building2 className="h-5 w-5" /> Novo Departamento
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4 pt-6">
+                <div className="space-y-2">
+                  <Label>Nome do Departamento</Label>
+                  <Input
+                    value={depName}
+                    onChange={(e) => setDepName(e.target.value)}
+                    placeholder="Ex: Recursos Humanos"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Descrição</Label>
+                  <Input
+                    value={depDesc}
+                    onChange={(e) => setDepDesc(e.target.value)}
+                    placeholder="Opcional"
+                  />
+                </div>
+                <Button
+                  onClick={handleCreateDep}
+                  disabled={isSubmittingDep || !depName}
+                  className="w-full"
+                >
+                  {isSubmittingDep ? 'Salvando...' : 'Criar Departamento'}
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card className="border-slate-200 md:col-span-2">
+              <Table>
+                <TableHeader className="bg-slate-50">
+                  <TableRow>
+                    <TableHead>Nome</TableHead>
+                    <TableHead>Descrição</TableHead>
+                    <TableHead className="text-right">Ações</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {departments.map((dep) => (
+                    <TableRow key={dep.id}>
+                      <TableCell className="font-semibold text-slate-800">{dep.name}</TableCell>
+                      <TableCell className="text-slate-500">{dep.description || '-'}</TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDeleteDep(dep.id)}
+                          className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {departments.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={3} className="text-center text-muted-foreground py-8">
+                        Nenhum departamento cadastrado.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </Card>
+          </div>
+        </TabsContent>
 
         <TabsContent value="audit" className="space-y-4">
           <div className="flex justify-between items-center bg-white p-4 rounded-lg border shadow-sm mb-4">

@@ -12,6 +12,7 @@ import Department from './pages/Department'
 import AiChat from './pages/AiChat'
 import Admin from './pages/Admin'
 import Login from './pages/Login'
+import Profile from './pages/Profile'
 import { AuthProvider, useAuth } from './hooks/use-auth'
 
 function ProtectedRoute() {
@@ -37,6 +38,7 @@ const App = () => (
               <Route path="/department/:id" element={<Department />} />
               <Route path="/ai/:id" element={<AiChat />} />
               <Route path="/admin" element={<Admin />} />
+              <Route path="/profile" element={<Profile />} />
             </Route>
           </Route>
           <Route path="*" element={<NotFound />} />

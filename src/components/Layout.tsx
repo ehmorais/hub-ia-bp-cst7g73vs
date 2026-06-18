@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Outlet, useLocation } from 'react-router-dom'
+import { Outlet, useLocation, Link, useNavigate } from 'react-router-dom'
 import { SidebarProvider, SidebarInset, SidebarTrigger } from '@/components/ui/sidebar'
 import { AppSidebar } from './AppSidebar'
 import { Bell, Search, User, AlertCircle, Activity } from 'lucide-react'
@@ -11,10 +11,20 @@ import { useAuth } from '@/hooks/use-auth'
 import pb from '@/lib/pocketbase/client'
 import { useRealtime } from '@/hooks/use-realtime'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { SystemChecklistModal } from './SystemChecklistModal'
 
 export default function Layout() {
   const location = useLocation()
-  const { user, isAuthenticated } = useAuth()
+  const navigate = useNavigate()
+  const { user, isAuthenticated, signOut } = useAuth()
 
   const [tools, setTools] = useState<any[]>([])
 
@@ -45,8 +55,8 @@ export default function Layout() {
   const statusColor = allActive ? 'bg-green-500' : 'bg-red-500'
   const statusText = allActive ? 'All System Go' : 'System Alert'
 
-  const avatarUrl = user?.avatar ? pb.files.getUrl(user, user.avatar) : ''
-  const name = user?.name || user?.email || 'Usuário'
+  const avatarUrl = user?.avatar ? pb.files.getUrl(user, user.avatar, { thumb: '100x100' }) : ''
+  const name = user?.name || 'Usuário'
   const initials = name
     .split(' ')
     .map((n: string) => n[0])
@@ -150,13 +160,46 @@ export default function Layout() {
                 <span className="text-sm font-semibold leading-none">{name}</span>
                 <span className="text-xs text-muted-foreground">{user?.email}</span>
               </div>
-              <Avatar className="h-9 w-9 border border-primary/20">
-                <AvatarImage src={avatarUrl} alt={name} />
-                <AvatarFallback>{initials}</AvatarFallback>
-              </Avatar>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="relative h-9 w-9 rounded-full">
+                    <Avatar className="h-9 w-9 border border-primary/20">
+                      <AvatarImage src={avatarUrl} alt={name} />
+                      <AvatarFallback>{initials}</AvatarFallback>
+                    </Avatar>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-56" align="end" forceMount>
+                  <DropdownMenuLabel className="font-normal">
+                    <div className="flex flex-col space-y-1">
+                      <p className="text-sm font-medium leading-none">{name}</p>
+                      <p className="text-xs leading-none text-muted-foreground">{user?.email}</p>
+                    </div>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link to="/profile" className="w-full cursor-pointer flex items-center">
+                      <User className="mr-2 h-4 w-4" />
+                      <span>Meu Perfil</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => {
+                      signOut()
+                      navigate('/login')
+                    }}
+                    className="cursor-pointer"
+                  >
+                    Sair
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         </header>
+
+        {isAuthenticated && <SystemChecklistModal />}
 
         {/* Main Content Area */}
         <main className="flex-1 overflow-auto animate-fade-in">
