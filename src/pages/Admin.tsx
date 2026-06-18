@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
@@ -19,10 +20,90 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { AUDIT_LOGS, USERS, TOOLS } from '@/lib/mock-data'
 import { Search, Download, Plus, ShieldCheck, Settings2, Users } from 'lucide-react'
+import { useToast } from '@/components/ui/use-toast'
+import { getAuditLogs, getIaTools, getUsers, createIaTool } from '@/services/admin'
+import { extractFieldErrors } from '@/lib/pocketbase/errors'
+import { useRealtime } from '@/hooks/use-realtime'
+import { cn } from '@/lib/utils'
 
 export default function Admin() {
+  const { toast } = useToast()
+
+  const [logs, setLogs] = useState<any[]>([])
+  const [users, setUsers] = useState<any[]>([])
+  const [tools, setTools] = useState<any[]>([])
+
+  const [toolName, setToolName] = useState('')
+  const [toolModel, setToolModel] = useState('fast')
+  const [toolDesc, setToolDesc] = useState('')
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const loadLogs = async () => {
+    try {
+      setLogs(await getAuditLogs())
+    } catch (e) {
+      console.error(e)
+    }
+  }
+  const loadUsers = async () => {
+    try {
+      setUsers(await getUsers())
+    } catch (e) {
+      console.error(e)
+    }
+  }
+  const loadTools = async () => {
+    try {
+      setTools(await getIaTools())
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  useEffect(() => {
+    loadLogs()
+    loadUsers()
+    loadTools()
+  }, [])
+
+  useRealtime('audit_logs', () => {
+    loadLogs()
+  })
+  useRealtime('users', () => {
+    loadUsers()
+  })
+  useRealtime('ia_tools', () => {
+    loadTools()
+  })
+
+  const handleCreateTool = async () => {
+    setFieldErrors({})
+    setIsSubmitting(true)
+    try {
+      await createIaTool({
+        name: toolName,
+        model_alias: toolModel,
+        description: toolDesc,
+        status: 'active',
+        version: 'v1.0.0',
+      })
+      toast({ title: 'Sucesso', description: 'Ferramenta IA configurada com sucesso.' })
+      setToolName('')
+      setToolDesc('')
+    } catch (err) {
+      setFieldErrors(extractFieldErrors(err))
+      toast({
+        title: 'Erro',
+        description: 'Verifique os campos e tente novamente.',
+        variant: 'destructive',
+      })
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
   return (
     <div className="container mx-auto p-4 md:p-8 space-y-8 max-w-7xl animate-fade-in">
       <div className="flex flex-col gap-2">
@@ -57,7 +138,6 @@ export default function Admin() {
           </TabsTrigger>
         </TabsList>
 
-        {/* AUDIT TAB */}
         <TabsContent value="audit" className="space-y-4">
           <div className="flex justify-between items-center bg-white p-4 rounded-lg border shadow-sm mb-4">
             <div className="flex items-center gap-4 w-full max-w-lg">
@@ -92,34 +172,44 @@ export default function Admin() {
                   <TableHead>Data/Hora</TableHead>
                   <TableHead>Usuário</TableHead>
                   <TableHead>Departamento</TableHead>
-                  <TableHead>Ação / Modelo</TableHead>
+                  <TableHead>Ação</TableHead>
                   <TableHead className="text-right">Tokens Úteis</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {AUDIT_LOGS.map((log) => (
+                {logs.map((log) => (
                   <TableRow key={log.id} className="font-medium text-sm text-slate-600">
-                    <TableCell className="font-mono text-xs">{log.id}</TableCell>
-                    <TableCell>{log.timestamp}</TableCell>
+                    <TableCell className="font-mono text-xs">{log.id.slice(0, 8)}</TableCell>
+                    <TableCell>{new Date(log.created).toLocaleString()}</TableCell>
                     <TableCell>
                       <div className="flex flex-col">
-                        <span className="text-slate-900">{log.user}</span>
-                        <span className="text-xs text-muted-foreground">{log.role}</span>
+                        <span className="text-slate-900">
+                          {log.expand?.user?.name || log.expand?.user?.email || 'Sistema'}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {log.expand?.user?.role || 'Usuário'}
+                        </span>
                       </div>
                     </TableCell>
-                    <TableCell>{log.department}</TableCell>
+                    <TableCell>{log.department || '-'}</TableCell>
                     <TableCell>{log.action}</TableCell>
                     <TableCell className="text-right font-mono text-primary">
-                      {log.tokens}
+                      {log.token_usage || 0}
                     </TableCell>
                   </TableRow>
                 ))}
+                {logs.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                      Nenhum registro de auditoria encontrado.
+                    </TableCell>
+                  </TableRow>
+                )}
               </TableBody>
             </Table>
           </Card>
         </TabsContent>
 
-        {/* USERS TAB */}
         <TabsContent value="users" className="space-y-4">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-semibold flex items-center gap-2">
@@ -141,23 +231,23 @@ export default function Admin() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {USERS.map((user) => (
+                {users.map((user) => (
                   <TableRow key={user.id}>
-                    <TableCell className="font-semibold text-slate-800">{user.name}</TableCell>
+                    <TableCell className="font-semibold text-slate-800">
+                      {user.name || 'Sem nome'}
+                    </TableCell>
                     <TableCell className="text-slate-500">{user.email}</TableCell>
-                    <TableCell>{user.department}</TableCell>
+                    <TableCell>{user.department || '-'}</TableCell>
                     <TableCell>
                       <Badge
                         variant="outline"
                         className={cn(
                           user.role === 'Admin'
                             ? 'border-red-200 text-red-700 bg-red-50'
-                            : user.role === 'Gerente'
-                              ? 'border-blue-200 text-blue-700 bg-blue-50'
-                              : 'border-slate-200 text-slate-700 bg-slate-50',
+                            : 'border-slate-200 text-slate-700 bg-slate-50',
                         )}
                       >
-                        {user.role}
+                        {user.role || 'Operador'}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
@@ -172,7 +262,6 @@ export default function Admin() {
           </Card>
         </TabsContent>
 
-        {/* PROJECTS TAB */}
         <TabsContent value="projects" className="space-y-6">
           <div className="grid md:grid-cols-2 gap-6">
             <Card className="border-slate-200 bg-white">
@@ -187,21 +276,29 @@ export default function Admin() {
               <CardContent className="space-y-4 pt-6">
                 <div className="space-y-2">
                   <Label>Nome do Projeto</Label>
-                  <Input placeholder="Ex: Análise de Prontuários" />
+                  <Input
+                    value={toolName}
+                    onChange={(e) => setToolName(e.target.value)}
+                    placeholder="Ex: Análise de Prontuários"
+                  />
+                  {fieldErrors.name && <p className="text-sm text-red-500">{fieldErrors.name}</p>}
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Modelo Base</Label>
-                    <Select defaultValue="claude">
+                    <Select value={toolModel} onValueChange={setToolModel}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="claude">Claude 3.5 Sonnet</SelectItem>
-                        <SelectItem value="gpt4">GPT-4o</SelectItem>
-                        <SelectItem value="llama">Llama 3 (On-Premise)</SelectItem>
+                        <SelectItem value="fast">Fast</SelectItem>
+                        <SelectItem value="reasoning">Reasoning</SelectItem>
+                        <SelectItem value="embedding">Embedding</SelectItem>
                       </SelectContent>
                     </Select>
+                    {fieldErrors.model_alias && (
+                      <p className="text-sm text-red-500">{fieldErrors.model_alias}</p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label>Temperatura (Criatividade)</Label>
@@ -209,22 +306,27 @@ export default function Admin() {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label>System Prompt (Instruções Base)</Label>
+                  <Label>System Prompt / Descrição</Label>
                   <textarea
+                    value={toolDesc}
+                    onChange={(e) => setToolDesc(e.target.value)}
                     className="w-full min-h-[100px] p-3 text-sm border rounded-md focus:ring-1 focus:ring-primary focus:outline-none bg-slate-50 font-mono text-slate-600"
-                    defaultValue={
-                      'Você é um assistente médico especializado do Hospital BP. Suas respostas devem ser baseadas em evidências clínicas, curtas e objetivas. Nunca forneça diagnósticos definitivos.'
-                    }
+                    placeholder="Descrição e instruções do assistente..."
                   />
+                  {fieldErrors.description && (
+                    <p className="text-sm text-red-500">{fieldErrors.description}</p>
+                  )}
                 </div>
-                <Button className="w-full">Salvar e Homologar</Button>
+                <Button onClick={handleCreateTool} disabled={isSubmitting} className="w-full">
+                  {isSubmitting ? 'Salvando...' : 'Salvar e Homologar'}
+                </Button>
               </CardContent>
             </Card>
 
             <div className="space-y-4">
               <h3 className="text-lg font-semibold border-b pb-2">Projetos Ativos</h3>
               <div className="flex flex-col gap-3">
-                {TOOLS.map((tool) => (
+                {tools.map((tool) => (
                   <Card
                     key={tool.id}
                     className="p-4 flex items-center justify-between border-slate-200 shadow-sm"
@@ -232,13 +334,13 @@ export default function Admin() {
                     <div>
                       <p className="font-semibold text-slate-800">{tool.name}</p>
                       <p className="text-xs text-muted-foreground font-mono mt-1">
-                        Modelo: {tool.model}
+                        Modelo: {tool.model_alias} | Versão: {tool.version || 'N/A'}
                       </p>
                     </div>
                     <Badge
                       variant="outline"
                       className={
-                        tool.status === 'Ativo'
+                        tool.status === 'active'
                           ? 'text-primary border-primary/30'
                           : 'text-amber-600 border-amber-300'
                       }
@@ -247,6 +349,11 @@ export default function Admin() {
                     </Badge>
                   </Card>
                 ))}
+                {tools.length === 0 && (
+                  <div className="text-sm text-muted-foreground text-center py-4 border rounded-md bg-slate-50">
+                    Nenhum projeto ativo.
+                  </div>
+                )}
               </div>
             </div>
           </div>

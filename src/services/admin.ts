@@ -1,0 +1,27 @@
+import pb from '@/lib/pocketbase/client'
+
+export const getAuditLogs = () =>
+  pb.collection('audit_logs').getFullList({ expand: 'user', sort: '-created' })
+
+export const getIaTools = () => pb.collection('ia_tools').getFullList({ sort: '-created' })
+
+export const getUsers = () => pb.collection('users').getFullList({ sort: '-created' })
+
+export const createIaTool = (data: {
+  name: string
+  description?: string
+  model_alias: string
+  status: string
+  version?: string
+}) => pb.collection('ia_tools').create(data)
+
+export const updateIaTool = (
+  id: string,
+  data: Partial<{
+    name: string
+    description: string
+    model_alias: string
+    status: string
+    version: string
+  }>,
+) => pb.collection('ia_tools').update(id, data)
