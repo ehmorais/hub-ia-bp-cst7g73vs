@@ -1,6 +1,42 @@
 migrate(
   (app) => {
-    const staffCol = app.findCollectionByNameOrId('hospital_staff')
+    let staffCol
+    try {
+      staffCol = app.findCollectionByNameOrId('hospital_staff')
+    } catch (_) {
+      staffCol = new Collection({
+        name: 'hospital_staff',
+        type: 'base',
+        listRule: "@request.auth.id != ''",
+        viewRule: "@request.auth.id != ''",
+        createRule: "@request.auth.id != ''",
+        updateRule: "@request.auth.id != ''",
+        deleteRule: "@request.auth.id != ''",
+        fields: [
+          { name: 'name', type: 'text', required: true },
+          { name: 'registry_id', type: 'text', required: true },
+          {
+            name: 'role',
+            type: 'select',
+            values: ['Supervisor', 'Nurse', 'Technician'],
+            required: true,
+            maxSelect: 1,
+          },
+          {
+            name: 'department',
+            type: 'relation',
+            required: true,
+            collectionId: app.findCollectionByNameOrId('departments').id,
+            maxSelect: 1,
+          },
+          { name: 'contracted_hours', type: 'number', required: true },
+          { name: 'created', type: 'autodate', onCreate: true, onUpdate: false },
+          { name: 'updated', type: 'autodate', onCreate: true, onUpdate: true },
+        ],
+      })
+      app.save(staffCol)
+    }
+
     if (!staffCol.fields.getByName('user_id')) {
       staffCol.fields.add(
         new RelationField({ name: 'user_id', collectionId: '_pb_users_auth_', maxSelect: 1 }),
