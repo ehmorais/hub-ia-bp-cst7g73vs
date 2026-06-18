@@ -38,7 +38,12 @@ import {
   createIaTool,
   getDepartments,
   createDepartment,
+  updateDepartment,
   deleteDepartment,
+  getProjects,
+  createProject,
+  updateProject,
+  deleteProject,
 } from '@/services/admin'
 import { extractFieldErrors } from '@/lib/pocketbase/errors'
 import { useRealtime } from '@/hooks/use-realtime'
@@ -60,8 +65,18 @@ export default function Admin() {
 
   const [depName, setDepName] = useState('')
   const [depDesc, setDepDesc] = useState('')
+  const [depSortOrder, setDepSortOrder] = useState(0)
   const [isSubmittingDep, setIsSubmittingDep] = useState(false)
   const [editingDep, setEditingDep] = useState<any>(null)
+
+  const [projects, setProjects] = useState<any[]>([])
+  const [projName, setProjName] = useState('')
+  const [projDesc, setProjDesc] = useState('')
+  const [projDep, setProjDep] = useState('')
+  const [projSort, setProjSort] = useState(0)
+  const [projStatus, setProjStatus] = useState('active')
+  const [editingProj, setEditingProj] = useState<any>(null)
+  const [isSubmittingProj, setIsSubmittingProj] = useState(false)
 
   const loadLogs = async () => {
     try {
@@ -91,12 +106,20 @@ export default function Admin() {
       console.error(e)
     }
   }
+  const loadProjects = async () => {
+    try {
+      setProjects(await getProjects())
+    } catch (e) {
+      console.error(e)
+    }
+  }
 
   useEffect(() => {
     loadLogs()
     loadUsers()
     loadTools()
     loadDepartments()
+    loadProjects()
   }, [])
 
   useRealtime('audit_logs', () => {
@@ -111,15 +134,22 @@ export default function Admin() {
   useRealtime('departments', () => {
     loadDepartments()
   })
+  useRealtime('projects', () => {
+    loadProjects()
+  })
 
   const handleSaveDep = async () => {
     setIsSubmittingDep(true)
     try {
       if (editingDep) {
-        await updateDepartment(editingDep.id, { name: depName, description: depDesc })
+        await updateDepartment(editingDep.id, {
+          name: depName,
+          description: depDesc,
+          sort_order: depSortOrder,
+        })
         toast({ title: 'Sucesso', description: 'Departamento atualizado com sucesso.' })
       } else {
-        await createDepartment({ name: depName, description: depDesc })
+        await createDepartment({ name: depName, description: depDesc, sort_order: depSortOrder })
         toast({ title: 'Sucesso', description: 'Departamento criado com sucesso.' })
       }
       handleCancelEditDep()
@@ -134,12 +164,73 @@ export default function Admin() {
     setEditingDep(dep)
     setDepName(dep.name)
     setDepDesc(dep.description || '')
+    setDepSortOrder(dep.sort_order || 0)
   }
 
   const handleCancelEditDep = () => {
     setEditingDep(null)
     setDepName('')
     setDepDesc('')
+    setDepSortOrder(0)
+  }
+
+  const handleSaveProj = async () => {
+    setIsSubmittingProj(true)
+    try {
+      if (editingProj) {
+        await updateProject(editingProj.id, {
+          name: projName,
+          description: projDesc,
+          department: projDep,
+          sort_order: projSort,
+          status: projStatus,
+        })
+        toast({ title: 'Sucesso', description: 'Projeto atualizado com sucesso.' })
+      } else {
+        await createProject({
+          name: projName,
+          description: projDesc,
+          department: projDep,
+          sort_order: projSort,
+          status: projStatus,
+        })
+        toast({ title: 'Sucesso', description: 'Projeto criado com sucesso.' })
+      }
+      handleCancelEditProj()
+    } catch (err) {
+      toast({ title: 'Erro', description: 'Erro ao salvar projeto.', variant: 'destructive' })
+    } finally {
+      setIsSubmittingProj(false)
+    }
+  }
+
+  const handleEditProj = (proj: any) => {
+    setEditingProj(proj)
+    setProjName(proj.name)
+    setProjDesc(proj.description || '')
+    setProjDep(proj.department)
+    setProjSort(proj.sort_order || 0)
+    setProjStatus(proj.status || 'active')
+  }
+
+  const handleCancelEditProj = () => {
+    setEditingProj(null)
+    setProjName('')
+    setProjDesc('')
+    setProjDep('')
+    setProjSort(0)
+    setProjStatus('active')
+  }
+
+  const handleDeleteProj = async (id: string) => {
+    if (confirm('Tem certeza que deseja remover este projeto?')) {
+      try {
+        await deleteProject(id)
+        toast({ title: 'Sucesso', description: 'Projeto removido.' })
+      } catch (err) {
+        toast({ title: 'Erro', description: 'Erro ao remover projeto.', variant: 'destructive' })
+      }
+    }
   }
 
   const handleDeleteDep = async (id: string) => {
@@ -192,7 +283,7 @@ export default function Admin() {
       </div>
 
       <Tabs defaultValue="audit" className="w-full">
-        <TabsList className="grid w-full grid-cols-4 max-w-2xl mb-8">
+        <TabsList className="grid w-full grid-cols-5 max-w-4xl mb-8">
           <TabsTrigger
             value="audit"
             className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
@@ -206,16 +297,22 @@ export default function Admin() {
             Usuários
           </TabsTrigger>
           <TabsTrigger
-            value="projects"
+            value="ia_tools"
             className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
           >
-            Projetos IA
+            Ferramentas IA
           </TabsTrigger>
           <TabsTrigger
             value="departments"
             className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
           >
             Departamentos
+          </TabsTrigger>
+          <TabsTrigger
+            value="projects"
+            className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+          >
+            Projetos
           </TabsTrigger>
         </TabsList>
 
@@ -245,6 +342,14 @@ export default function Admin() {
                     placeholder="Opcional"
                   />
                 </div>
+                <div className="space-y-2">
+                  <Label>Ordem de Exibição</Label>
+                  <Input
+                    type="number"
+                    value={depSortOrder}
+                    onChange={(e) => setDepSortOrder(Number(e.target.value))}
+                  />
+                </div>
                 <div className="flex flex-col gap-2">
                   <Button
                     onClick={handleSaveDep}
@@ -272,6 +377,7 @@ export default function Admin() {
                   <TableRow>
                     <TableHead>Nome</TableHead>
                     <TableHead>Descrição</TableHead>
+                    <TableHead>Ordem</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -280,6 +386,7 @@ export default function Admin() {
                     <TableRow key={dep.id}>
                       <TableCell className="font-semibold text-slate-800">{dep.name}</TableCell>
                       <TableCell className="text-slate-500">{dep.description || '-'}</TableCell>
+                      <TableCell className="text-slate-500">{dep.sort_order || 0}</TableCell>
                       <TableCell className="text-right space-x-2">
                         <Button variant="ghost" size="sm" onClick={() => handleEditDep(dep)}>
                           Editar
@@ -432,7 +539,7 @@ export default function Admin() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="projects" className="space-y-6">
+        <TabsContent value="ia_tools" className="space-y-6">
           <div className="grid md:grid-cols-2 gap-6">
             <Card className="border-slate-200 bg-white">
               <CardHeader className="bg-slate-50 border-b">
@@ -494,7 +601,7 @@ export default function Admin() {
             </Card>
 
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold border-b pb-2">Projetos Ativos</h3>
+              <h3 className="text-lg font-semibold border-b pb-2">Ferramentas Ativas</h3>
               <div className="flex flex-col gap-3">
                 {tools.map((tool) => (
                   <Card
@@ -521,11 +628,154 @@ export default function Admin() {
                 ))}
                 {tools.length === 0 && (
                   <div className="text-sm text-muted-foreground text-center py-4 border rounded-md bg-slate-50">
-                    Nenhum projeto ativo.
+                    Nenhuma ferramenta ativa.
                   </div>
                 )}
               </div>
             </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="projects" className="space-y-6">
+          <div className="grid md:grid-cols-3 gap-6">
+            <Card className="border-slate-200 bg-white md:col-span-1 h-fit">
+              <CardHeader className="bg-slate-50 border-b">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Building2 className="h-5 w-5" />{' '}
+                  {editingProj ? 'Editar Projeto' : 'Novo Projeto'}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4 pt-6">
+                <div className="space-y-2">
+                  <Label>Nome do Projeto</Label>
+                  <Input
+                    value={projName}
+                    onChange={(e) => setProjName(e.target.value)}
+                    placeholder="Ex: Recrutamento AI"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Descrição</Label>
+                  <Input
+                    value={projDesc}
+                    onChange={(e) => setProjDesc(e.target.value)}
+                    placeholder="Opcional"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Departamento</Label>
+                  <Select value={projDep} onValueChange={setProjDep}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {departments.map((d) => (
+                        <SelectItem key={d.id} value={d.id}>
+                          {d.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Ordem</Label>
+                    <Input
+                      type="number"
+                      value={projSort}
+                      onChange={(e) => setProjSort(Number(e.target.value))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Status</Label>
+                    <Select value={projStatus} onValueChange={setProjStatus}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="active">Ativo</SelectItem>
+                        <SelectItem value="inactive">Inativo</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Button
+                    onClick={handleSaveProj}
+                    disabled={isSubmittingProj || !projName || !projDep}
+                    className="w-full"
+                  >
+                    {isSubmittingProj
+                      ? 'Salvando...'
+                      : editingProj
+                        ? 'Salvar Alterações'
+                        : 'Criar Projeto'}
+                  </Button>
+                  {editingProj && (
+                    <Button variant="outline" onClick={handleCancelEditProj} className="w-full">
+                      Cancelar
+                    </Button>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-slate-200 md:col-span-2">
+              <Table>
+                <TableHeader className="bg-slate-50">
+                  <TableRow>
+                    <TableHead>Nome</TableHead>
+                    <TableHead>Departamento</TableHead>
+                    <TableHead>Ordem</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Ações</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {projects.map((proj) => (
+                    <TableRow key={proj.id}>
+                      <TableCell className="font-semibold text-slate-800">{proj.name}</TableCell>
+                      <TableCell className="text-slate-500">
+                        {proj.expand?.department?.name || '-'}
+                      </TableCell>
+                      <TableCell>{proj.sort_order || 0}</TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="outline"
+                          className={
+                            proj.status === 'active'
+                              ? 'text-green-600 border-green-200 bg-green-50'
+                              : 'text-amber-600 border-amber-200 bg-amber-50'
+                          }
+                        >
+                          {proj.status === 'active' ? 'Ativo' : 'Inativo'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right space-x-2">
+                        <Button variant="ghost" size="sm" onClick={() => handleEditProj(proj)}>
+                          Editar
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDeleteProj(proj.id)}
+                          className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {projects.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                        Nenhum projeto cadastrado.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </Card>
           </div>
         </TabsContent>
       </Tabs>

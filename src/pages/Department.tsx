@@ -20,7 +20,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { ArrowLeft, Play, History, BrainCircuit, Folder } from 'lucide-react'
+import { ArrowLeft, Play, History, BrainCircuit, Folder, Blocks } from 'lucide-react'
+import { useRealtime } from '@/hooks/use-realtime'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
@@ -31,6 +32,7 @@ export default function Department() {
   const { id } = useParams()
   const [department, setDepartment] = useState<any>(null)
   const [departmentTools, setDepartmentTools] = useState<any[]>([])
+  const [projects, setProjects] = useState<any[]>([])
 
   useEffect(() => {
     if (id) {
@@ -40,8 +42,22 @@ export default function Department() {
         .getFullList({ sort: 'name' })
         .then(setDepartmentTools)
         .catch(console.error)
+
+      pb.collection('projects')
+        .getFullList({ filter: `department="${id}"`, sort: 'sort_order,name' })
+        .then(setProjects)
+        .catch(console.error)
     }
   }, [id])
+
+  useRealtime('projects', () => {
+    if (id) {
+      pb.collection('projects')
+        .getFullList({ filter: `department="${id}"`, sort: 'sort_order,name' })
+        .then(setProjects)
+        .catch(console.error)
+    }
+  })
 
   if (!department) return null
 
@@ -150,6 +166,54 @@ export default function Department() {
               </CardFooter>
             </Card>
           ))}
+        </div>
+      </div>
+
+      {/* History Table */}
+      {/* Projects Grid */}
+      <div className="space-y-4 pt-4">
+        <div className="flex items-center gap-2 border-b pb-2">
+          <Blocks className="h-5 w-5 text-primary" />
+          <h2 className="text-xl font-semibold">Projetos</h2>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {projects.map((proj) => (
+            <Card
+              key={proj.id}
+              className="flex flex-col bg-white border-slate-200 overflow-hidden hover:shadow-md transition-shadow"
+            >
+              <CardHeader className="pb-4">
+                <div className="flex justify-between items-start mb-2">
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      'uppercase text-[10px]',
+                      proj.status === 'active'
+                        ? 'bg-green-50 text-green-700 border-green-200'
+                        : 'bg-amber-50 text-amber-700 border-amber-200',
+                    )}
+                  >
+                    {proj.status === 'active' ? 'Ativo' : 'Inativo'}
+                  </Badge>
+                </div>
+                <CardTitle className="text-lg">{proj.name}</CardTitle>
+                <CardDescription className="line-clamp-2 h-10 mt-1">
+                  {proj.description || 'Sem descrição'}
+                </CardDescription>
+              </CardHeader>
+              <CardFooter className="pt-2 border-t bg-slate-50/50 mt-auto">
+                <Button className="w-full gap-2 font-medium" variant="secondary" asChild>
+                  <Link to={`/dashboard`}>Acessar Projeto</Link>
+                </Button>
+              </CardFooter>
+            </Card>
+          ))}
+          {projects.length === 0 && (
+            <div className="col-span-full p-8 text-center text-muted-foreground border rounded-lg bg-slate-50">
+              Nenhum projeto associado a este departamento.
+            </div>
+          )}
         </div>
       </div>
 

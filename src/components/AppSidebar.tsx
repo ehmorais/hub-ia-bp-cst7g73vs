@@ -29,7 +29,7 @@ export function AppSidebar() {
 
   const loadDepartments = async () => {
     try {
-      const records = await pb.collection('departments').getFullList({ sort: 'name' })
+      const records = await pb.collection('departments').getFullList({ sort: 'sort_order,name' })
       setDepartments(records)
     } catch (e) {
       console.error(e)

@@ -40,7 +40,7 @@ export function SystemChecklistModal() {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="text-xl">System Checklist</DialogTitle>
+          <DialogTitle className="text-xl">All System Go - Checklist</DialogTitle>
           <DialogDescription>
             Verificando integridade dos módulos de Inteligência Artificial...
           </DialogDescription>
