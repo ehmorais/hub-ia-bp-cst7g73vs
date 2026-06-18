@@ -46,11 +46,13 @@ import {
   X,
 } from 'lucide-react'
 import { useToast } from '@/components/ui/use-toast'
+import pb from '@/lib/pocketbase/client'
 import {
   getAuditLogs,
   getIaTools,
   getUsers,
   createIaTool,
+  updateIaTool,
   getDepartments,
   createDepartment,
   updateDepartment,
@@ -96,6 +98,10 @@ export default function Admin() {
   const [toolName, setToolName] = useState('')
   const [toolModel, setToolModel] = useState('fast')
   const [toolDesc, setToolDesc] = useState('')
+  const [toolStatus, setToolStatus] = useState('active')
+  const [toolDeps, setToolDeps] = useState<string[]>([])
+  const [openToolDeps, setOpenToolDeps] = useState(false)
+  const [editingTool, setEditingTool] = useState<any>(null)
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -341,20 +347,26 @@ export default function Admin() {
     }
   }
 
-  const handleCreateTool = async () => {
+  const handleSaveTool = async () => {
     setFieldErrors({})
     setIsSubmitting(true)
     try {
-      await createIaTool({
+      const payload = {
         name: toolName,
         model_alias: toolModel,
         description: toolDesc,
-        status: 'active',
+        status: toolStatus,
         version: 'v1.0.0',
-      })
-      toast({ title: 'Sucesso', description: 'Ferramenta IA configurada com sucesso.' })
-      setToolName('')
-      setToolDesc('')
+        associated_departments: toolDeps,
+      }
+      if (editingTool) {
+        await updateIaTool(editingTool.id, payload)
+        toast({ title: 'Sucesso', description: 'Ferramenta IA atualizada com sucesso.' })
+      } else {
+        await createIaTool(payload)
+        toast({ title: 'Sucesso', description: 'Ferramenta IA configurada com sucesso.' })
+      }
+      handleCancelEditTool()
     } catch (err) {
       setFieldErrors(extractFieldErrors(err))
       toast({
@@ -364,6 +376,36 @@ export default function Admin() {
       })
     } finally {
       setIsSubmitting(false)
+    }
+  }
+
+  const handleEditTool = (tool: any) => {
+    setEditingTool(tool)
+    setToolName(tool.name)
+    setToolModel(tool.model_alias || 'fast')
+    setToolDesc(tool.description || '')
+    setToolStatus(tool.status || 'active')
+    setToolDeps(tool.associated_departments || [])
+  }
+
+  const handleCancelEditTool = () => {
+    setEditingTool(null)
+    setToolName('')
+    setToolModel('fast')
+    setToolDesc('')
+    setToolStatus('active')
+    setToolDeps([])
+    setFieldErrors({})
+  }
+
+  const handleDeleteTool = async (id: string) => {
+    if (confirm('Tem certeza que deseja remover esta ferramenta?')) {
+      try {
+        await pb.collection('ia_tools').delete(id)
+        toast({ title: 'Sucesso', description: 'Ferramenta removida.' })
+      } catch (err) {
+        toast({ title: 'Erro', description: 'Erro ao remover.', variant: 'destructive' })
+      }
     }
   }
 
@@ -792,15 +834,14 @@ export default function Admin() {
               <Card className="border-slate-200 bg-white h-fit">
                 <CardHeader className="bg-slate-50 border-b">
                   <CardTitle className="text-lg flex items-center gap-2">
-                    <Settings2 className="h-5 w-5" /> Nova Ferramenta IA
+                    <Settings2 className="h-5 w-5" />{' '}
+                    {editingTool ? 'Editar Ferramenta IA' : 'Nova Ferramenta IA'}
                   </CardTitle>
-                  <CardDescription>
-                    Defina os parâmetros do modelo para um novo projeto.
-                  </CardDescription>
+                  <CardDescription>Defina os parâmetros e associções do modelo.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4 pt-6">
                   <div className="space-y-2">
-                    <Label>Nome do Projeto</Label>
+                    <Label>Nome da Ferramenta</Label>
                     <Input
                       value={toolName}
                       onChange={(e) => setToolName(e.target.value)}
@@ -808,6 +849,80 @@ export default function Admin() {
                     />
                     {fieldErrors.name && <p className="text-sm text-red-500">{fieldErrors.name}</p>}
                   </div>
+
+                  <div className="space-y-2">
+                    <Label>Departamentos Associados</Label>
+                    <Popover open={openToolDeps} onOpenChange={setOpenToolDeps}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={openToolDeps}
+                          className="w-full justify-between"
+                        >
+                          {toolDeps.length > 0
+                            ? `${toolDeps.length} departamento(s) selecionado(s)`
+                            : 'Selecione os departamentos...'}
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[300px] p-0" align="start">
+                        <Command>
+                          <CommandInput placeholder="Buscar departamento..." />
+                          <CommandList>
+                            <CommandEmpty>Nenhum encontrado.</CommandEmpty>
+                            <CommandGroup>
+                              {departments.map((d) => (
+                                <CommandItem
+                                  key={d.id}
+                                  value={d.name}
+                                  onSelect={() => {
+                                    setToolDeps(
+                                      toolDeps.includes(d.id)
+                                        ? toolDeps.filter((id) => id !== d.id)
+                                        : [...toolDeps, d.id],
+                                    )
+                                  }}
+                                >
+                                  <Check
+                                    className={cn(
+                                      'mr-2 h-4 w-4',
+                                      toolDeps.includes(d.id) ? 'opacity-100' : 'opacity-0',
+                                    )}
+                                  />
+                                  {d.name}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                    <div className="flex flex-wrap gap-2 mt-3">
+                      {toolDeps.map((id) => {
+                        const d = departments.find((x) => x.id === id)
+                        if (!d) return null
+                        return (
+                          <Badge
+                            key={d.id}
+                            variant="secondary"
+                            className="flex items-center gap-1 pr-1 py-1"
+                          >
+                            {d.name}
+                            <div
+                              role="button"
+                              tabIndex={0}
+                              className="ml-1 rounded-full hover:bg-muted p-0.5 cursor-pointer"
+                              onClick={() => setToolDeps(toolDeps.filter((x) => x !== d.id))}
+                            >
+                              <X className="h-3 w-3" />
+                            </div>
+                          </Badge>
+                        )
+                      })}
+                    </div>
+                  </div>
+
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>Modelo Base</Label>
@@ -823,8 +938,17 @@ export default function Admin() {
                       </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label>Temperatura</Label>
-                      <Input type="number" step="0.1" defaultValue="0.2" max="1" min="0" />
+                      <Label>Status</Label>
+                      <Select value={toolStatus} onValueChange={setToolStatus}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="active">Ativo</SelectItem>
+                          <SelectItem value="draft">Rascunho</SelectItem>
+                          <SelectItem value="archived">Arquivado</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                   <div className="space-y-2">
@@ -836,42 +960,89 @@ export default function Admin() {
                       placeholder="Descrição e instruções do assistente..."
                     />
                   </div>
-                  <Button onClick={handleCreateTool} disabled={isSubmitting} className="w-full">
-                    {isSubmitting ? 'Salvando...' : 'Salvar e Homologar'}
-                  </Button>
+                  <div className="flex flex-col gap-2 pt-2">
+                    <Button
+                      onClick={handleSaveTool}
+                      disabled={isSubmitting || !toolName}
+                      className="w-full"
+                    >
+                      {isSubmitting
+                        ? 'Salvando...'
+                        : editingTool
+                          ? 'Salvar Alterações'
+                          : 'Salvar e Homologar'}
+                    </Button>
+                    {editingTool && (
+                      <Button variant="outline" onClick={handleCancelEditTool} className="w-full">
+                        Cancelar
+                      </Button>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
             )}
 
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold border-b pb-2">Ferramentas Ativas</h3>
+              <h3 className="text-lg font-semibold border-b pb-2">Ferramentas Cadastradas</h3>
               <div className="flex flex-col gap-3">
                 {tools.map((tool) => (
                   <Card
                     key={tool.id}
                     className="p-4 flex items-center justify-between border-slate-200 shadow-sm"
                   >
-                    <div>
-                      <p className="font-semibold text-slate-800">{tool.name}</p>
-                      <p className="text-xs text-muted-foreground font-mono mt-1">
+                    <div className="flex-1 min-w-0 pr-4">
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-slate-800 truncate">{tool.name}</p>
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            'text-[10px] uppercase h-5 px-1.5',
+                            tool.status === 'active'
+                              ? 'text-green-600 border-green-200 bg-green-50'
+                              : 'text-amber-600 border-amber-200 bg-amber-50',
+                          )}
+                        >
+                          {tool.status}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground font-mono mt-1 mb-2">
                         Modelo: {tool.model_alias} | Versão: {tool.version || 'N/A'}
                       </p>
+                      <div className="flex flex-wrap gap-1">
+                        {tool.associated_departments?.length > 0 ? (
+                          tool.associated_departments.map((depId: string) => {
+                            const d = departments.find((x) => x.id === depId)
+                            return d ? (
+                              <Badge key={depId} variant="secondary" className="text-[10px] px-1.5">
+                                {d.name}
+                              </Badge>
+                            ) : null
+                          })
+                        ) : (
+                          <span className="text-xs text-slate-400">Sem departamentos</span>
+                        )}
+                      </div>
                     </div>
-                    <Badge
-                      variant="outline"
-                      className={
-                        tool.status === 'active'
-                          ? 'text-primary border-primary/30'
-                          : 'text-amber-600 border-amber-300'
-                      }
-                    >
-                      {tool.status}
-                    </Badge>
+                    {isAdmin && (
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button variant="ghost" size="icon" onClick={() => handleEditTool(tool)}>
+                          <Settings2 className="h-4 w-4 text-slate-600" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDeleteTool(tool.id)}
+                          className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
                   </Card>
                 ))}
                 {tools.length === 0 && (
                   <div className="text-sm text-muted-foreground text-center py-4 border rounded-md bg-slate-50">
-                    Nenhuma ferramenta ativa.
+                    Nenhuma ferramenta cadastrada.
                   </div>
                 )}
               </div>

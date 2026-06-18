@@ -129,45 +129,114 @@ export default function Dashboard() {
                       </div>
                     </div>
                   </CardHeader>
-                  <CardContent className="p-4">
-                    {deptProjects.length > 0 ? (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                        {deptProjects.map((proj) => (
-                          <div
-                            key={proj.id}
-                            className="p-3 border rounded-md bg-white flex flex-col justify-between hover:border-primary/50 transition-colors"
-                          >
-                            <div>
-                              <div className="flex justify-between items-start mb-1">
-                                <span className="font-semibold text-slate-800 text-sm truncate pr-2">
-                                  {proj.name}
-                                </span>
-                                <Badge
-                                  variant="outline"
-                                  className={cn(
-                                    'text-[10px] uppercase',
-                                    proj.status === 'active'
-                                      ? 'text-green-600 border-green-200 bg-green-50'
-                                      : 'text-amber-600 border-amber-200 bg-amber-50',
-                                  )}
-                                >
-                                  {proj.status === 'active' ? 'Ativo' : 'Inativo'}
-                                </Badge>
+                  <CardContent className="p-4 space-y-5">
+                    {(() => {
+                      const deptTools = tools.filter((t) =>
+                        t.associated_departments?.includes(dept.id),
+                      )
+
+                      return (
+                        <>
+                          {deptTools.length > 0 && (
+                            <div className="space-y-3">
+                              <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-2">
+                                <Zap className="h-3.5 w-3.5 text-primary" /> Ferramentas IA
+                              </h4>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                {deptTools.map((tool) => (
+                                  <div
+                                    key={tool.id}
+                                    className="p-4 border border-slate-200 rounded-lg bg-white flex flex-col shadow-sm hover:shadow-md hover:border-primary/40 transition-all group"
+                                  >
+                                    <div className="flex-1">
+                                      <div className="flex justify-between items-start mb-2">
+                                        <span className="font-bold text-slate-900 text-sm line-clamp-1 pr-2 group-hover:text-primary transition-colors">
+                                          {tool.name}
+                                        </span>
+                                        <Badge
+                                          variant="outline"
+                                          className={cn(
+                                            'text-[9px] uppercase px-1.5 h-4',
+                                            tool.status === 'active'
+                                              ? 'text-primary border-primary/30 bg-primary/5'
+                                              : 'text-amber-600 border-amber-300 bg-amber-50',
+                                          )}
+                                        >
+                                          {tool.status === 'active' ? 'Ativo' : tool.status}
+                                        </Badge>
+                                      </div>
+                                      <div className="text-[10px] text-muted-foreground font-mono mb-2 bg-slate-100 w-fit px-1.5 py-0.5 rounded">
+                                        Modelo: {tool.model_alias}{' '}
+                                        {tool.version ? `| v${tool.version}` : ''}
+                                      </div>
+                                      {tool.description && (
+                                        <p className="text-xs text-slate-600 line-clamp-2 mt-1">
+                                          {tool.description}
+                                        </p>
+                                      )}
+                                    </div>
+                                    <Button
+                                      size="sm"
+                                      className="w-full mt-4 h-8 text-xs font-medium"
+                                      asChild
+                                      variant="secondary"
+                                    >
+                                      <Link to={`/ai/${tool.id}`}>Abrir Ferramenta</Link>
+                                    </Button>
+                                  </div>
+                                ))}
                               </div>
-                              {proj.description && (
-                                <p className="text-xs text-muted-foreground line-clamp-2">
-                                  {proj.description}
-                                </p>
-                              )}
                             </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-sm text-muted-foreground italic px-2">
-                        Nenhum projeto associado.
-                      </p>
-                    )}
+                          )}
+
+                          {deptProjects.length > 0 && (
+                            <div className="space-y-3">
+                              <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-2">
+                                <Activity className="h-3.5 w-3.5" /> Projetos
+                              </h4>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                {deptProjects.map((proj) => (
+                                  <div
+                                    key={proj.id}
+                                    className="p-3 border rounded-md bg-white flex flex-col justify-between hover:border-slate-300 transition-colors"
+                                  >
+                                    <div>
+                                      <div className="flex justify-between items-start mb-1">
+                                        <span className="font-semibold text-slate-800 text-sm truncate pr-2">
+                                          {proj.name}
+                                        </span>
+                                        <Badge
+                                          variant="outline"
+                                          className={cn(
+                                            'text-[10px] uppercase',
+                                            proj.status === 'active'
+                                              ? 'text-green-600 border-green-200 bg-green-50'
+                                              : 'text-amber-600 border-amber-200 bg-amber-50',
+                                          )}
+                                        >
+                                          {proj.status === 'active' ? 'Ativo' : 'Inativo'}
+                                        </Badge>
+                                      </div>
+                                      {proj.description && (
+                                        <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
+                                          {proj.description}
+                                        </p>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {deptTools.length === 0 && deptProjects.length === 0 && (
+                            <p className="text-sm text-muted-foreground italic px-2">
+                              Nenhum recurso associado.
+                            </p>
+                          )}
+                        </>
+                      )
+                    })()}
                   </CardContent>
                 </Card>
               )

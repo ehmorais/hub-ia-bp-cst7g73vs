@@ -39,7 +39,10 @@ export default function Department() {
       pb.collection('departments').getOne(id).then(setDepartment).catch(console.error)
 
       pb.collection('ia_tools')
-        .getFullList({ sort: 'name' })
+        .getFullList({
+          filter: `associated_departments~"${id}"`,
+          sort: 'name',
+        })
         .then(setDepartmentTools)
         .catch(console.error)
 
@@ -61,6 +64,18 @@ export default function Department() {
           sort: 'sort_order,name',
         })
         .then(setProjects)
+        .catch(console.error)
+    }
+  })
+
+  useRealtime('ia_tools', () => {
+    if (id) {
+      pb.collection('ia_tools')
+        .getFullList({
+          filter: `associated_departments~"${id}"`,
+          sort: 'name',
+        })
+        .then(setDepartmentTools)
         .catch(console.error)
     }
   })
@@ -113,12 +128,21 @@ export default function Department() {
                   >
                     {tool.status === 'active' ? 'Ativo' : tool.status}
                   </Badge>
-                  <span className="text-xs text-muted-foreground font-mono bg-slate-100 px-2 py-0.5 rounded">
-                    {tool.model_alias}
-                  </span>
+                  <div className="flex gap-2">
+                    {tool.version && (
+                      <span className="text-xs text-muted-foreground font-mono bg-slate-100 px-2 py-0.5 rounded">
+                        v{tool.version}
+                      </span>
+                    )}
+                    <span className="text-xs text-muted-foreground font-mono bg-slate-100 px-2 py-0.5 rounded">
+                      {tool.model_alias}
+                    </span>
+                  </div>
                 </div>
                 <CardTitle className="text-xl">{tool.name}</CardTitle>
-                <CardDescription className="line-clamp-2 h-10">{tool.description}</CardDescription>
+                <CardDescription className="line-clamp-2 h-10">
+                  {tool.description || 'Sem descrição'}
+                </CardDescription>
               </CardHeader>
 
               <CardContent className="flex-1">
