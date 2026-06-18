@@ -29,24 +29,55 @@ export default function Layout() {
   const [tools, setTools] = useState<any[]>([])
 
   const fetchTools = async () => {
+    if (!user) return
     try {
       const records = await pb.collection('ia_tools').getFullList({ sort: 'name' })
-      setTools(records)
+      let filteredTools = records
+      const currentDeptId = location.pathname.startsWith('/department/')
+        ? location.pathname.split('/')[2]
+        : null
+
+      if (user.role !== 'Admin') {
+        const userProjects = await pb.collection('projects').getFullList({
+          filter: `members ~ "${user.id}"`,
+        })
+        const userDeptIds = new Set<string>()
+        userProjects.forEach((p) => {
+          if (p.department) userDeptIds.add(p.department)
+          p.associated_departments?.forEach((d: string) => userDeptIds.add(d))
+        })
+        if (currentDeptId) userDeptIds.add(currentDeptId)
+
+        filteredTools = records.filter((t) =>
+          t.associated_departments?.some((d: string) => userDeptIds.has(d)),
+        )
+      }
+      setTools(filteredTools)
     } catch (error) {
       console.error('Failed to fetch IA tools:', error)
     }
   }
 
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && user) {
       fetchTools()
     }
-  }, [isAuthenticated])
+  }, [isAuthenticated, user, location.pathname])
 
   useRealtime(
     'ia_tools',
     () => {
       fetchTools()
+    },
+    isAuthenticated,
+  )
+
+  useRealtime(
+    'projects',
+    () => {
+      if (user?.role !== 'Admin') {
+        fetchTools()
+      }
     },
     isAuthenticated,
   )
@@ -199,7 +230,7 @@ export default function Layout() {
           </div>
         </header>
 
-        {isAuthenticated && <SystemChecklistModal />}
+        {isAuthenticated && <SystemChecklistModal tools={tools} />}
 
         {/* Main Content Area */}
         <main className="flex-1 overflow-auto animate-fade-in">

@@ -64,11 +64,60 @@ export function AppSidebar() {
     return <Icon className="h-4 w-4" />
   }
 
-  const sortedDepartments = [...departments].sort((a, b) => {
-    if (a.name === 'Projetos Gerais HBPSCS') return -1
-    if (b.name === 'Projetos Gerais HBPSCS') return 1
-    return a.sort_order - b.sort_order
-  })
+  const generalProjectDept = departments.find((d) => d.name === 'Projetos Gerais HBPSCS')
+  const otherDepartments = departments
+    .filter((d) => d.name !== 'Projetos Gerais HBPSCS')
+    .sort((a, b) => a.sort_order - b.sort_order)
+
+  const renderDeptItem = (dept: any) => {
+    const isDeptActive = location.pathname === `/department/${dept.id}`
+    const deptProjects = projects.filter(
+      (p) => p.associated_departments?.includes(dept.id) || p.department === dept.id,
+    )
+
+    return (
+      <SidebarMenuItem key={dept.id}>
+        <HoverCard openDelay={200} closeDelay={100}>
+          <HoverCardTrigger asChild>
+            <SidebarMenuButton asChild isActive={isDeptActive} tooltip={dept.name}>
+              <Link to={`/department/${dept.id}`}>
+                <div
+                  style={{ color: dept.color || 'inherit' }}
+                  className="flex items-center justify-center"
+                >
+                  {renderIcon(dept.icon)}
+                </div>
+                <span style={{ color: dept.color || 'inherit', fontWeight: 500 }}>{dept.name}</span>
+              </Link>
+            </SidebarMenuButton>
+          </HoverCardTrigger>
+          {deptProjects.length > 0 && (
+            <HoverCardContent side="right" align="start" className="w-64 p-2 z-50">
+              <div className="space-y-1">
+                <h4 className="font-semibold text-sm mb-2 text-muted-foreground px-2">Projetos</h4>
+                {deptProjects.map((proj: any) => {
+                  const isProjActive = location.pathname === `/project/${proj.id}`
+                  return (
+                    <Link
+                      key={proj.id}
+                      to={`/project/${proj.id}`}
+                      className={`block px-2 py-1.5 text-sm rounded-md transition-colors hover:bg-muted ${
+                        isProjActive
+                          ? 'bg-muted font-medium text-foreground'
+                          : 'text-muted-foreground'
+                      }`}
+                    >
+                      {proj.name}
+                    </Link>
+                  )
+                })}
+              </div>
+            </HoverCardContent>
+          )}
+        </HoverCard>
+      </SidebarMenuItem>
+    )
+  }
 
   return (
     <Sidebar variant="inset" className="border-r shadow-sm">
@@ -100,6 +149,7 @@ export function AppSidebar() {
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
+              {generalProjectDept && renderDeptItem(generalProjectDept)}
               <SidebarMenuItem>
                 <SidebarMenuButton
                   asChild
@@ -119,61 +169,7 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupLabel>Departamentos</SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu>
-              {sortedDepartments.map((dept: any) => {
-                const isDeptActive = location.pathname === `/department/${dept.id}`
-                const deptProjects = projects.filter(
-                  (p) => p.associated_departments?.includes(dept.id) || p.department === dept.id,
-                )
-
-                return (
-                  <SidebarMenuItem key={dept.id}>
-                    <HoverCard openDelay={200} closeDelay={100}>
-                      <HoverCardTrigger asChild>
-                        <SidebarMenuButton asChild isActive={isDeptActive} tooltip={dept.name}>
-                          <Link to={`/department/${dept.id}`}>
-                            <div
-                              style={{ color: dept.color || 'inherit' }}
-                              className="flex items-center justify-center"
-                            >
-                              {renderIcon(dept.icon)}
-                            </div>
-                            <span style={{ color: dept.color || 'inherit', fontWeight: 500 }}>
-                              {dept.name}
-                            </span>
-                          </Link>
-                        </SidebarMenuButton>
-                      </HoverCardTrigger>
-                      {deptProjects.length > 0 && (
-                        <HoverCardContent side="right" align="start" className="w-64 p-2 z-50">
-                          <div className="space-y-1">
-                            <h4 className="font-semibold text-sm mb-2 text-muted-foreground px-2">
-                              Projetos
-                            </h4>
-                            {deptProjects.map((proj: any) => {
-                              const isProjActive = location.pathname === `/project/${proj.id}`
-                              return (
-                                <Link
-                                  key={proj.id}
-                                  to={`/project/${proj.id}`}
-                                  className={`block px-2 py-1.5 text-sm rounded-md transition-colors hover:bg-muted ${
-                                    isProjActive
-                                      ? 'bg-muted font-medium text-foreground'
-                                      : 'text-muted-foreground'
-                                  }`}
-                                >
-                                  {proj.name}
-                                </Link>
-                              )
-                            })}
-                          </div>
-                        </HoverCardContent>
-                      )}
-                    </HoverCard>
-                  </SidebarMenuItem>
-                )
-              })}
-            </SidebarMenu>
+            <SidebarMenu>{otherDepartments.map((dept: any) => renderDeptItem(dept))}</SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>

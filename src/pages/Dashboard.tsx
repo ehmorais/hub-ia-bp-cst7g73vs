@@ -92,50 +92,45 @@ export default function Dashboard() {
 
       <div className="space-y-4">
         <h2 className="text-xl font-semibold tracking-tight">Departamentos</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
           {departments.map((dept) => {
             const deptProjects = projects.filter(
-              (p) =>
-                p.status === 'active' &&
-                (p.associated_departments?.includes(dept.id) || p.department === dept.id),
+              (p) => p.associated_departments?.includes(dept.id) || p.department === dept.id,
             )
-            const deptTools = tools.filter(
-              (t) => t.status === 'active' && t.associated_departments?.includes(dept.id),
-            )
+            const deptTools = tools.filter((t) => t.associated_departments?.includes(dept.id))
             const Icon = getIcon(dept.icon)
 
             return (
               <Card
                 key={dept.id}
-                className="border-slate-200 hover:border-primary/40 hover:shadow-md transition-all bg-white"
+                className="border-green-100/60 hover:border-green-400 hover:shadow-lg hover:shadow-green-500/10 transition-all bg-white rounded-2xl overflow-hidden group"
               >
-                <CardHeader className="pb-2 pt-4 px-4 flex flex-row items-center gap-3 space-y-0">
+                <CardHeader className="pb-3 pt-5 px-5 flex flex-row items-center gap-3 space-y-0 bg-green-50/40 border-b border-green-50/50">
                   <div
-                    className="p-2 rounded-lg bg-slate-50 flex shrink-0"
+                    className="p-2.5 rounded-xl bg-green-100/60 text-green-700 flex shrink-0 group-hover:scale-110 group-hover:bg-green-200 transition-all duration-300"
                     style={{ color: dept.color || 'inherit' }}
                   >
                     <Icon className="h-5 w-5" />
                   </div>
-                  <CardTitle
-                    className="text-sm font-semibold leading-tight line-clamp-2"
-                    style={{ color: dept.color || 'inherit' }}
-                  >
+                  <CardTitle className="text-[15px] font-bold leading-tight line-clamp-2 text-slate-800">
                     {dept.name}
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="px-4 pb-4 pt-2">
-                  <div className="flex flex-col gap-2 mt-2">
-                    <div className="flex items-center justify-between text-sm p-2 bg-slate-50 rounded-md">
-                      <span className="text-muted-foreground flex items-center gap-1.5 font-medium">
-                        <Activity className="h-3.5 w-3.5 text-blue-500" /> Projetos
+                <CardContent className="px-5 pb-5 pt-4">
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center justify-between text-sm px-3 py-2.5 bg-slate-50/80 rounded-xl group-hover:bg-green-50/50 transition-colors">
+                      <span className="text-slate-600 flex items-center gap-2 font-medium">
+                        <Activity className="h-4 w-4 text-green-600" /> Projetos
                       </span>
-                      <span className="font-bold text-slate-800">{deptProjects.length}</span>
+                      <span className="font-bold text-slate-800 text-base">
+                        {deptProjects.length}
+                      </span>
                     </div>
-                    <div className="flex items-center justify-between text-sm p-2 bg-slate-50 rounded-md">
-                      <span className="text-muted-foreground flex items-center gap-1.5 font-medium">
-                        <Zap className="h-3.5 w-3.5 text-amber-500" /> Ferramentas IA
+                    <div className="flex items-center justify-between text-sm px-3 py-2.5 bg-slate-50/80 rounded-xl group-hover:bg-green-50/50 transition-colors">
+                      <span className="text-slate-600 flex items-center gap-2 font-medium">
+                        <Zap className="h-4 w-4 text-green-600" /> Modelos de IA
                       </span>
-                      <span className="font-bold text-slate-800">{deptTools.length}</span>
+                      <span className="font-bold text-slate-800 text-base">{deptTools.length}</span>
                     </div>
                   </div>
                 </CardContent>
@@ -143,7 +138,7 @@ export default function Dashboard() {
             )
           })}
           {departments.length === 0 && (
-            <div className="col-span-full text-muted-foreground text-sm py-8 text-center bg-white rounded-lg border border-dashed">
+            <div className="col-span-full text-muted-foreground text-sm py-8 text-center bg-white rounded-2xl border border-dashed">
               Nenhum departamento cadastrado.
             </div>
           )}

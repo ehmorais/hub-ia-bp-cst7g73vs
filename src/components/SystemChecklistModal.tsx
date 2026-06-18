@@ -11,23 +11,19 @@ import { Button } from '@/components/ui/button'
 import { CheckCircle2, PlayCircle } from 'lucide-react'
 import pb from '@/lib/pocketbase/client'
 
-export function SystemChecklistModal() {
+export function SystemChecklistModal({ tools }: { tools: any[] }) {
   const [open, setOpen] = useState(false)
-  const [tools, setTools] = useState<any[]>([])
   const [visibleCount, setVisibleCount] = useState(0)
+  const [hasInitialized, setHasInitialized] = useState(false)
 
   useEffect(() => {
     const hasShown = sessionStorage.getItem('system-checklist-shown')
-    if (!hasShown) {
-      pb.collection('ia_tools')
-        .getFullList({ sort: 'name' })
-        .then((records) => {
-          setTools(records)
-          setOpen(true)
-          sessionStorage.setItem('system-checklist-shown', 'true')
-        })
+    if (!hasShown && !hasInitialized) {
+      setOpen(true)
+      setHasInitialized(true)
+      sessionStorage.setItem('system-checklist-shown', 'true')
     }
-  }, [])
+  }, [hasInitialized])
 
   useEffect(() => {
     if (open && tools.length > 0 && visibleCount < tools.length) {
