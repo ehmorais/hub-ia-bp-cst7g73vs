@@ -23,19 +23,21 @@ export default function Login() {
       setError('Credenciais inválidas.')
       setLoading(false)
     } else {
-      navigate('/admin')
+      navigate('/dashboard')
     }
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50 p-4">
-      <Card className="w-full max-w-md border-slate-200 shadow-md animate-fade-in">
-        <CardHeader className="text-center space-y-2">
-          <div className="mx-auto bg-primary/10 p-3 rounded-full w-fit mb-2">
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 p-4">
+      <Card className="w-full max-w-md border-slate-200/60 shadow-xl bg-white/80 backdrop-blur-sm animate-fade-in">
+        <CardHeader className="text-center space-y-2 pb-6">
+          <div className="mx-auto bg-primary/10 p-3 rounded-2xl w-fit mb-4">
             <ShieldCheck className="h-8 w-8 text-primary" />
           </div>
-          <CardTitle className="text-2xl">All Systems Go</CardTitle>
-          <CardDescription>Faça login para acessar o portal</CardDescription>
+          <CardTitle className="text-2xl font-bold tracking-tight">Portal IA</CardTitle>
+          <CardDescription className="text-base">
+            Entre com suas credenciais de acesso
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleLogin} className="space-y-4">
@@ -59,8 +61,8 @@ export default function Login() {
                 className="bg-white"
               />
             </div>
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? 'Entrando...' : 'Entrar'}
+            <Button type="submit" className="w-full h-11 text-base shadow-sm" disabled={loading}>
+              {loading ? 'Entrando...' : 'Entrar no Sistema'}
             </Button>
           </form>
         </CardContent>

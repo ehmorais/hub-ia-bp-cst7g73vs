@@ -149,7 +149,6 @@ export function AppSidebar() {
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
-              {generalProjectDept && renderDeptItem(generalProjectDept)}
               <SidebarMenuItem>
                 <SidebarMenuButton
                   asChild
@@ -169,7 +168,10 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupLabel>Departamentos</SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu>{otherDepartments.map((dept: any) => renderDeptItem(dept))}</SidebarMenu>
+            <SidebarMenu>
+              {generalProjectDept && renderDeptItem(generalProjectDept)}
+              {otherDepartments.map((dept: any) => renderDeptItem(dept))}
+            </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>

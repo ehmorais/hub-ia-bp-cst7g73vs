@@ -5,6 +5,7 @@ import { useRealtime } from '@/hooks/use-realtime'
 import { Activity, Zap, FolderKanban } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { getIcon } from '@/lib/icons'
+import { SystemChecklistModal } from '@/components/SystemChecklistModal'
 
 export default function Dashboard() {
   const { user, isAuthenticated } = useAuth()
@@ -37,8 +38,22 @@ export default function Dashboard() {
   useRealtime('departments', () => loadData(), isAuthenticated)
   useRealtime('projects', () => loadData(), isAuthenticated)
 
+  const userProjectDepts = new Set<string>()
+  projects.forEach((p) => {
+    if (p.members?.includes(user?.id)) {
+      if (p.department) userProjectDepts.add(p.department)
+      p.associated_departments?.forEach((d: string) => userProjectDepts.add(d))
+    }
+  })
+
+  const filteredTools =
+    user?.role === 'Admin'
+      ? tools
+      : tools.filter((t) => t.associated_departments?.some((d: string) => userProjectDepts.has(d)))
+
   return (
     <div className="container mx-auto p-4 md:p-8 space-y-8 max-w-7xl animate-fade-in-up">
+      <SystemChecklistModal tools={filteredTools} />
       {/* Welcome Section */}
       <div className="flex flex-col gap-2">
         <h1 className="text-3xl font-bold tracking-tight text-slate-900">
