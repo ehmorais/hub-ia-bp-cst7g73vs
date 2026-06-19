@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import {
   Select,
@@ -21,9 +21,8 @@ import {
   CheckCircle2,
   UserPlus,
   Save,
-  Wand2,
+  Send,
   Trash2,
-  Download,
   CalendarOff,
   Info,
 } from 'lucide-react'
@@ -38,7 +37,9 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area'
+import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
+import { Badge } from '@/components/ui/badge'
 
 type DraftCell = 'D' | 'N' | 'M' | 'T' | 'F' | ''
 
@@ -55,11 +56,10 @@ export function ScalePlanner({ departmentId }: { departmentId?: string }) {
   const [draftUsers, setDraftUsers] = useState<any[]>([])
   const [draft, setDraft] = useState<Record<string, Record<string, DraftCell>>>({})
   const [isSaving, setIsSaving] = useState(false)
+  const [searchUser, setSearchUser] = useState('')
 
   const { toast } = useToast()
-
-  const currentDay = new Date().getDate()
-  const isCollectionPast = currentDay > 10
+  const isCollectionPast = new Date().getDate() > 10
 
   useEffect(() => {
     Promise.all([
@@ -74,18 +74,50 @@ export function ScalePlanner({ departmentId }: { departmentId?: string }) {
       setUsers(u.filter((user: any) => user.expand?.staff_role))
       setContracts(cont)
       setTimeoffs(to)
-      if (c.length > 0) setSelectedCycleId(c.find((x: any) => x.status === 'active')?.id || c[0].id)
+      if (c.length > 0)
+        setSelectedCycleId(
+          c.find((x: any) => x.status === 'draft' || x.status === 'active')?.id || c[0].id,
+        )
       if (s.length > 0) setSelectedSectorId(s[0].id)
     })
   }, [departmentId])
 
   useEffect(() => {
-    if (selectedCycleId) {
+    if (selectedCycleId)
       pb.collection('shifts')
         .getFullList({ filter: `cycle="${selectedCycleId}"` })
         .then(setAllShifts)
-    }
   }, [selectedCycleId])
+
+  useEffect(() => {
+    if (!selectedCycleId || !selectedSectorId || allShifts.length === 0) return
+    const sectorShifts = allShifts.filter((s) => s.sector === selectedSectorId)
+    const newDraft: Record<string, Record<string, DraftCell>> = {}
+    const newUsers = new Map<string, any>()
+
+    sectorShifts.forEach((s) => {
+      const u = users.find((x) => x.id === s.user)
+      if (u) newUsers.set(u.id, u)
+      if (!newDraft[s.user]) newDraft[s.user] = {}
+
+      const dateStr = s.start_time.split(' ')[0]
+      const sh = s.start_time.split(' ')[1]
+      const eh = s.end_time.split(' ')[1]
+
+      let val: DraftCell = ''
+      if (sh === '07:00:00' && eh === '19:00:00') val = 'D'
+      if (sh === '19:00:00' && eh === '07:00:00') val = 'N'
+      if (sh === '07:00:00' && eh === '13:00:00') val = 'M'
+      if (sh === '13:00:00' && eh === '19:00:00') val = 'T'
+
+      if (val) newDraft[s.user][dateStr] = val
+    })
+
+    draftUsers.forEach((u) => newUsers.set(u.id, u))
+    setDraftUsers(Array.from(newUsers.values()))
+    setDraft((prev) => ({ ...prev, ...newDraft }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allShifts, selectedSectorId, selectedCycleId])
 
   const selectedCycle = useMemo(
     () => cycles.find((c) => c.id === selectedCycleId),
@@ -95,312 +127,186 @@ export function ScalePlanner({ departmentId }: { departmentId?: string }) {
     () => sectors.find((s) => s.id === selectedSectorId),
     [sectors, selectedSectorId],
   )
-
   const days = useMemo(() => {
-    if (!selectedCycle) return []
     try {
-      const start = parseISO(selectedCycle.start_date.split(' ')[0])
-      const end = parseISO(selectedCycle.end_date.split(' ')[0])
-      return eachDayOfInterval({ start, end })
+      return selectedCycle
+        ? eachDayOfInterval({
+            start: parseISO(selectedCycle.start_date.split(' ')[0]),
+            end: parseISO(selectedCycle.end_date.split(' ')[0]),
+          })
+        : []
     } catch {
       return []
     }
   }, [selectedCycle])
-
-  const timeoffsForCycle = useMemo(() => {
-    return timeoffs.filter((t) => t.cycle === selectedCycleId && t.status === 'fulfilled')
-  }, [timeoffs, selectedCycleId])
-
-  const handleAddUser = (user: any) => {
-    if (!draftUsers.find((u) => u.id === user.id)) {
-      setDraftUsers((prev) => [...prev, user])
-
-      const userTimeoffs = timeoffsForCycle.filter((t) => t.user === user.id)
-      if (userTimeoffs.length > 0) {
-        setDraft((prev) => {
-          const newDraft = { ...prev }
-          if (!newDraft[user.id]) newDraft[user.id] = {}
-          userTimeoffs.forEach((t) => {
-            const dateStr = t.date.substring(0, 10)
-            newDraft[user.id][dateStr] = 'F'
-          })
-          return newDraft
-        })
-      }
-    }
-  }
-
-  const handleRemoveUser = (userId: string) => {
-    setDraftUsers((prev) => prev.filter((u) => u.id !== userId))
-    setDraft((prev) => {
-      const newDraft = { ...prev }
-      delete newDraft[userId]
-      return newDraft
-    })
-  }
-
-  const updateCell = (userId: string, dateStr: string, value: DraftCell) => {
-    setDraft((prev) => ({
-      ...prev,
-      [userId]: {
-        ...(prev[userId] || {}),
-        [dateStr]: value,
-      },
-    }))
-  }
+  const timeoffsForCycle = useMemo(
+    () => timeoffs.filter((t) => t.cycle === selectedCycleId && t.status === 'fulfilled'),
+    [timeoffs, selectedCycleId],
+  )
 
   const validations = useMemo(() => {
     if (!selectedSector || days.length === 0) return []
     const alerts: string[] = []
-
-    const minStaff = Math.max(
-      selectedSector.min_staffing || 0,
-      selectedSector.bed_capacity ? Math.ceil(selectedSector.bed_capacity / 10) : 0,
-      2,
-    )
+    const isEm = selectedSector.is_critical || selectedSector.name.toLowerCase().includes('ps')
+    const fReq = selectedSector.bed_capacity
+      ? Math.ceil(selectedSector.bed_capacity / (selectedSector.staffing_ratio || 10))
+      : 0
 
     days.forEach((day) => {
       const dateStr = format(day, 'yyyy-MM-dd')
-      let staffCount = 0
-      let hasSupervisor = false
-      let requiresSupervisionCount = 0
+      let count = 0,
+        supCount = 0,
+        reqSupCount = 0
 
       draftUsers.forEach((user) => {
         const cell = draft[user.id]?.[dateStr]
         if (cell && cell !== 'F') {
-          staffCount++
-          if (user.expand?.staff_role?.requires_supervision === false) {
-            hasSupervisor = true
-          } else {
-            requiresSupervisionCount++
-          }
-
-          if (
-            allShifts.some(
-              (s) =>
-                s.user === user.id &&
-                s.start_time.startsWith(dateStr) &&
-                s.sector !== selectedSectorId,
-            )
-          ) {
-            alerts.push(
-              `${user.name} já possui plantão dia ${format(day, 'dd/MM')} em outro setor.`,
-            )
-          }
+          count++
+          if (user.expand?.staff_role?.requires_supervision === false) supCount++
+          else reqSupCount++
         }
       })
 
-      if (staffCount > 0 && staffCount < minStaff) {
-        alerts.push(
-          `Dia ${format(day, 'dd/MM')}: Abaixo do efetivo mínimo (${staffCount}/${minStaff})`,
-        )
-      }
-      if (requiresSupervisionCount > 0 && !hasSupervisor) {
-        alerts.push(`Dia ${format(day, 'dd/MM')}: Falta Enfermeiro p/ supervisão de Técnicos`)
+      if (reqSupCount > 0 && supCount === 0)
+        alerts.push(`Dia ${format(day, 'dd/MM')}: Falta Enfermeiro p/ supervisão`)
+      if (isEm) {
+        if (count < 2) alerts.push(`Dia ${format(day, 'dd/MM')}: Emergência < mínimo (2)`)
+        else if (count < 3) alerts.push(`Dia ${format(day, 'dd/MM')}: Emergência < ideal (3)`)
+      } else if (fReq > 0) {
+        if (count < fReq)
+          alerts.push(`Dia ${format(day, 'dd/MM')}: Andar < efetivo (${count}/${fReq})`)
+      } else if (count > 0 && count < (selectedSector.min_staffing || 0)) {
+        alerts.push(`Dia ${format(day, 'dd/MM')}: Abaixo do efetivo mínimo`)
       }
     })
 
     draftUsers.forEach((user) => {
       const contract = contracts.find((c) => c.user === user.id)
-      const maxHours = contract?.monthly_hour_limit || 180
-      let userHours = 0
-      let consecutive12h = 0
-      let lastShift12h = false
+      const maxH = contract?.monthly_hour_limit || 180
+      const stName = contract?.expand?.shift_type?.name || ''
+      let uh = 0,
+        lastEnd: Date | null = null
 
       days.forEach((day) => {
         const dateStr = format(day, 'yyyy-MM-dd')
         const cell = draft[user.id]?.[dateStr]
-        if (cell === 'D' || cell === 'N') {
-          userHours += 12
-          if (lastShift12h) consecutive12h++
-          lastShift12h = true
-        } else if (cell === 'M' || cell === 'T') {
-          userHours += 6
-          lastShift12h = false
-        } else {
-          lastShift12h = false
-        }
-      })
+        const isTO = timeoffsForCycle.some(
+          (t) => t.user === user.id && t.date.substring(0, 10) === dateStr,
+        )
 
-      if (userHours > maxHours) {
-        alerts.push(`${user.name} excede o limite de ${maxHours}h (Total: ${userHours}h)`)
-      }
-      if (consecutive12h > 0) {
-        alerts.push(`${user.name} possui turnos de 12h consecutivos (Risco de Fadiga)`)
-      }
-    })
-
-    return Array.from(new Set(alerts))
-  }, [days, draft, draftUsers, selectedSector, allShifts, contracts])
-
-  const handleSave = async () => {
-    if (!selectedCycleId || !selectedSectorId) return
-    if (validations.some((v) => v.includes('em outro setor'))) {
-      toast({
-        title: 'Conflito de Alocação',
-        description: 'Remova os conflitos intersetoriais antes de salvar.',
-        variant: 'destructive',
-      })
-      return
-    }
-
-    setIsSaving(true)
-    const shiftsToCreate: any[] = []
-
-    draftUsers.forEach((user) => {
-      days.forEach((day) => {
-        const dateStr = format(day, 'yyyy-MM-dd')
-        const cell = draft[user.id]?.[dateStr]
         if (cell && cell !== 'F') {
-          let startTime = ''
-          let endTime = ''
-          if (cell === 'D') {
-            startTime = '07:00:00'
-            endTime = '19:00:00'
-          } else if (cell === 'N') {
-            startTime = '19:00:00'
-            endTime = '07:00:00'
-          } else if (cell === 'M') {
-            startTime = '07:00:00'
-            endTime = '13:00:00'
-          } else if (cell === 'T') {
-            startTime = '13:00:00'
-            endTime = '19:00:00'
+          if (isTO) alerts.push(`${user.name} alocado em dia de folga (${format(day, 'dd/MM')})`)
+          if (cell === 'D' || cell === 'N') {
+            uh += 12
+            if (lastEnd) {
+              const cs = new Date(day)
+              cs.setHours(cell === 'D' ? 7 : 19, 0, 0, 0)
+              if (stName.includes('12x36') && (cs.getTime() - lastEnd.getTime()) / 3600000 < 36) {
+                alerts.push(`${user.name} sem descanso de 36h (${format(day, 'dd/MM')})`)
+              }
+            }
+            lastEnd = new Date(day)
+            lastEnd.setDate(lastEnd.getDate() + (cell === 'N' ? 1 : 0))
+            lastEnd.setHours(cell === 'N' ? 7 : 19, 0, 0, 0)
+          } else if (cell === 'M' || cell === 'T') {
+            uh += 6
+            lastEnd = new Date(day)
+            lastEnd.setHours(cell === 'M' ? 13 : 19, 0, 0, 0)
           }
-
-          let startFull = `${dateStr} ${startTime}`
-          let endFull =
-            cell === 'N'
-              ? `${format(addDays(day, 1), 'yyyy-MM-dd')} ${endTime}`
-              : `${dateStr} ${endTime}`
-
-          shiftsToCreate.push({
-            user: user.id,
-            sector: selectedSectorId,
-            cycle: selectedCycleId,
-            start_time: startFull,
-            end_time: endFull,
-          })
         }
       })
+      if (uh > maxH) alerts.push(`${user.name} excede o limite mensal (Total: ${uh}h / ${maxH}h)`)
     })
+    return Array.from(new Set(alerts))
+  }, [days, draft, draftUsers, selectedSector, contracts, timeoffsForCycle])
 
-    if (shiftsToCreate.length === 0) {
-      toast({ title: 'Aviso', description: 'Nenhum plantão preenchido para salvar.' })
-      setIsSaving(false)
-      return
-    }
-
+  const handleSave = async (publish: boolean) => {
+    if (!selectedCycleId || !selectedSectorId) return
+    setIsSaving(true)
     try {
-      for (const shift of shiftsToCreate) {
-        await pb.collection('shifts').create(shift)
-      }
+      const existing = allShifts.filter((s) => s.sector === selectedSectorId)
+      for (const s of existing) await pb.collection('shifts').delete(s.id)
 
-      try {
-        await pb.collection('audit_logs').create({
-          user: pb.authStore.record?.id,
-          action: 'create_shifts',
-          department: departmentId || 'Geral',
-          details: `Generated ${shiftsToCreate.length} shifts for sector ${selectedSector?.name} in cycle ${selectedCycle?.name}`,
-        })
-      } catch (err) {
-        console.error('Audit log failed', err)
-      }
+      const toCreate: any[] = []
+      draftUsers.forEach((u) =>
+        days.forEach((d) => {
+          const dateStr = format(d, 'yyyy-MM-dd')
+          const cell = draft[u.id]?.[dateStr]
+          if (cell && cell !== 'F') {
+            let st = '',
+              et = ''
+            if (cell === 'D') {
+              st = '07:00:00'
+              et = '19:00:00'
+            }
+            if (cell === 'N') {
+              st = '19:00:00'
+              et = '07:00:00'
+            }
+            if (cell === 'M') {
+              st = '07:00:00'
+              et = '13:00:00'
+            }
+            if (cell === 'T') {
+              st = '13:00:00'
+              et = '19:00:00'
+            }
+            toCreate.push({
+              user: u.id,
+              sector: selectedSectorId,
+              cycle: selectedCycleId,
+              start_time: `${dateStr} ${st}.000Z`,
+              end_time:
+                cell === 'N'
+                  ? `${format(addDays(d, 1), 'yyyy-MM-dd')} ${et}.000Z`
+                  : `${dateStr} ${et}.000Z`,
+            })
+          }
+        }),
+      )
+      for (const s of toCreate) await pb.collection('shifts').create(s)
 
-      toast({ title: 'Sucesso', description: 'Escala salva e publicada com sucesso!' })
-      const updatedShifts = await pb
-        .collection('shifts')
-        .getFullList({ filter: `cycle="${selectedCycleId}"` })
-      setAllShifts(updatedShifts)
+      if (publish && selectedCycle?.status === 'draft') {
+        await pb.collection('shift_cycles').update(selectedCycleId, { status: 'active' })
+        setCycles((c) => c.map((x) => (x.id === selectedCycleId ? { ...x, status: 'active' } : x)))
+        toast({ title: 'Sucesso', description: 'Escala publicada e ativa!' })
+      } else {
+        toast({ title: 'Sucesso', description: 'Rascunho salvo localmente.' })
+      }
+      setAllShifts(
+        await pb.collection('shifts').getFullList({ filter: `cycle="${selectedCycleId}"` }),
+      )
     } catch (err: any) {
-      toast({ title: 'Erro ao salvar', description: err.message, variant: 'destructive' })
+      toast({ title: 'Erro', description: err.message, variant: 'destructive' })
     } finally {
       setIsSaving(false)
     }
   }
 
-  const handleAutoSuggest = () => {
-    if (draftUsers.length === 0) {
-      toast({ title: 'Aviso', description: 'Adicione colaboradores ao rascunho primeiro.' })
-      return
-    }
-    const newDraft = { ...draft }
-    draftUsers.forEach((user, i) => {
-      if (!newDraft[user.id]) newDraft[user.id] = {}
-
-      const contract = contracts.find((c) => c.user === user.id)
-      const maxHours = contract?.monthly_hour_limit || 180
-      let currentHours = 0
-
-      days.forEach((day, j) => {
-        const dateStr = format(day, 'yyyy-MM-dd')
-        const isTimeoff = timeoffsForCycle.some(
-          (t) => t.user === user.id && t.date.substring(0, 10) === dateStr,
-        )
-
-        if (isTimeoff) {
-          newDraft[user.id][dateStr] = 'F'
-        } else {
-          if ((i + j) % 2 === 0 && currentHours + 12 <= maxHours) {
-            newDraft[user.id][dateStr] = 'D'
-            currentHours += 12
-          } else {
-            newDraft[user.id][dateStr] = 'F'
-          }
-        }
-      })
-    })
-    setDraft(newDraft)
-    toast({
-      title: 'Sugestão Aplicada',
-      description: 'Template base preenchido respeitando limites e folgas.',
-    })
-  }
-
-  const handleExportCSV = () => {
-    if (!selectedSector || !selectedCycle || draftUsers.length === 0) return
-    let csv = 'Colaborador,Funcao,' + days.map((d) => format(d, 'dd/MM')).join(',') + '\n'
-    draftUsers.forEach((user) => {
-      const row = [user.name, user.expand?.staff_role?.name || '']
-      days.forEach((day) => {
-        const dateStr = format(day, 'yyyy-MM-dd')
-        row.push(draft[user.id]?.[dateStr] || '')
-      })
-      csv += row.join(',') + '\n'
-    })
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-    const link = document.createElement('a')
-    link.href = URL.createObjectURL(blob)
-    link.download = `Escala_${selectedSector.name.replace(/\s+/g, '_')}_${selectedCycle.name.replace(/\s+/g, '_')}.csv`
-    link.click()
-  }
-
   return (
     <div className="flex flex-col gap-4 animate-fade-in pb-10">
       {isCollectionPast && (
-        <div className="bg-blue-50 border border-blue-200 text-blue-800 text-xs px-3 py-2 rounded-lg flex items-center gap-2 mb-2">
-          <Info className="h-4 w-4" />
-          A etapa de coleta de pretensões de folga para o ciclo vigente já foi encerrada (prazo: dia
-          10).
+        <div className="bg-blue-50 border border-blue-200 text-blue-800 text-xs px-3 py-2 rounded-lg flex items-center gap-2">
+          <Info className="h-4 w-4" /> Coleta de folgas para este ciclo já encerrada.
         </div>
       )}
 
       <div className="flex flex-col xl:flex-row gap-4 justify-between items-start xl:items-center bg-white p-4 rounded-xl border shadow-sm">
         <div className="flex flex-wrap items-center gap-3">
           <Select value={selectedCycleId} onValueChange={setSelectedCycleId}>
-            <SelectTrigger className="w-[200px] bg-slate-50">
+            <SelectTrigger className="w-[200px]">
               <SelectValue placeholder="Selecione o Ciclo" />
             </SelectTrigger>
             <SelectContent>
               {cycles.map((c) => (
                 <SelectItem key={c.id} value={c.id}>
-                  {c.name}
+                  {c.name} {c.status === 'draft' && '(Rascunho)'}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
           <Select value={selectedSectorId} onValueChange={setSelectedSectorId}>
-            <SelectTrigger className="w-[200px] bg-slate-50">
+            <SelectTrigger className="w-[200px]">
               <SelectValue placeholder="Selecione o Setor" />
             </SelectTrigger>
             <SelectContent>
@@ -416,40 +322,47 @@ export function ScalePlanner({ departmentId }: { departmentId?: string }) {
         <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto">
           <Dialog>
             <DialogTrigger asChild>
-              <Button
-                variant="outline"
-                className="gap-2 bg-white flex-1 md:flex-auto whitespace-nowrap"
-              >
+              <Button variant="outline" className="gap-2 bg-white flex-1 whitespace-nowrap">
                 <UserPlus className="h-4 w-4" /> Add Colaborador
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Adicionar Colaborador à Escala</DialogTitle>
+                <DialogTitle>Adicionar à Escala (Cobertura intersetorial permitida)</DialogTitle>
               </DialogHeader>
+              <Input
+                placeholder="Buscar por nome..."
+                value={searchUser}
+                onChange={(e) => setSearchUser(e.target.value)}
+              />
               <ScrollArea className="h-[300px] mt-2 rounded-md border p-2">
                 <div className="space-y-2">
-                  {users.map((u) => (
-                    <div
-                      key={u.id}
-                      className="flex justify-between items-center p-2 hover:bg-slate-50 rounded border border-transparent hover:border-slate-200"
-                    >
-                      <div>
-                        <p className="font-medium text-sm text-slate-800">{u.name || 'Sem nome'}</p>
-                        <p className="text-[11px] text-slate-500 uppercase tracking-wider">
-                          {u.expand?.staff_role?.name}
-                        </p>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant={draftUsers.some((d) => d.id === u.id) ? 'secondary' : 'default'}
-                        onClick={() => handleAddUser(u)}
-                        disabled={draftUsers.some((d) => d.id === u.id)}
+                  {users
+                    .filter((u) => u.name.toLowerCase().includes(searchUser.toLowerCase()))
+                    .map((u) => (
+                      <div
+                        key={u.id}
+                        className="flex justify-between items-center p-2 hover:bg-slate-50 border rounded"
                       >
-                        {draftUsers.some((d) => d.id === u.id) ? 'Adicionado' : 'Adicionar'}
-                      </Button>
-                    </div>
-                  ))}
+                        <div>
+                          <p className="font-medium text-sm text-slate-800">{u.name}</p>
+                          <p className="text-[11px] text-slate-500 uppercase">
+                            {u.expand?.staff_role?.name}
+                          </p>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant={draftUsers.some((d) => d.id === u.id) ? 'secondary' : 'default'}
+                          onClick={() => {
+                            if (!draftUsers.find((d) => d.id === u.id))
+                              setDraftUsers((p) => [...p, u])
+                          }}
+                          disabled={draftUsers.some((d) => d.id === u.id)}
+                        >
+                          {draftUsers.some((d) => d.id === u.id) ? 'Adicionado' : 'Adicionar'}
+                        </Button>
+                      </div>
+                    ))}
                 </div>
               </ScrollArea>
             </DialogContent>
@@ -457,63 +370,36 @@ export function ScalePlanner({ departmentId }: { departmentId?: string }) {
 
           <Button
             variant="outline"
-            onClick={handleExportCSV}
-            className="gap-2 flex-1 md:flex-auto bg-white whitespace-nowrap"
+            onClick={() => handleSave(false)}
+            disabled={isSaving || selectedCycle?.status !== 'draft'}
+            className="gap-2 flex-1 bg-white"
           >
-            <Download className="h-4 w-4" /> Exportar CSV
+            <Save className="h-4 w-4" /> Salvar Rascunho
           </Button>
 
           <Button
-            variant="secondary"
-            onClick={handleAutoSuggest}
-            className="gap-2 flex-1 md:flex-auto whitespace-nowrap"
+            onClick={() => handleSave(true)}
+            disabled={isSaving || selectedCycle?.status !== 'draft'}
+            className="gap-2 flex-1 whitespace-nowrap"
           >
-            <Wand2 className="h-4 w-4" /> Sugerir
-          </Button>
-
-          <Button
-            onClick={handleSave}
-            disabled={isSaving}
-            className="gap-2 flex-1 md:flex-auto whitespace-nowrap"
-          >
-            <Save className="h-4 w-4" /> {isSaving ? 'Salvando...' : 'Gerar Escala'}
+            <Send className="h-4 w-4" /> Publicar Escala
           </Button>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
         <div className="lg:col-span-3 border rounded-xl bg-white shadow-sm overflow-hidden flex flex-col">
-          <div className="p-3 border-b bg-slate-50 flex items-center justify-between">
-            <div className="flex flex-wrap items-center gap-4 text-xs font-medium text-slate-600">
-              <span className="flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-blue-500" /> D: Dia (12h)
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-indigo-800" /> N: Noite (12h)
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-amber-500" /> M: Manhã (6h)
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-orange-600" /> T: Tarde (6h)
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-slate-300" /> F: Folga
-              </span>
-            </div>
-          </div>
-
           <ScrollArea className="w-full max-w-[calc(100vw-2rem)]">
             <table className="w-full text-sm border-collapse">
               <thead>
                 <tr>
-                  <th className="sticky left-0 z-20 bg-slate-100 border-b border-r p-2 text-left min-w-[150px] font-semibold text-slate-700 shadow-[1px_0_0_0_#e2e8f0]">
+                  <th className="sticky left-0 z-20 bg-slate-100 border-b border-r p-2 text-left min-w-[150px]">
                     Colaborador
                   </th>
                   {days.map((day) => (
                     <th
                       key={day.toISOString()}
-                      className="border-b border-r p-1.5 min-w-[36px] bg-slate-50 text-center font-medium"
+                      className="border-b border-r p-1.5 min-w-[36px] bg-slate-50 text-center"
                     >
                       <div className="text-[10px] uppercase text-slate-500">
                         {format(day, 'eee', { locale: ptBR })}
@@ -524,57 +410,58 @@ export function ScalePlanner({ departmentId }: { departmentId?: string }) {
                 </tr>
               </thead>
               <tbody>
-                {draftUsers.length === 0 ? (
-                  <tr>
-                    <td colSpan={days.length + 1} className="p-8 text-center text-muted-foreground">
-                      Nenhum colaborador adicionado ao rascunho de planejamento.
-                    </td>
-                  </tr>
-                ) : (
-                  draftUsers.map((user) => (
-                    <tr key={user.id} className="hover:bg-slate-50/50 group">
-                      <td className="sticky left-0 z-20 bg-white group-hover:bg-slate-50/90 border-b border-r p-2 shadow-[1px_0_0_0_#e2e8f0]">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex flex-col overflow-hidden">
+                {draftUsers.map((user) => {
+                  const isCov =
+                    !allShifts.some((s) => s.user === user.id && s.sector === selectedSectorId) &&
+                    allShifts.some((s) => s.user === user.id)
+                  return (
+                    <tr key={user.id} className="hover:bg-slate-50 group">
+                      <td className="sticky left-0 z-20 bg-white border-b border-r p-2 shadow-[1px_0_0_0_#e2e8f0]">
+                        <div className="flex items-center justify-between">
+                          <div className="flex flex-col">
                             <span className="font-medium text-xs truncate max-w-[120px]">
                               {user.name}
                             </span>
-                            <span className="text-[9px] text-slate-400 truncate max-w-[120px]">
-                              {user.expand?.staff_role?.name}
+                            <span className="text-[9px] text-slate-400">
+                              {user.expand?.staff_role?.name}{' '}
+                              {isCov && (
+                                <Badge variant="secondary" className="text-[8px] h-3 px-1 ml-1">
+                                  Cobertura
+                                </Badge>
+                              )}
                             </span>
                           </div>
                           <button
-                            onClick={() => handleRemoveUser(user.id)}
-                            className="text-slate-300 hover:text-red-500 transition-colors"
+                            onClick={() => setDraftUsers((p) => p.filter((u) => u.id !== user.id))}
+                            className="text-slate-300 hover:text-red-500"
                           >
                             <Trash2 className="h-3 w-3" />
                           </button>
                         </div>
                       </td>
                       {days.map((day) => {
-                        const dateStr = format(day, 'yyyy-MM-dd')
-                        const val = draft[user.id]?.[dateStr] || ''
-                        const isTimeoff = timeoffsForCycle.some(
-                          (t) => t.user === user.id && t.date.substring(0, 10) === dateStr,
+                        const ds = format(day, 'yyyy-MM-dd')
+                        const val = draft[user.id]?.[ds] || ''
+                        const isTO = timeoffsForCycle.some(
+                          (t) => t.user === user.id && t.date.substring(0, 10) === ds,
                         )
-
                         return (
-                          <td key={dateStr} className="p-0 border-b border-r relative">
+                          <td key={ds} className="p-0 border-b border-r relative">
                             <select
                               value={val}
                               onChange={(e) =>
-                                updateCell(user.id, dateStr, e.target.value as DraftCell)
+                                setDraft((p) => ({
+                                  ...p,
+                                  [user.id]: { ...p[user.id], [ds]: e.target.value as DraftCell },
+                                }))
                               }
-                              disabled={isTimeoff}
+                              disabled={isTO || selectedCycle?.status !== 'draft'}
                               className={cn(
-                                'w-full h-11 appearance-none bg-transparent text-center text-xs outline-none cursor-pointer hover:bg-slate-100 focus:bg-primary/10 transition-colors disabled:cursor-not-allowed disabled:bg-slate-50 disabled:opacity-50',
+                                'w-full h-11 appearance-none bg-transparent text-center text-xs outline-none cursor-pointer hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50',
                                 {
                                   'font-bold text-blue-600': val === 'D',
                                   'font-bold text-indigo-900': val === 'N',
-                                  'font-bold text-amber-600': val === 'M',
-                                  'font-bold text-orange-700': val === 'T',
-                                  'text-slate-300': val === 'F' && !isTimeoff,
-                                  'text-red-400 font-bold bg-red-50': isTimeoff,
+                                  'text-red-400 font-bold bg-red-50': isTO,
                                 },
                               )}
                             >
@@ -585,11 +472,8 @@ export function ScalePlanner({ departmentId }: { departmentId?: string }) {
                               <option value="T">T</option>
                               <option value="F">F</option>
                             </select>
-                            {isTimeoff && (
-                              <div
-                                className="absolute top-0 right-0 p-0.5 pointer-events-none text-red-500 opacity-50"
-                                title="Folga/Férias Aprovada"
-                              >
+                            {isTO && (
+                              <div className="absolute top-0 right-0 p-0.5 text-red-500 opacity-50">
                                 <CalendarOff className="h-2.5 w-2.5" />
                               </div>
                             )}
@@ -597,8 +481,8 @@ export function ScalePlanner({ departmentId }: { departmentId?: string }) {
                         )
                       })}
                     </tr>
-                  ))
-                )}
+                  )
+                })}
               </tbody>
             </table>
             <ScrollBar orientation="horizontal" />
@@ -610,23 +494,20 @@ export function ScalePlanner({ departmentId }: { departmentId?: string }) {
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-semibold flex items-center gap-2 text-amber-800">
                 <AlertCircle className="h-4 w-4" />
-                Validação em Tempo Real
+                Validação
               </CardTitle>
             </CardHeader>
             <CardContent>
               {validations.length === 0 ? (
-                <div className="flex flex-col items-center justify-center text-center p-4 text-green-700 gap-2">
+                <div className="flex flex-col items-center justify-center p-4 text-green-700 gap-2">
                   <CheckCircle2 className="h-8 w-8" />
-                  <p className="text-xs font-medium">Escala validada e sem conflitos.</p>
+                  <p className="text-xs font-medium">Escala validada.</p>
                 </div>
               ) : (
                 <ul className="space-y-2">
                   {validations.map((v, i) => (
-                    <li
-                      key={i}
-                      className="text-xs text-amber-800 bg-amber-100/50 p-2 rounded flex items-start gap-2"
-                    >
-                      <span className="mt-0.5">•</span> <span>{v}</span>
+                    <li key={i} className="text-xs text-amber-800 bg-amber-100/50 p-2 rounded">
+                      • {v}
                     </li>
                   ))}
                 </ul>
