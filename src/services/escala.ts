@@ -71,10 +71,12 @@ export const generateShifts = (cycleId: string, departmentId: string) =>
 // Timeoff Requests
 export const getTimeoffRequests = () =>
   pb.collection('timeoff_requests').getFullList({ expand: 'user,cycle', sort: '-created' })
+export const createTimeoffRequest = (data: any) => pb.collection('timeoff_requests').create(data)
 export const updateTimeoffRequest = (id: string, data: any) =>
   pb.collection('timeoff_requests').update(id, data)
+export const deleteTimeoffRequest = (id: string) => pb.collection('timeoff_requests').delete(id)
 
 // Users
 export const getUsers = () =>
-  pb.collection('users').getFullList({ sort: 'name', expand: 'staff_role' })
+  pb.collection('users').getFullList({ sort: 'name', expand: 'staff_role,default_sector' })
 export const updateUser = (id: string, data: any) => pb.collection('users').update(id, data)

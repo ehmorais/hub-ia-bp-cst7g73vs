@@ -28,6 +28,8 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/
 import { Bar, BarChart, XAxis, YAxis, ResponsiveContainer } from 'recharts'
 import { cn } from '@/lib/utils'
 import { EscalasManagement } from '@/components/EscalasManagement'
+import { DepartmentStaffList } from '@/components/escala/DepartmentStaffList'
+import { UserPlus } from 'lucide-react'
 
 export default function Department() {
   const { id } = useParams()
@@ -312,6 +314,15 @@ export default function Department() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Staff List */}
+      <div className="space-y-4 pt-4">
+        <div className="flex items-center gap-2 border-b pb-2">
+          <UserPlus className="h-5 w-5 text-slate-500" />
+          <h2 className="text-xl font-semibold">Equipe e Setores</h2>
+        </div>
+        <DepartmentStaffList departmentId={id as string} />
       </div>
 
       {/* History Table */}

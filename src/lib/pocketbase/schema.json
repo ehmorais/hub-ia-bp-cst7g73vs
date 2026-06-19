@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-06-19T17:41:08.022Z",
+  "generatedAt": "2026-06-19T17:55:00.244Z",
   "collections": [
     {
       "name": "users",
@@ -51,6 +51,13 @@
           "required": false,
           "system": false,
           "collectionRef": "staff_roles"
+        },
+        {
+          "name": "default_sector",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "hospital_sectors"
         }
       ],
       "indexes": [

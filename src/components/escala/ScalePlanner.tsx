@@ -140,7 +140,10 @@ export function ScalePlanner({ departmentId }: { departmentId?: string }) {
     }
   }, [selectedCycle])
   const timeoffsForCycle = useMemo(
-    () => timeoffs.filter((t) => t.cycle === selectedCycleId && t.status === 'fulfilled'),
+    () =>
+      timeoffs.filter(
+        (t) => t.cycle === selectedCycleId && (t.status === 'fulfilled' || t.status === 'pending'),
+      ),
     [timeoffs, selectedCycleId],
   )
 
@@ -195,7 +198,14 @@ export function ScalePlanner({ departmentId }: { departmentId?: string }) {
         )
 
         if (cell && cell !== 'F') {
-          if (isTO) alerts.push(`${user.name} alocado em dia de folga (${format(day, 'dd/MM')})`)
+          if (isTO) {
+            const reqStatus = timeoffsForCycle.find(
+              (t) => t.user === user.id && t.date.substring(0, 10) === dateStr,
+            )?.status
+            alerts.push(
+              `${user.name} alocado em dia de folga ${reqStatus === 'pending' ? '(pendente)' : ''} (${format(day, 'dd/MM')})`,
+            )
+          }
           if (cell === 'D' || cell === 'N') {
             uh += 12
             if (lastEnd) {
@@ -442,9 +452,11 @@ export function ScalePlanner({ departmentId }: { departmentId?: string }) {
                       {days.map((day) => {
                         const ds = format(day, 'yyyy-MM-dd')
                         const val = draft[user.id]?.[ds] || ''
-                        const isTO = timeoffsForCycle.some(
+                        const toReq = timeoffsForCycle.find(
                           (t) => t.user === user.id && t.date.substring(0, 10) === ds,
                         )
+                        const isTO = !!toReq
+                        const isPendingTO = toReq?.status === 'pending'
                         return (
                           <td key={ds} className="p-0 border-b border-r relative">
                             <select
@@ -461,7 +473,8 @@ export function ScalePlanner({ departmentId }: { departmentId?: string }) {
                                 {
                                   'font-bold text-blue-600': val === 'D',
                                   'font-bold text-indigo-900': val === 'N',
-                                  'text-red-400 font-bold bg-red-50': isTO,
+                                  'text-red-400 font-bold bg-red-50': isTO && !isPendingTO,
+                                  'text-amber-500 font-bold bg-amber-50': isPendingTO,
                                 },
                               )}
                             >
@@ -473,7 +486,13 @@ export function ScalePlanner({ departmentId }: { departmentId?: string }) {
                               <option value="F">F</option>
                             </select>
                             {isTO && (
-                              <div className="absolute top-0 right-0 p-0.5 text-red-500 opacity-50">
+                              <div
+                                className={cn(
+                                  'absolute top-0 right-0 p-0.5 opacity-50',
+                                  isPendingTO ? 'text-amber-500' : 'text-red-500',
+                                )}
+                                title={isPendingTO ? 'Folga Pendente' : 'Folga'}
+                              >
                                 <CalendarOff className="h-2.5 w-2.5" />
                               </div>
                             )}
