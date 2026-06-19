@@ -259,7 +259,7 @@ export function ShiftRules({ departmentId, readOnly = false }: ShiftRulesProps) 
                 {type === 'custom_prompt' && (
                   <div className="space-y-2">
                     <Label className="flex items-center gap-2">
-                      Instruções da IA <span className="text-red-500">*</span>
+                      Prompt da Regra <span className="text-red-500">*</span>
                       <Info className="h-4 w-4 text-muted-foreground" />
                     </Label>
                     <Textarea

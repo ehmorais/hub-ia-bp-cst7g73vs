@@ -112,6 +112,26 @@ export default function Department() {
         </div>
       </div>
 
+      {/* Projetos Gerais Integration */}
+      {department.name === 'Projetos Gerais HBPSCS' && (
+        <Card className="border-primary/20 bg-primary/5 shadow-sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-primary">
+              <Calendar className="h-5 w-5" />
+              Escala de Colaboradores
+            </CardTitle>
+            <CardDescription>
+              Módulo centralizado para gestão de escalas, plantões e regras de dimensionamento.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button asChild>
+              <Link to="/admin#escalas">Acessar Módulo de Escalas</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Tools Grid */}
       <div className="space-y-4">
         <div className="flex items-center gap-2 border-b pb-2">
