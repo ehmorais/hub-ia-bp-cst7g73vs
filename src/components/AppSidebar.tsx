@@ -12,7 +12,7 @@ import {
   SidebarMenuItem,
 } from '@/components/ui/sidebar'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
-import { LayoutDashboard, Settings, LogOut, ShieldAlert, Calendar } from 'lucide-react'
+import { LayoutDashboard, Settings, LogOut, ShieldAlert } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import pb from '@/lib/pocketbase/client'
 import { useRealtime } from '@/hooks/use-realtime'
@@ -158,38 +158,6 @@ export function AppSidebar() {
                   <Link to="/admin">
                     <Settings className="h-4 w-4" />
                     <span>Administração</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        <SidebarGroup>
-          <SidebarGroupLabel>Escala de Colaboradores</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  asChild
-                  isActive={location.pathname === '/admin' && location.hash === '#escalas'}
-                  tooltip="Gestão de Escalas"
-                >
-                  <Link to="/admin#escalas">
-                    <Calendar className="h-4 w-4" />
-                    <span>Gestão de Escalas</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  asChild
-                  isActive={location.pathname === '/admin/regras'}
-                  tooltip="Regras"
-                >
-                  <Link to="/admin/regras">
-                    <Calendar className="h-4 w-4" />
-                    <span>Regras</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>

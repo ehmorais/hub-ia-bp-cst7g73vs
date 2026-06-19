@@ -12,7 +12,6 @@ import Department from './pages/Department'
 import Project from './pages/Project'
 import AiChat from './pages/AiChat'
 import Admin from './pages/Admin'
-import RulesAdmin from './pages/RulesAdmin'
 import Login from './pages/Login'
 import Profile from './pages/Profile'
 import { AuthProvider, useAuth } from './hooks/use-auth'
@@ -41,7 +40,6 @@ const App = () => (
               <Route path="/project/:id" element={<Project />} />
               <Route path="/ai/:id" element={<AiChat />} />
               <Route path="/admin" element={<Admin />} />
-              <Route path="/admin/regras" element={<RulesAdmin />} />
               <Route path="/profile" element={<Profile />} />
             </Route>
           </Route>
