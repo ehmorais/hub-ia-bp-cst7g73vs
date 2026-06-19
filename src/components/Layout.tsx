@@ -116,16 +116,24 @@ export default function Layout() {
       <SidebarInset className="flex flex-col min-h-screen bg-slate-50/50">
         {/* Header */}
         <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6 shadow-sm">
-          <div className="flex items-center gap-2 md:hidden">
-            <SidebarTrigger className="shrink-0" />
-            <div className="flex items-center gap-2 ml-1">
-              <div className="flex flex-col">
+          <div className="flex items-center gap-2">
+            <SidebarTrigger className="shrink-0 md:hidden" />
+            <Link
+              to="/dashboard"
+              className="flex items-center gap-2 ml-1 transition-opacity hover:opacity-80"
+            >
+              <img
+                src="https://img.usecurling.com/i?q=hospital&color=green&shape=fill"
+                alt="Logo HBPSCS"
+                className="h-10 w-auto object-contain"
+              />
+              <div className="flex flex-col md:hidden lg:flex">
                 <span className="font-bold text-sm leading-none text-primary">HUB de IA BP</span>
                 <span className="text-[10px] text-muted-foreground font-medium">
                   São Caetano do Sul
                 </span>
               </div>
-            </div>
+            </Link>
           </div>
           <div className="flex-1">
             <div className="relative max-w-md hidden md:flex items-center">

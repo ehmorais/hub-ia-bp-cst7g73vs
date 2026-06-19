@@ -70,8 +70,12 @@ export default function Login() {
       <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 p-4">
         <Card className="w-full max-w-md border-slate-200/60 shadow-xl bg-white/80 backdrop-blur-sm animate-fade-in">
           <CardHeader className="text-center space-y-2 pb-6">
-            <div className="mx-auto bg-primary/10 p-3 rounded-2xl w-fit mb-4">
-              <ShieldCheck className="h-8 w-8 text-primary" />
+            <div className="mx-auto mb-4">
+              <img
+                src="https://img.usecurling.com/i?q=hospital&color=green&shape=fill"
+                alt="Logo HBPSCS"
+                className="h-16 w-auto object-contain mx-auto"
+              />
             </div>
             <CardTitle className="text-2xl font-bold tracking-tight">All Systems Go</CardTitle>
             <CardDescription className="text-base">
@@ -132,8 +136,12 @@ export default function Login() {
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 p-4">
       <Card className="w-full max-w-md border-slate-200/60 shadow-xl bg-white/80 backdrop-blur-sm animate-fade-in">
         <CardHeader className="text-center space-y-2 pb-6">
-          <div className="mx-auto bg-primary/10 p-3 rounded-2xl w-fit mb-4">
-            <ShieldCheck className="h-8 w-8 text-primary" />
+          <div className="mx-auto mb-4">
+            <img
+              src="https://img.usecurling.com/i?q=hospital&color=green&shape=fill"
+              alt="Logo HBPSCS"
+              className="h-16 w-auto object-contain mx-auto"
+            />
           </div>
           <CardTitle className="text-2xl font-bold tracking-tight">Portal IA</CardTitle>
           <CardDescription className="text-base">
