@@ -48,7 +48,7 @@ import { Input } from '@/components/ui/input'
 import { useToast } from '@/components/ui/use-toast'
 import { Badge } from '@/components/ui/badge'
 
-export function StaffContracts() {
+export function StaffContracts({ departmentId }: { departmentId?: string }) {
   const [contracts, setContracts] = useState<any[]>([])
   const [users, setUsers] = useState<any[]>([])
   const [shiftTypes, setShiftTypes] = useState<any[]>([])
@@ -66,15 +66,36 @@ export function StaffContracts() {
 
   const loadData = () => {
     Promise.all([getStaffContracts(), getUsers(), getShiftTypes()]).then(([c, u, st]) => {
-      setContracts(c)
-      setUsers(u)
+      let filteredContracts = c
+      let filteredUsers = u
+
+      if (departmentId) {
+        filteredContracts = c.filter((contract: any) => {
+          const userSector = contract.expand?.user?.expand?.default_sector
+          if (userSector?.department) {
+            return userSector.department === departmentId
+          }
+          return true // fallback to showing if expansion missing
+        })
+
+        filteredUsers = u.filter((user: any) => {
+          const userSector = user.expand?.default_sector
+          if (userSector?.department) {
+            return userSector.department === departmentId
+          }
+          return true // fallback to showing if expansion missing
+        })
+      }
+
+      setContracts(filteredContracts)
+      setUsers(filteredUsers)
       setShiftTypes(st)
     })
   }
 
   useEffect(() => {
     loadData()
-  }, [])
+  }, [departmentId])
 
   const handleSubmit = async () => {
     try {

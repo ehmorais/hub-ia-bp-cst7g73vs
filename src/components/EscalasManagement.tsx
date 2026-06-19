@@ -119,47 +119,47 @@ export function EscalasManagement({ departmentId }: EscalasManagementProps) {
       </div>
 
       <Tabs defaultValue="ciclos" className="flex flex-col overflow-hidden">
-        <TabsList className="grid grid-cols-3 md:grid-cols-5 lg:grid-cols-10 w-full h-auto min-h-12 py-1 mb-4 gap-1">
-          <TabsTrigger value="ciclos" className="h-10 text-xs sm:text-sm">
+        <TabsList className="flex flex-wrap w-full h-auto min-h-12 py-1 mb-4 gap-1 justify-start">
+          <TabsTrigger value="ciclos" className="h-10 text-xs sm:text-sm flex-1 sm:flex-none">
             <Clock className="h-4 w-4 mr-1 sm:mr-2 hidden sm:block" />
             <span className="inline">Ciclos</span>
           </TabsTrigger>
-          <TabsTrigger value="tipos" className="h-10 text-xs sm:text-sm">
+          <TabsTrigger value="tipos" className="h-10 text-xs sm:text-sm flex-1 sm:flex-none">
             <Layers className="h-4 w-4 mr-1 sm:mr-2 hidden sm:block" />
             <span className="inline">Tipos</span>
           </TabsTrigger>
-          <TabsTrigger value="setores" className="h-10 text-xs sm:text-sm">
+          <TabsTrigger value="setores" className="h-10 text-xs sm:text-sm flex-1 sm:flex-none">
             <Building2 className="h-4 w-4 mr-1 sm:mr-2 hidden sm:block" />
             <span className="inline">Setores</span>
           </TabsTrigger>
-          <TabsTrigger value="colaboradores" className="h-10 text-xs sm:text-sm">
+          <TabsTrigger value="contratos" className="h-10 text-xs sm:text-sm flex-1 sm:flex-none">
             <Users className="h-4 w-4 mr-1 sm:mr-2 hidden sm:block" />
-            <span className="inline">Colab.</span>
+            <span className="inline">Contratos</span>
           </TabsTrigger>
-          <TabsTrigger value="funcao" className="h-10 text-xs sm:text-sm">
+          <TabsTrigger value="funcao" className="h-10 text-xs sm:text-sm flex-1 sm:flex-none">
             <FileText className="h-4 w-4 mr-1 sm:mr-2 hidden sm:block" />
             <span className="inline">Função</span>
           </TabsTrigger>
-          <TabsTrigger value="folgas" className="h-10 text-xs sm:text-sm">
+          <TabsTrigger value="folgas" className="h-10 text-xs sm:text-sm flex-1 sm:flex-none">
             <CalendarOff className="h-4 w-4 mr-1 sm:mr-2 hidden sm:block" />
             <span className="inline">Folgas</span>
           </TabsTrigger>
-          <TabsTrigger value="regras" className="h-10 text-xs sm:text-sm">
+          <TabsTrigger value="regras" className="h-10 text-xs sm:text-sm flex-1 sm:flex-none">
             <Settings className="h-4 w-4 mr-1 sm:mr-2 hidden sm:block" />
             <span className="inline">Regras</span>
           </TabsTrigger>
-          <TabsTrigger value="perfis" className="h-10 text-xs sm:text-sm">
+          <TabsTrigger value="perfis" className="h-10 text-xs sm:text-sm flex-1 sm:flex-none">
             <Users className="h-4 w-4 mr-1 sm:mr-2 hidden sm:block" />
             <span className="inline">Perfis</span>
           </TabsTrigger>
           <TabsTrigger
             value="planejamento"
-            className="h-10 text-xs sm:text-sm bg-primary/5 text-primary data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+            className="h-10 text-xs sm:text-sm flex-1 sm:flex-none bg-primary/5 text-primary data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
           >
             <Wand2 className="h-4 w-4 mr-1 sm:mr-2 hidden sm:block" />
             <span className="inline">Montar Escala</span>
           </TabsTrigger>
-          <TabsTrigger value="indicadores" className="h-10 text-xs sm:text-sm">
+          <TabsTrigger value="indicadores" className="h-10 text-xs sm:text-sm flex-1 sm:flex-none">
             <Activity className="h-4 w-4 mr-1 sm:mr-2 hidden sm:block" />
             <span className="inline">Indicadores</span>
           </TabsTrigger>
@@ -175,8 +175,8 @@ export function EscalasManagement({ departmentId }: EscalasManagementProps) {
           <TabsContent value="setores" className="mt-0">
             <Sectors departmentId={departmentId} />
           </TabsContent>
-          <TabsContent value="colaboradores" className="mt-0">
-            <StaffContracts />
+          <TabsContent value="contratos" className="mt-0">
+            <StaffContracts departmentId={departmentId} />
           </TabsContent>
           <TabsContent value="funcao" className="mt-0">
             <StaffRoles />
