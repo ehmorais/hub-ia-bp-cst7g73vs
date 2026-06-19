@@ -98,13 +98,17 @@ export function DepartmentStaffList({ departmentId }: { departmentId: string }) 
 
   const handleSaveUser = async () => {
     try {
+      const dataToSave = {
+        ...formData,
+        default_sector: formData.default_sector === 'none' ? null : formData.default_sector,
+      }
       if (editingUser) {
-        await updateUser(editingUser.id, formData)
+        await updateUser(editingUser.id, dataToSave)
         toast({ title: 'Colaborador atualizado com sucesso' })
       } else {
         const timestamp = Date.now()
         await createUser({
-          ...formData,
+          ...dataToSave,
           email: `colab_${timestamp}@hub-ia.local`,
           password: 'Password123!',
           passwordConfirm: 'Password123!',
@@ -131,7 +135,7 @@ export function DepartmentStaffList({ departmentId }: { departmentId: string }) 
   }
 
   const openAdd = () => {
-    setFormData({ name: '', staff_role: '', default_sector: sectors[0]?.id || '' })
+    setFormData({ name: '', staff_role: '', default_sector: sectors[0]?.id || 'none' })
     setEditingUser(null)
     setIsAddOpen(true)
   }
@@ -140,7 +144,7 @@ export function DepartmentStaffList({ departmentId }: { departmentId: string }) 
     setFormData({
       name: user.name,
       staff_role: user.staff_role || '',
-      default_sector: user.default_sector || '',
+      default_sector: user.default_sector || 'none',
     })
     setEditingUser(user)
     setIsAddOpen(true)
@@ -198,6 +202,7 @@ export function DepartmentStaffList({ departmentId }: { departmentId: string }) 
                     <SelectValue placeholder="Selecione um setor" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="none">Sem setor</SelectItem>
                     {sectors.map((s) => (
                       <SelectItem key={s.id} value={s.id}>
                         {s.name}

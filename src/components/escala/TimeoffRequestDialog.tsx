@@ -7,12 +7,14 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Clock } from 'lucide-react'
+import { Clock, Plus } from 'lucide-react'
 import {
   getShiftCycles,
   getTimeoffRequests,
   createTimeoffRequest,
   deleteTimeoffRequest,
+  getUsers,
+  getHospitalSectors,
 } from '@/services/escala'
 import {
   Select,
@@ -26,20 +28,33 @@ import { format, parseISO, isWithinInterval } from 'date-fns'
 import { extractFieldErrors } from '@/lib/pocketbase/errors'
 import { Badge } from '@/components/ui/badge'
 
-export function TimeoffRequestDialog({ user, departmentId }: { user: any; departmentId: string }) {
+export function TimeoffRequestDialog({ user, departmentId }: { user?: any; departmentId: string }) {
   const [open, setOpen] = useState(false)
   const [cycles, setCycles] = useState<any[]>([])
   const [selectedCycleId, setSelectedCycleId] = useState<string>('')
   const [requests, setRequests] = useState<any[]>([])
+  const [departmentUsers, setDepartmentUsers] = useState<any[]>([])
+  const [selectedUserId, setSelectedUserId] = useState<string>(user?.id || '')
   const [date, setDate] = useState('')
+  const [priority, setPriority] = useState('5')
   const { toast } = useToast()
 
   const loadData = async () => {
     const [c, r] = await Promise.all([getShiftCycles(), getTimeoffRequests()])
     setCycles(c)
-    setRequests(r.filter((req: any) => req.user === user.id))
+    setRequests(r)
     if (c.length > 0 && !selectedCycleId) {
       setSelectedCycleId(c[0].id)
+    }
+
+    if (!user) {
+      const [u, s] = await Promise.all([getUsers(), getHospitalSectors(departmentId)])
+      const sectorIds = s.map((sec: any) => sec.id)
+      const deptUsers = u.filter(
+        (usr: any) =>
+          usr.expand?.staff_role && (!usr.default_sector || sectorIds.includes(usr.default_sector)),
+      )
+      setDepartmentUsers(deptUsers)
     }
   }
 
@@ -48,11 +63,28 @@ export function TimeoffRequestDialog({ user, departmentId }: { user: any; depart
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
+  useEffect(() => {
+    if (!open) {
+      if (!user) setSelectedUserId('')
+      setDate('')
+      setPriority('5')
+    }
+  }, [open, user])
+
+  const targetUser = user?.id || selectedUserId
   const selectedCycle = cycles.find((c) => c.id === selectedCycleId)
-  const cycleRequests = requests.filter((r) => r.cycle === selectedCycleId)
+  const cycleRequests = requests.filter((r) => r.cycle === selectedCycleId && r.user === targetUser)
 
   const handleAdd = async () => {
     if (!selectedCycleId || !date) return
+    if (!targetUser) {
+      toast({
+        title: 'Atenção',
+        description: 'Selecione um colaborador primeiro.',
+        variant: 'destructive',
+      })
+      return
+    }
 
     const d = parseISO(date)
     const start = parseISO(selectedCycle.start_date.substring(0, 10))
@@ -78,10 +110,10 @@ export function TimeoffRequestDialog({ user, departmentId }: { user: any; depart
 
     try {
       await createTimeoffRequest({
-        user: user.id,
+        user: targetUser,
         cycle: selectedCycleId,
         date: `${date} 12:00:00.000Z`,
-        priority_weight: 5,
+        priority_weight: parseInt(priority, 10),
         status: 'pending',
       })
       toast({ title: 'Sucesso', description: 'Folga solicitada com sucesso.' })
@@ -109,16 +141,41 @@ export function TimeoffRequestDialog({ user, departmentId }: { user: any; depart
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-2 bg-white hover:bg-slate-50">
-          <Clock className="h-4 w-4 text-slate-500" />
-          <span>Solicitar Folga</span>
-        </Button>
+        {user ? (
+          <Button variant="outline" size="sm" className="gap-2 bg-white hover:bg-slate-50">
+            <Clock className="h-4 w-4 text-slate-500" />
+            <span>Solicitar Folga</span>
+          </Button>
+        ) : (
+          <Button size="sm" className="gap-2">
+            <Plus className="h-4 w-4" />
+            <span>Solicitar Folga</span>
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Gerenciar Folgas: {user.name}</DialogTitle>
+          <DialogTitle>{user ? `Gerenciar Folgas: ${user.name}` : 'Solicitar Folga'}</DialogTitle>
         </DialogHeader>
         <div className="space-y-6">
+          {!user && (
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">Colaborador</label>
+              <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Selecione um colaborador..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {departmentUsers.map((u) => (
+                    <SelectItem key={u.id} value={u.id}>
+                      {u.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           <div className="space-y-2">
             <label className="text-sm font-medium text-slate-700">Ciclo de Escala</label>
             <Select value={selectedCycleId} onValueChange={setSelectedCycleId}>
@@ -149,7 +206,11 @@ export function TimeoffRequestDialog({ user, departmentId }: { user: any; depart
               </Badge>
             </h4>
 
-            {cycleRequests.length === 0 ? (
+            {!targetUser ? (
+              <p className="text-sm text-muted-foreground p-4 bg-slate-50 rounded-md border border-dashed text-center">
+                Selecione um colaborador para ver as folgas.
+              </p>
+            ) : cycleRequests.length === 0 ? (
               <p className="text-sm text-muted-foreground p-4 bg-slate-50 rounded-md border border-dashed text-center">
                 Nenhuma folga solicitada neste ciclo.
               </p>
@@ -195,7 +256,7 @@ export function TimeoffRequestDialog({ user, departmentId }: { user: any; depart
             )}
           </div>
 
-          {cycleRequests.length < 2 ? (
+          {!targetUser ? null : cycleRequests.length < 2 ? (
             <div className="flex gap-3 items-end pt-4 border-t">
               <div className="flex-1 space-y-2">
                 <label className="text-sm font-medium block">Nova Data</label>
@@ -208,7 +269,22 @@ export function TimeoffRequestDialog({ user, departmentId }: { user: any; depart
                   max={selectedCycle?.end_date.substring(0, 10)}
                 />
               </div>
-              <Button onClick={handleAdd} disabled={!date}>
+              <div className="w-[100px] space-y-2">
+                <label className="text-sm font-medium block">Prioridade</label>
+                <Select value={priority} onValueChange={setPriority}>
+                  <SelectTrigger className="h-10">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((p) => (
+                      <SelectItem key={p} value={p.toString()}>
+                        {p}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button onClick={handleAdd} disabled={!date} className="h-10">
                 Adicionar
               </Button>
             </div>

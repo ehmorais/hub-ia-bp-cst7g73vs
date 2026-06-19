@@ -20,10 +20,13 @@ import { useToast } from '@/components/ui/use-toast'
 import { getTimeoffRequests, updateTimeoffRequest } from '@/services/escala'
 import { useRealtime } from '@/hooks/use-realtime'
 import { format } from 'date-fns'
+import { TimeoffRequestDialog } from './TimeoffRequestDialog'
+import { useParams } from 'react-router-dom'
 
 export function Timeoff() {
   const [requests, setRequests] = useState<any[]>([])
   const { toast } = useToast()
+  const { id: departmentId } = useParams()
 
   const loadData = async () => {
     getTimeoffRequests().then(setRequests)
@@ -46,9 +49,14 @@ export function Timeoff() {
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader>
-          <CardTitle>Solicitações de Folga</CardTitle>
-          <CardDescription>Visão geral de pedidos e gestão de deferimentos.</CardDescription>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+          <div>
+            <CardTitle>Solicitações de Folga</CardTitle>
+            <CardDescription className="mt-1">
+              Visão geral de pedidos e gestão de deferimentos.
+            </CardDescription>
+          </div>
+          {departmentId && <TimeoffRequestDialog departmentId={departmentId} />}
         </CardHeader>
         <CardContent className="p-0 overflow-x-auto">
           <Table>
