@@ -20,7 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { ArrowLeft, Play, History, BrainCircuit, Folder, Blocks } from 'lucide-react'
+import { ArrowLeft, Play, History, BrainCircuit, Folder, Blocks, Calendar } from 'lucide-react'
 import { useRealtime } from '@/hooks/use-realtime'
 import { EscalaAdminModal } from '@/components/EscalaAdminModal'
 import { format } from 'date-fns'
