@@ -13,7 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { ArrowLeft, Play, History, BrainCircuit, Folder, Blocks } from 'lucide-react'
+import { ArrowLeft, Play, History, BrainCircuit, Folder, Blocks, Building2 } from 'lucide-react'
 import { useRealtime } from '@/hooks/use-realtime'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -24,6 +24,7 @@ export default function Department() {
   const [department, setDepartment] = useState<any>(null)
   const [departmentTools, setDepartmentTools] = useState<any[]>([])
   const [projects, setProjects] = useState<any[]>([])
+  const [sectors, setSectors] = useState<any[]>([])
 
   useEffect(() => {
     if (id) {
@@ -50,6 +51,14 @@ export default function Department() {
           console.error('Error loading projects:', e)
           setProjects([])
         })
+
+      pb.collection('hospital_sectors')
+        .getFullList({ filter: `department="${id}"`, sort: 'name' })
+        .then(setSectors)
+        .catch((e) => {
+          console.error('Error loading sectors:', e)
+          setSectors([])
+        })
     }
   }, [id])
 
@@ -62,6 +71,14 @@ export default function Department() {
         })
         .then(setProjects)
         .catch((e) => console.error('Error on projects realtime:', e))
+  })
+
+  useRealtime('hospital_sectors', () => {
+    if (id)
+      pb.collection('hospital_sectors')
+        .getFullList({ filter: `department="${id}"`, sort: 'name' })
+        .then(setSectors)
+        .catch((e) => console.error('Error on sectors realtime:', e))
   })
 
   useRealtime('ia_tools', () => {
@@ -191,6 +208,57 @@ export default function Department() {
           {projects.length === 0 && (
             <div className="col-span-full p-8 text-center text-muted-foreground border rounded-lg bg-slate-50">
               Nenhum projeto associado.
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="space-y-4 pt-4">
+        <div className="flex items-center gap-2 border-b pb-2">
+          <Building2 className="h-5 w-5 text-primary" />
+          <h2 className="text-xl font-semibold">Setores do Departamento</h2>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start">
+          {sectors.map((sector) => (
+            <Card
+              key={sector.id}
+              className="bg-white border-slate-200 hover:shadow-md transition-shadow"
+            >
+              <CardHeader className="pb-2">
+                <div className="flex justify-between items-start mb-2">
+                  <Badge
+                    variant="outline"
+                    className={
+                      sector.is_critical
+                        ? 'bg-red-50 text-red-700 border-red-200'
+                        : 'bg-slate-50 text-slate-700 border-slate-200'
+                    }
+                  >
+                    {sector.is_critical ? 'Crítico' : 'Normal'}
+                  </Badge>
+                </div>
+                <CardTitle className="text-lg">{sector.name}</CardTitle>
+                <CardDescription>Capacidade: {sector.bed_capacity || 0} leitos</CardDescription>
+              </CardHeader>
+              <CardContent className="text-sm space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Staff Mínimo:</span>
+                  <span className="font-medium">{sector.min_staffing || 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Staff Ideal:</span>
+                  <span className="font-medium">{sector.ideal_staffing || 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Ratio:</span>
+                  <span className="font-medium">{sector.staffing_ratio || 0}</span>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+          {sectors.length === 0 && (
+            <div className="col-span-full p-8 text-center text-muted-foreground border rounded-lg bg-slate-50">
+              Nenhum setor associado.
             </div>
           )}
         </div>
