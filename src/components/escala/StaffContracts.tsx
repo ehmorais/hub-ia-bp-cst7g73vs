@@ -16,6 +16,7 @@ import {
   getShiftTypes,
   createStaffContract,
   updateStaffContract,
+  deleteStaffContract,
 } from '@/services/escala'
 import {
   Dialog,
@@ -24,6 +25,18 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
+import { Trash2 } from 'lucide-react'
 import {
   Select,
   SelectContent,
@@ -76,6 +89,20 @@ export function StaffContracts() {
       loadData()
     } catch (err: any) {
       toast({ title: 'Erro', description: err.message, variant: 'destructive' })
+    }
+  }
+
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteStaffContract(id)
+      toast({ title: 'Sucesso', description: 'Contrato excluído com sucesso' })
+      loadData()
+    } catch (err: any) {
+      toast({
+        title: 'Erro',
+        description: 'Erro ao excluir o contrato. Tente novamente.',
+        variant: 'destructive',
+      })
     }
   }
 
@@ -196,7 +223,7 @@ export function StaffContracts() {
                 <TableCell>
                   <Badge variant="outline">{c.expand?.shift_type?.name || 'Não associado'}</Badge>
                 </TableCell>
-                <TableCell className="text-right">
+                <TableCell className="text-right flex items-center justify-end gap-2">
                   <Button
                     variant="ghost"
                     size="sm"
@@ -213,6 +240,35 @@ export function StaffContracts() {
                   >
                     Editar
                   </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Excluir Contrato</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Tem certeza que deseja excluir este contrato? Esta ação não pode ser
+                          desfeita.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction
+                          className="bg-red-500 hover:bg-red-600 text-white"
+                          onClick={() => handleDelete(c.id)}
+                        >
+                          Confirmar
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 </TableCell>
               </TableRow>
             ))}
