@@ -52,7 +52,7 @@ export function StaffContracts() {
   const handleRoleChange = async (userId: string, roleId: string) => {
     try {
       await updateUser(userId, { staff_role: roleId })
-      toast({ title: 'Papel atualizado' })
+      toast({ title: 'Função atualizada' })
     } catch {
       toast({ title: 'Erro', variant: 'destructive' })
     }
@@ -80,7 +80,7 @@ export function StaffContracts() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Colaboradores e Contratos</CardTitle>
+        <CardTitle>Colaboradores</CardTitle>
         <CardDescription>
           Gerencie a função e o regime de contratação para cada profissional.
         </CardDescription>
@@ -90,7 +90,7 @@ export function StaffContracts() {
           <TableHeader>
             <TableRow>
               <TableHead>Profissional</TableHead>
-              <TableHead>Papel Clínico</TableHead>
+              <TableHead>Função</TableHead>
               <TableHead>Tipo de Contrato</TableHead>
               <TableHead>Carga Horária (mês)</TableHead>
             </TableRow>
@@ -119,7 +119,7 @@ export function StaffContracts() {
                       onValueChange={(val) => handleRoleChange(u.id, val)}
                     >
                       <SelectTrigger className="w-[180px] h-8">
-                        <SelectValue placeholder="Sem papel" />
+                        <SelectValue placeholder="Sem função" />
                       </SelectTrigger>
                       <SelectContent>
                         {roles.map((r) => (

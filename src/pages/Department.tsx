@@ -151,7 +151,7 @@ export default function Department() {
                 </div>
                 <CardTitle className="text-xl">Escala de Colaboradores</CardTitle>
                 <CardDescription className="line-clamp-2 h-10">
-                  Gestão completa de ciclos, setores, contratos e folgas para os colaboradores do
+                  Gestão completa de ciclos, setores, funções e folgas para os colaboradores do
                   HBPSCS.
                 </CardDescription>
               </CardHeader>

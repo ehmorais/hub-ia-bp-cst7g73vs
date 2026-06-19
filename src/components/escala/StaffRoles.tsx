@@ -39,7 +39,7 @@ export function StaffRoles() {
       setName('')
       setRank(0)
       setReqSup(false)
-      toast({ title: 'Papel criado' })
+      toast({ title: 'Função criada' })
     } catch {
       toast({ title: 'Erro', variant: 'destructive' })
     }
@@ -66,13 +66,13 @@ export function StaffRoles() {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Novo Papel Clínico</CardTitle>
-          <CardDescription>Crie uma função na hierarquia assistencial.</CardDescription>
+          <CardTitle>Nova Função</CardTitle>
+          <CardDescription>Crie uma função na hierarquia assistencial.</CardDescription>{' '}
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
             <div className="space-y-2">
-              <Label>Nome do Papel</Label>
+              <Label>Nome da Função</Label>
               <Input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -95,7 +95,7 @@ export function StaffRoles() {
             </div>
             <Button onClick={handleCreate} className="w-full">
               <Plus className="h-4 w-4 mr-2" />
-              Adicionar Papel
+              Adicionar Função
             </Button>
           </div>
         </CardContent>
@@ -103,7 +103,7 @@ export function StaffRoles() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Papéis Existentes</CardTitle>
+          <CardTitle>Funções Existentes</CardTitle>
         </CardHeader>
         <CardContent className="p-0 overflow-x-auto">
           <Table>
