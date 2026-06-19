@@ -1,4 +1,5 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Clock,
   Building2,
@@ -70,57 +71,61 @@ export function EscalasManagement({ departmentId, projectId }: EscalasManagement
         </p>
       </div>
 
-      <div className="p-4 border rounded-xl bg-white shadow-sm flex flex-col gap-5 relative overflow-hidden">
+      <Card className="relative overflow-hidden border-slate-200 shadow-sm bg-white">
         <div className="absolute top-0 left-0 w-1 bg-primary h-full" />
-        <div className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-          <Calendar className="h-4 w-4 text-primary" />
-          Ciclo Operacional Vigente (26 a 25)
-        </div>
-        <div className="flex items-center justify-between w-full relative px-2 md:px-8">
-          <div className="absolute top-[8px] left-0 md:left-8 right-0 md:right-8 h-1 bg-slate-100 rounded-full overflow-hidden z-0">
-            <div
-              className="h-full bg-primary transition-all duration-1000 ease-out"
-              style={{ width: `${progressWidth}%` }}
-            />
-          </div>
-          {phases.map((p) => (
-            <div
-              key={p.name}
-              className="z-10 flex flex-col items-center gap-2 relative group cursor-default"
-            >
+        <CardHeader className="pb-2 pt-4 px-4 md:px-6">
+          <CardTitle className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+            <Calendar className="h-4 w-4 text-primary" />
+            Ciclo Operacional Vigente (26 a 25)
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="px-4 md:px-6 pb-8">
+          <div className="flex items-center justify-between w-full relative px-2 md:px-8 mt-2">
+            <div className="absolute top-[8px] left-0 md:left-8 right-0 md:right-8 h-1 bg-slate-100 rounded-full overflow-hidden z-0">
               <div
-                className={cn(
-                  'w-5 h-5 rounded-full border-[3px] transition-colors duration-500',
-                  p.past
-                    ? 'bg-primary border-primary'
-                    : p.active
-                      ? 'bg-white border-primary ring-4 ring-primary/20 shadow-sm'
-                      : 'bg-white border-slate-200',
-                )}
+                className="h-full bg-primary transition-all duration-1000 ease-out"
+                style={{ width: `${progressWidth}%` }}
               />
-              <div className="flex flex-col items-center absolute top-7 w-24">
-                <span
-                  className={cn(
-                    'text-[11px] font-semibold text-center leading-tight transition-colors',
-                    p.active ? 'text-primary' : p.past ? 'text-slate-700' : 'text-slate-400',
-                  )}
-                >
-                  {p.name}
-                </span>
-                <span
-                  className={cn(
-                    'text-[9px] text-center mt-0.5',
-                    p.active ? 'text-slate-600' : 'text-slate-400',
-                  )}
-                >
-                  {p.desc}
-                </span>
-              </div>
             </div>
-          ))}
-        </div>
-        <div className="h-10" /> {/* Spacer for absolute text */}
-      </div>
+            {phases.map((p) => (
+              <div
+                key={p.name}
+                className="z-10 flex flex-col items-center gap-2 relative group cursor-default"
+              >
+                <div
+                  className={cn(
+                    'w-5 h-5 rounded-full border-[3px] transition-colors duration-500',
+                    p.past
+                      ? 'bg-primary border-primary'
+                      : p.active
+                        ? 'bg-white border-primary ring-4 ring-primary/20 shadow-sm'
+                        : 'bg-white border-slate-200',
+                  )}
+                />
+                <div className="flex flex-col items-center absolute top-7 w-24">
+                  <span
+                    className={cn(
+                      'text-[11px] font-semibold text-center leading-tight transition-colors',
+                      p.active ? 'text-primary' : p.past ? 'text-slate-700' : 'text-slate-400',
+                    )}
+                  >
+                    {p.name}
+                  </span>
+                  <span
+                    className={cn(
+                      'text-[9px] text-center mt-0.5',
+                      p.active ? 'text-slate-600' : 'text-slate-400',
+                    )}
+                  >
+                    {p.desc}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="h-4" /> {/* Spacer for absolute text */}
+        </CardContent>
+      </Card>
 
       <Tabs defaultValue="ciclos" className="flex flex-col overflow-hidden">
         <TabsList className="flex flex-wrap w-full h-auto min-h-12 py-1 mb-4 gap-1 justify-start">

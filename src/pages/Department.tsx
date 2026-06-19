@@ -42,6 +42,7 @@ export default function Department() {
   const [department, setDepartment] = useState<any>(null)
   const [departmentTools, setDepartmentTools] = useState<any[]>([])
   const [projects, setProjects] = useState<any[]>([])
+  const [todayShifts, setTodayShifts] = useState<any[]>([])
 
   useEffect(() => {
     if (id) {
@@ -68,8 +69,35 @@ export default function Department() {
           console.error('Error loading projects:', e)
           setProjects([])
         })
+
+      const today = new Date().toISOString().split('T')[0]
+      pb.collection('shifts')
+        .getFullList({
+          filter: `sector.department="${id}" && start_time >= "${today} 00:00:00" && start_time <= "${today} 23:59:59"`,
+          expand: 'user,sector',
+          sort: 'start_time',
+        })
+        .then(setTodayShifts)
+        .catch((e) => {
+          console.error('Error loading shifts:', e)
+          setTodayShifts([])
+        })
     }
   }, [id])
+
+  useRealtime('shifts', () => {
+    if (id) {
+      const today = new Date().toISOString().split('T')[0]
+      pb.collection('shifts')
+        .getFullList({
+          filter: `sector.department="${id}" && start_time >= "${today} 00:00:00" && start_time <= "${today} 23:59:59"`,
+          expand: 'user,sector',
+          sort: 'start_time',
+        })
+        .then(setTodayShifts)
+        .catch(() => {})
+    }
+  })
 
   useRealtime('projects', () => {
     if (id)
@@ -114,23 +142,75 @@ export default function Department() {
 
       {/* Projetos Gerais Integration */}
       {department.name === 'Projetos Gerais HBPSCS' && (
-        <Card className="border-primary/20 bg-primary/5 shadow-sm">
+        <Card className="border-slate-200 bg-white shadow-sm flex flex-col hover:shadow-md transition-shadow">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-primary">
-              <Calendar className="h-5 w-5" />
+            <div className="flex items-center justify-between mb-2">
+              <Badge
+                variant="outline"
+                className="bg-primary/5 text-primary border-primary/20 uppercase text-[10px]"
+              >
+                Gestão Integrada
+              </Badge>
+            </div>
+            <CardTitle className="text-xl flex items-center gap-2">
+              <Calendar className="h-5 w-5 text-primary" />
               Escala de Colaboradores
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="mt-1">
               Módulo centralizado para gestão de escalas, plantões e regras de dimensionamento.
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <Button asChild>
+          <CardContent className="pt-0">
+            <Button className="w-full gap-2 font-medium" asChild>
               <Link to="/admin#escalas">Acessar Módulo de Escalas</Link>
             </Button>
           </CardContent>
         </Card>
       )}
+
+      {/* Operational View: Today's Shifts */}
+      <div className="space-y-4 pt-2">
+        <div className="flex items-center gap-2 border-b pb-2">
+          <Calendar className="h-5 w-5 text-primary" />
+          <h2 className="text-xl font-semibold">Plantões do Dia (Operacional)</h2>
+        </div>
+        <Card className="border-slate-200 bg-white">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-slate-50/80 hover:bg-slate-50/80">
+                <TableHead>Colaborador</TableHead>
+                <TableHead>Setor</TableHead>
+                <TableHead>Horário</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {todayShifts.map((shift) => (
+                <TableRow key={shift.id}>
+                  <TableCell className="font-medium text-slate-800">
+                    {shift.expand?.user?.name || shift.expand?.user?.email}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className="font-normal text-slate-600">
+                      {shift.expand?.sector?.name || 'N/A'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-slate-600">
+                    {format(new Date(shift.start_time), 'HH:mm')} -{' '}
+                    {format(new Date(shift.end_time), 'HH:mm')}
+                  </TableCell>
+                </TableRow>
+              ))}
+              {todayShifts.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={3} className="text-center text-muted-foreground py-8">
+                    Nenhum plantão agendado para hoje neste departamento.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </Card>
+      </div>
 
       {/* Tools Grid */}
       <div className="space-y-4">
