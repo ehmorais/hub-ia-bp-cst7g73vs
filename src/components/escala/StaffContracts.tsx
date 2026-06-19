@@ -23,6 +23,7 @@ import {
   getUsers,
   getStaffContracts,
   getStaffRoles,
+  getShiftTypes,
   updateUser,
   createStaffContract,
   updateStaffContract,
@@ -35,14 +36,18 @@ export function StaffContracts() {
   const [users, setUsers] = useState<any[]>([])
   const [contracts, setContracts] = useState<any[]>([])
   const [roles, setRoles] = useState<any[]>([])
+  const [shiftTypes, setShiftTypes] = useState<any[]>([])
   const { toast } = useToast()
 
   const loadData = async () => {
-    Promise.all([getUsers(), getStaffContracts(), getStaffRoles()]).then(([us, co, ro]) => {
-      setUsers(us)
-      setContracts(co)
-      setRoles(ro)
-    })
+    Promise.all([getUsers(), getStaffContracts(), getStaffRoles(), getShiftTypes()]).then(
+      ([us, co, ro, st]) => {
+        setUsers(us)
+        setContracts(co)
+        setRoles(ro)
+        setShiftTypes(st)
+      },
+    )
   }
 
   useEffect(() => {
@@ -51,6 +56,7 @@ export function StaffContracts() {
   useRealtime('users', loadData)
   useRealtime('staff_contracts', loadData)
   useRealtime('staff_roles', loadData)
+  useRealtime('shift_types', loadData)
 
   const handleRoleChange = async (userId: string, roleId: string) => {
     try {
@@ -67,6 +73,22 @@ export function StaffContracts() {
       if (existing) await updateStaffContract(existing.id, { contract_type: type })
       else await createStaffContract({ user: userId, contract_type: type, monthly_hour_limit: 180 })
       toast({ title: 'Contrato atualizado' })
+    } catch {
+      toast({ title: 'Erro', variant: 'destructive' })
+    }
+  }
+
+  const handleShiftTypeChange = async (userId: string, shiftTypeId: string) => {
+    try {
+      const existing = contracts.find((c) => c.user === userId)
+      if (existing) await updateStaffContract(existing.id, { shift_type: shiftTypeId })
+      else
+        await createStaffContract({
+          user: userId,
+          shift_type: shiftTypeId,
+          monthly_hour_limit: 180,
+        })
+      toast({ title: 'Tipo de escala atualizado' })
     } catch {
       toast({ title: 'Erro', variant: 'destructive' })
     }
@@ -90,11 +112,11 @@ export function StaffContracts() {
   }
 
   return (
-    <Card>
+    <Card className="animate-fade-in">
       <CardHeader>
         <CardTitle>Colaboradores</CardTitle>
         <CardDescription>
-          Gerencie a função e o regime de contratação para cada profissional.
+          Gerencie a função, tipo de escala e regime de contratação para cada profissional.
         </CardDescription>
       </CardHeader>
       <CardContent className="p-0 overflow-x-auto">
@@ -103,8 +125,9 @@ export function StaffContracts() {
             <TableRow>
               <TableHead>Profissional</TableHead>
               <TableHead>Função</TableHead>
+              <TableHead>Tipo de Escala</TableHead>
               <TableHead>Tipo de Contrato</TableHead>
-              <TableHead>Carga Horária (mês)</TableHead>
+              <TableHead>Carga Horária</TableHead>
               <TableHead className="text-right">Ações</TableHead>
             </TableRow>
           </TableHeader>
@@ -131,7 +154,7 @@ export function StaffContracts() {
                       value={u.staff_role}
                       onValueChange={(val) => handleRoleChange(u.id, val)}
                     >
-                      <SelectTrigger className="w-[180px] h-8">
+                      <SelectTrigger className="w-[160px] h-8">
                         <SelectValue placeholder="Sem função" />
                       </SelectTrigger>
                       <SelectContent>
@@ -145,10 +168,27 @@ export function StaffContracts() {
                   </TableCell>
                   <TableCell>
                     <Select
+                      value={userContract?.shift_type}
+                      onValueChange={(val) => handleShiftTypeChange(u.id, val)}
+                    >
+                      <SelectTrigger className="w-[160px] h-8">
+                        <SelectValue placeholder="Sem tipo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {shiftTypes.map((st) => (
+                          <SelectItem key={st.id} value={st.id}>
+                            {st.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </TableCell>
+                  <TableCell>
+                    <Select
                       value={userContract?.contract_type}
                       onValueChange={(val) => handleContractChange(u.id, val)}
                     >
-                      <SelectTrigger className="w-[150px] h-8">
+                      <SelectTrigger className="w-[120px] h-8">
                         <SelectValue placeholder="Sem contrato" />
                       </SelectTrigger>
                       <SelectContent>
@@ -166,9 +206,9 @@ export function StaffContracts() {
                           min={0}
                           defaultValue={userContract.monthly_hour_limit}
                           onBlur={(e) => handleHoursChange(userContract.id, Number(e.target.value))}
-                          className="w-20 h-8"
+                          className="w-16 h-8"
                         />
-                        <span className="text-xs text-muted-foreground">horas</span>
+                        <span className="text-xs text-muted-foreground">h/mês</span>
                       </div>
                     ) : (
                       <span className="text-muted-foreground text-sm">-</span>

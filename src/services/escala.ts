@@ -8,6 +8,13 @@ export const updateShiftCycle = (id: string, data: any) =>
   pb.collection('shift_cycles').update(id, data)
 export const deleteShiftCycle = (id: string) => pb.collection('shift_cycles').delete(id)
 
+// Shift Types
+export const getShiftTypes = () => pb.collection('shift_types').getFullList({ sort: 'name' })
+export const createShiftType = (data: any) => pb.collection('shift_types').create(data)
+export const updateShiftType = (id: string, data: any) =>
+  pb.collection('shift_types').update(id, data)
+export const deleteShiftType = (id: string) => pb.collection('shift_types').delete(id)
+
 // Hospital Sectors
 export const getHospitalSectors = (departmentId?: string) => {
   const opts: any = { sort: 'name', expand: 'department' }
@@ -31,7 +38,7 @@ export const deleteStaffRole = (id: string) => pb.collection('staff_roles').dele
 
 // Staff Contracts
 export const getStaffContracts = () =>
-  pb.collection('staff_contracts').getFullList({ expand: 'user' })
+  pb.collection('staff_contracts').getFullList({ expand: 'user,shift_type' })
 export const createStaffContract = (data: any) => pb.collection('staff_contracts').create(data)
 export const updateStaffContract = (id: string, data: any) =>
   pb.collection('staff_contracts').update(id, data)

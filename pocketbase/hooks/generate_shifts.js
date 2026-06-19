@@ -31,6 +31,7 @@ routerAdd(
 
     const contracts = $app.findRecordsByFilter('staff_contracts', '', '-created', 1000, 0)
     const roles = $app.findRecordsByFilter('staff_roles', '', '-created', 1000, 0)
+    const shiftTypes = $app.findRecordsByFilter('shift_types', '', '-created', 1000, 0)
     const timeoffs = $app.findRecordsByFilter(
       'timeoff_requests',
       `cycle = {:cyc}`,
@@ -56,6 +57,18 @@ routerAdd(
             rSup = r.getBool('requires_supervision')
           }
         }
+
+        let sTypeName = null
+        let sTypeHours = null
+        const sTypeId = c.getString('shift_type')
+        if (sTypeId) {
+          const st = shiftTypes.find((x) => x.id === sTypeId)
+          if (st) {
+            sTypeName = st.getString('name')
+            sTypeHours = st.getInt('work_hours')
+          }
+        }
+
         usersWithContracts.push({
           id: u.id,
           name: u.getString('name'),
@@ -65,6 +78,8 @@ routerAdd(
           role_id: rId,
           rank: rRank,
           requires_supervision: rSup,
+          shift_type: sTypeName,
+          shift_work_hours: sTypeHours || 12,
         })
       } catch (_) {}
     })
@@ -73,6 +88,10 @@ routerAdd(
       id: s.id,
       name: s.getString('name'),
       min_staff: s.getInt('min_staffing'),
+      ideal_staff: s.getInt('ideal_staffing'),
+      bed_capacity: s.getInt('bed_capacity'),
+      staffing_ratio: s.getInt('staffing_ratio') || 10,
+      is_critical: s.getBool('is_critical'),
     }))
 
     const ruleData = rules.map((r) => ({
@@ -108,11 +127,13 @@ Timeoff Requests:
 ${JSON.stringify(timeoffData, null, 2)}
 
 Constraints:
-1. Ensure all sectors meet their 'min_staff' requirements per day if possible.
-2. Staff cannot work on their requested timeoff dates if priority weight is high.
-3. Staff requiring supervision must work in a sector with another staff of higher hierarchy_rank.
-4. Total hours must not exceed hour_limit. Each shift is 12 hours long (assume 07:00 to 19:00 for simplicity).
-5. Ensure a valid JSON array of shifts is returned.
+1. Operational Cycle: The scale covers strictly the period from the 26th of the start month to the 25th of the end month as defined by Cycle Start/End.
+2. Safety Ratios: Non-critical floors must have at least 1 professional per "staffing_ratio" beds (default 10), and a minimum of 2 professionals. Calculate based on 'bed_capacity'.
+3. Predictive & Critical: Sectors marked as 'is_critical' (like PSRIO/PSI) should prioritize reaching their 'ideal_staff' (e.g. 3) when allocating.
+4. Hierarchical Supervision: A "Técnico de Enfermagem" (or any rank requiring supervision) cannot work alone. They must be paired with at least one "Enfermeiro" (higher hierarchy_rank) in the same sector and shift.
+5. Time-off Requests: Honor 'timeoff_requests'. If weight is high, block scheduling. "Dobradinha" (consecutive days off) should be prioritized if minimum staffing is met.
+6. Hours & Shifts: Respect the assigned 'shift_type' work hours. Total hours must not exceed 'hour_limit'.
+7. Output strictly a JSON array, representing the generated shifts. Assume default shifts start at 07:00:00.000Z and last for 'shift_work_hours'.
 
 Output FORMAT (strictly JSON array):
 [
