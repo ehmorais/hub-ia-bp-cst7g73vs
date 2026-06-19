@@ -20,6 +20,7 @@ import { Timeoff } from './escala/Timeoff'
 import { Indicators } from './escala/Indicators'
 import { ShiftRules } from './escala/ShiftRules'
 import { AutoGenerate } from './escala/AutoGenerate'
+import { ScalePlanner } from './escala/ScalePlanner'
 import { cn } from '@/lib/utils'
 
 export interface EscalasManagementProps {
@@ -147,11 +148,11 @@ export function EscalasManagement({ departmentId }: EscalasManagementProps) {
             <span className="inline">Regras</span>
           </TabsTrigger>
           <TabsTrigger
-            value="gerar"
+            value="planejamento"
             className="h-10 text-xs sm:text-sm bg-primary/5 text-primary data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
           >
             <Wand2 className="h-4 w-4 mr-1 sm:mr-2 hidden sm:block" />
-            <span className="inline">Gerar</span>
+            <span className="inline">Montar Escala</span>
           </TabsTrigger>
           <TabsTrigger value="indicadores" className="h-10 text-xs sm:text-sm">
             <Activity className="h-4 w-4 mr-1 sm:mr-2 hidden sm:block" />
@@ -181,8 +182,8 @@ export function EscalasManagement({ departmentId }: EscalasManagementProps) {
           <TabsContent value="regras" className="mt-0">
             <ShiftRules departmentId={departmentId} />
           </TabsContent>
-          <TabsContent value="gerar" className="mt-0">
-            <AutoGenerate departmentId={departmentId} />
+          <TabsContent value="planejamento" className="mt-0">
+            <ScalePlanner departmentId={departmentId} />
           </TabsContent>
           <TabsContent value="indicadores" className="mt-0">
             <Indicators />
