@@ -2,7 +2,14 @@ import { useEffect, useState } from 'react'
 import pb from '@/lib/pocketbase/client'
 import { useParams, Link } from 'react-router-dom'
 import { RECENT_HISTORY } from '@/lib/mock-data'
-import { Card, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'
+import {
+  Card,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  CardFooter,
+  CardContent,
+} from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -119,7 +126,7 @@ export default function Department() {
           {departmentTools.map((tool) => (
             <Card
               key={tool.id}
-              className="flex flex-col bg-white border-slate-200 overflow-hidden hover:shadow-md transition-shadow"
+              className="flex flex-col bg-white border-slate-200 overflow-hidden hover:shadow-md transition-shadow h-full"
             >
               <CardHeader>
                 <div className="flex justify-between items-start mb-2">
@@ -177,7 +184,7 @@ export default function Department() {
           {projects.map((proj) => (
             <Card
               key={proj.id}
-              className="flex flex-col bg-white border-slate-200 overflow-hidden hover:shadow-md transition-shadow"
+              className="flex flex-col bg-white border-slate-200 overflow-hidden hover:shadow-md transition-shadow h-full"
             >
               <CardHeader className="pb-4">
                 <div className="flex justify-between items-start mb-2">
@@ -222,7 +229,7 @@ export default function Department() {
           {sectors.map((sector) => (
             <Card
               key={sector.id}
-              className="bg-white border-slate-200 hover:shadow-md transition-shadow"
+              className="bg-white border-slate-200 hover:shadow-md transition-shadow flex flex-col h-full"
             >
               <CardHeader className="pb-2">
                 <div className="flex justify-between items-start mb-2">
@@ -240,7 +247,7 @@ export default function Department() {
                 <CardTitle className="text-lg">{sector.name}</CardTitle>
                 <CardDescription>Capacidade: {sector.bed_capacity || 0} leitos</CardDescription>
               </CardHeader>
-              <CardContent className="text-sm space-y-1">
+              <CardContent className="text-sm space-y-1 mt-auto">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Staff Mínimo:</span>
                   <span className="font-medium">{sector.min_staffing || 0}</span>
@@ -269,43 +276,45 @@ export default function Department() {
           <History className="h-5 w-5 text-slate-500" />
           <h2 className="text-xl font-semibold">Histórico Recente</h2>
         </div>
-        <Card className="border-slate-200 bg-white">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-slate-50/80 hover:bg-slate-50/80">
-                <TableHead className="w-[180px]">Data e Hora</TableHead>
-                <TableHead className="w-[250px]">Ferramenta</TableHead>
-                <TableHead>Resumo do Contexto</TableHead>
-                <TableHead className="text-right">Ação</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {RECENT_HISTORY.map((item) => (
-                <TableRow key={item.id}>
-                  <TableCell className="text-sm font-medium text-slate-600">
-                    {format(new Date(item.date), 'dd/MM/yyyy HH:mm', { locale: ptBR })}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="secondary" className="font-normal bg-slate-100">
-                      {item.tool}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-slate-600 truncate max-w-[300px]">
-                    {item.summary}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-primary hover:text-primary hover:bg-primary/10"
-                    >
-                      Ver Detalhes
-                    </Button>
-                  </TableCell>
+        <Card className="border-slate-200 bg-white overflow-hidden">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-slate-50/80 hover:bg-slate-50/80">
+                  <TableHead className="w-[180px]">Data e Hora</TableHead>
+                  <TableHead className="w-[250px]">Ferramenta</TableHead>
+                  <TableHead>Resumo do Contexto</TableHead>
+                  <TableHead className="text-right">Ação</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {RECENT_HISTORY.map((item: any) => (
+                  <TableRow key={item.id}>
+                    <TableCell className="text-sm font-medium text-slate-600 whitespace-nowrap">
+                      {format(new Date(item.date), 'dd/MM/yyyy HH:mm', { locale: ptBR })}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="secondary" className="font-normal bg-slate-100">
+                        {item.tool}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-slate-600 truncate max-w-[300px]">
+                      {item.summary}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-primary hover:text-primary hover:bg-primary/10"
+                      >
+                        Ver Detalhes
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         </Card>
       </div>
     </div>
