@@ -142,30 +142,38 @@ export default function Department() {
 
       {/* Projetos Gerais Integration */}
       {department.name === 'Projetos Gerais HBPSCS' && (
-        <Card className="border-slate-200 bg-white shadow-sm flex flex-col hover:shadow-md transition-shadow">
-          <CardHeader>
-            <div className="flex items-center justify-between mb-2">
-              <Badge
-                variant="outline"
-                className="bg-primary/5 text-primary border-primary/20 uppercase text-[10px]"
-              >
-                Gestão Integrada
-              </Badge>
-            </div>
-            <CardTitle className="text-xl flex items-center gap-2">
-              <Calendar className="h-5 w-5 text-primary" />
-              Escala de Colaboradores
-            </CardTitle>
-            <CardDescription className="mt-1">
-              Módulo centralizado para gestão de escalas, plantões e regras de dimensionamento.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <Button className="w-full gap-2 font-medium" asChild>
-              <Link to="/admin#escalas">Acessar Módulo de Escalas</Link>
-            </Button>
-          </CardContent>
-        </Card>
+        <div className="space-y-4 pt-2">
+          <div className="flex items-center gap-2 border-b pb-2">
+            <Blocks className="h-5 w-5 text-primary" />
+            <h2 className="text-xl font-semibold">Módulos Integrados</h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <Card className="flex flex-col bg-white border-slate-200 overflow-hidden hover:shadow-md transition-shadow">
+              <CardHeader className="pb-4">
+                <div className="flex justify-between items-start mb-2">
+                  <Badge
+                    variant="outline"
+                    className="bg-primary/5 text-primary border-primary/20 uppercase text-[10px]"
+                  >
+                    Gestão Integrada
+                  </Badge>
+                </div>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Calendar className="h-5 w-5 text-primary" />
+                  Escala de Colaboradores
+                </CardTitle>
+                <CardDescription className="line-clamp-2 h-10 mt-1">
+                  Módulo centralizado para gestão de escalas, plantões e regras de dimensionamento.
+                </CardDescription>
+              </CardHeader>
+              <CardFooter className="pt-3 border-t bg-slate-50/50 mt-auto flex flex-col gap-2">
+                <Button className="w-full gap-2 font-medium" variant="secondary" asChild>
+                  <Link to="/admin#escalas">Acessar Módulo de Escalas</Link>
+                </Button>
+              </CardFooter>
+            </Card>
+          </div>
+        </div>
       )}
 
       {/* Operational View: Today's Shifts */}
