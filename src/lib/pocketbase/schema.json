@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-06-19T18:10:57.002Z",
+  "generatedAt": "2026-06-19T18:29:55.685Z",
   "collections": [
     {
       "name": "users",
@@ -58,6 +58,20 @@
           "required": false,
           "system": false,
           "collectionRef": "hospital_sectors"
+        },
+        {
+          "name": "assigned_rules",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "shift_rules"
+        },
+        {
+          "name": "staff_profile",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "staff_profiles"
         }
       ],
       "indexes": [
@@ -785,6 +799,47 @@
           "type": "bool",
           "required": false,
           "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": []
+    },
+    {
+      "name": "staff_profiles",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.role = 'Admin'",
+        "update": "@request.auth.role = 'Admin'",
+        "delete": "@request.auth.role = 'Admin'"
+      },
+      "fields": [
+        {
+          "name": "name",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "rules",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "shift_rules"
         },
         {
           "name": "created",

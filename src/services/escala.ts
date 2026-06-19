@@ -36,6 +36,13 @@ export const updateStaffRole = (id: string, data: any) =>
   pb.collection('staff_roles').update(id, data)
 export const deleteStaffRole = (id: string) => pb.collection('staff_roles').delete(id)
 
+// Staff Profiles
+export const getStaffProfiles = () => pb.collection('staff_profiles').getFullList({ sort: 'name' })
+export const createStaffProfile = (data: any) => pb.collection('staff_profiles').create(data)
+export const updateStaffProfile = (id: string, data: any) =>
+  pb.collection('staff_profiles').update(id, data)
+export const deleteStaffProfile = (id: string) => pb.collection('staff_profiles').delete(id)
+
 // Staff Contracts
 export const getStaffContracts = () =>
   pb.collection('staff_contracts').getFullList({ expand: 'user,shift_type' })
@@ -78,7 +85,9 @@ export const deleteTimeoffRequest = (id: string) => pb.collection('timeoff_reque
 
 // Users
 export const getUsers = () =>
-  pb.collection('users').getFullList({ sort: 'name', expand: 'staff_role,default_sector' })
+  pb
+    .collection('users')
+    .getFullList({ sort: 'name', expand: 'staff_role,default_sector,assigned_rules,staff_profile' })
 export const createUser = (data: any) => pb.collection('users').create(data)
 export const updateUser = (id: string, data: any) => pb.collection('users').update(id, data)
 export const deleteUser = (id: string) => pb.collection('users').delete(id)

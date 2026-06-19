@@ -51,8 +51,7 @@ export function TimeoffRequestDialog({ user, departmentId }: { user?: any; depar
       const [u, s] = await Promise.all([getUsers(), getHospitalSectors(departmentId)])
       const sectorIds = s.map((sec: any) => sec.id)
       const deptUsers = u.filter(
-        (usr: any) =>
-          usr.expand?.staff_role && (!usr.default_sector || sectorIds.includes(usr.default_sector)),
+        (usr: any) => !usr.default_sector || sectorIds.includes(usr.default_sector),
       )
       setDepartmentUsers(deptUsers)
     }
