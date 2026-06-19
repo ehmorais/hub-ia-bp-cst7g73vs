@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/table'
 import { ArrowLeft, Play, History, BrainCircuit, Folder, Blocks } from 'lucide-react'
 import { useRealtime } from '@/hooks/use-realtime'
+import { EscalaAdminModal } from '@/components/EscalaAdminModal'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
@@ -33,6 +34,7 @@ export default function Department() {
   const [department, setDepartment] = useState<any>(null)
   const [departmentTools, setDepartmentTools] = useState<any[]>([])
   const [projects, setProjects] = useState<any[]>([])
+  const [escalaProject, setEscalaProject] = useState<any>(null)
 
   useEffect(() => {
     if (id) {
@@ -232,7 +234,14 @@ export default function Department() {
                   {proj.description || 'Sem descrição'}
                 </CardDescription>
               </CardHeader>
-              <CardFooter className="pt-2 border-t bg-slate-50/50 mt-auto">
+              <CardFooter className="pt-3 border-t bg-slate-50/50 mt-auto flex flex-col gap-2">
+                <Button
+                  className="w-full gap-2 font-medium bg-white"
+                  variant="outline"
+                  onClick={() => setEscalaProject(proj)}
+                >
+                  Administrar Escalas
+                </Button>
                 <Button className="w-full gap-2 font-medium" variant="secondary" asChild>
                   <Link to={`/dashboard`}>Acessar Projeto</Link>
                 </Button>
@@ -246,6 +255,14 @@ export default function Department() {
           )}
         </div>
       </div>
+
+      {escalaProject && (
+        <EscalaAdminModal
+          open={!!escalaProject}
+          onOpenChange={(open) => !open && setEscalaProject(null)}
+          project={escalaProject}
+        />
+      )}
 
       {/* History Table */}
       <div className="space-y-4 pt-4">
