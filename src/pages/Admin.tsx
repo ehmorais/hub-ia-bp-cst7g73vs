@@ -66,6 +66,8 @@ import { extractFieldErrors } from '@/lib/pocketbase/errors'
 import { useRealtime } from '@/hooks/use-realtime'
 import { cn } from '@/lib/utils'
 import { getIcon } from '@/lib/icons'
+import { EscalasManagement } from '@/components/EscalasManagement'
+import { useLocation } from 'react-router-dom'
 
 const ICONS_LIST = [
   'Building2',
@@ -85,6 +87,7 @@ const ICONS_LIST = [
 ]
 
 export default function Admin() {
+  const location = useLocation()
   const { toast } = useToast()
   const { user } = useAuth()
   const isAdmin = user?.role === 'Admin'
@@ -122,6 +125,18 @@ export default function Admin() {
   const [editingProj, setEditingProj] = useState<any>(null)
   const [isSubmittingProj, setIsSubmittingProj] = useState(false)
   const [openProjDeps, setOpenProjDeps] = useState(false)
+
+  const [activeTab, setActiveTab] = useState(
+    location.hash === '#escalas' ? 'escalas' : 'performance',
+  )
+
+  useEffect(() => {
+    if (location.hash === '#escalas') {
+      setActiveTab('escalas')
+    } else if (location.pathname === '/admin' && !location.hash) {
+      if (activeTab === 'escalas') setActiveTab('performance')
+    }
+  }, [location.hash, location.pathname])
 
   const loadLogs = async () => {
     try {
@@ -421,8 +436,8 @@ export default function Admin() {
         </p>
       </div>
 
-      <Tabs defaultValue="performance" className="w-full">
-        <TabsList className="grid w-full grid-cols-6 max-w-5xl mb-8 overflow-x-auto h-auto py-2">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="grid w-full grid-cols-7 max-w-6xl mb-8 overflow-x-auto h-auto py-2">
           <TabsTrigger
             value="performance"
             className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
@@ -458,6 +473,12 @@ export default function Admin() {
             className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
           >
             Projetos
+          </TabsTrigger>
+          <TabsTrigger
+            value="escalas"
+            className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+          >
+            Gestão de Escalas
           </TabsTrigger>
         </TabsList>
 
@@ -1321,6 +1342,10 @@ export default function Admin() {
               </Table>
             </Card>
           </div>
+        </TabsContent>
+
+        <TabsContent value="escalas" className="space-y-6">
+          <EscalasManagement />
         </TabsContent>
       </Tabs>
     </div>
