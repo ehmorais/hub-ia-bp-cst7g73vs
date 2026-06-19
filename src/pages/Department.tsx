@@ -167,7 +167,10 @@ export default function Department() {
                 </CardDescription>
               </CardHeader>
               <CardFooter className="pt-3 border-t bg-slate-50/50 mt-auto flex flex-col gap-2">
-                <Button className="w-full gap-2 font-medium" variant="secondary" asChild>
+                <Button
+                  className="w-full gap-2 font-medium bg-green-600 hover:bg-green-700 text-white"
+                  asChild
+                >
                   <Link to="/admin#escalas">Acessar Módulo de Escalas</Link>
                 </Button>
               </CardFooter>
