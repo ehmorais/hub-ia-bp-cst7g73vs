@@ -22,8 +22,15 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
+import pb from '@/lib/pocketbase/client'
 
-export function AutoGenerate({ departmentId }: { departmentId?: string }) {
+export function AutoGenerate({
+  departmentId,
+  projectId,
+}: {
+  departmentId?: string
+  projectId?: string
+}) {
   const [cycles, setCycles] = useState<any[]>([])
   const [selectedCycle, setSelectedCycle] = useState<string>('')
   const [loading, setLoading] = useState(false)
@@ -55,14 +62,34 @@ export function AutoGenerate({ departmentId }: { departmentId?: string }) {
   })
 
   const handleGenerate = async () => {
-    if (!selectedCycle || !departmentId) return
+    if (!selectedCycle || (!departmentId && !projectId)) return
     setLoading(true)
     try {
-      const res = await generateShifts(selectedCycle, departmentId)
-      toast({
-        title: 'Geração Concluída',
-        description: `Escala gerada com sucesso! (${res.count} plantões)`,
-      })
+      if (projectId) {
+        const p = await pb.collection('projects').getOne(projectId)
+        const deps = [p.department, ...(p.associated_departments || [])]
+        let total = 0
+        for (const dep of deps) {
+          try {
+            const res = await generateShifts(selectedCycle, dep)
+            if (res && res.count) total += res.count
+          } catch (e) {
+            console.warn(`Erro ao gerar para departamento ${dep}:`, e)
+          }
+        }
+        toast({
+          title: 'Geração Concluída',
+          description: `Escala gerada com sucesso para os departamentos do projeto! (${total} plantões totais)`,
+        })
+        getShifts(selectedCycle).then(setShifts)
+      } else {
+        const res = await generateShifts(selectedCycle, departmentId)
+        toast({
+          title: 'Geração Concluída',
+          description: `Escala gerada com sucesso! (${res?.count || 0} plantões)`,
+        })
+        getShifts(selectedCycle).then(setShifts)
+      }
     } catch (err: any) {
       toast({
         title: 'Erro ao gerar escala',

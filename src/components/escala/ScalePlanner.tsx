@@ -43,13 +43,33 @@ import { Badge } from '@/components/ui/badge'
 
 type DraftCell = 'D' | 'N' | 'M' | 'T' | 'F' | ''
 
-export function ScalePlanner({ departmentId }: { departmentId?: string }) {
+export function ScalePlanner({
+  departmentId,
+  projectId,
+}: {
+  departmentId?: string
+  projectId?: string
+}) {
   const [cycles, setCycles] = useState<any[]>([])
   const [sectors, setSectors] = useState<any[]>([])
   const [users, setUsers] = useState<any[]>([])
   const [contracts, setContracts] = useState<any[]>([])
   const [timeoffs, setTimeoffs] = useState<any[]>([])
   const [allShifts, setAllShifts] = useState<any[]>([])
+
+  const [projectDeps, setProjectDeps] = useState<string[]>([])
+
+  useEffect(() => {
+    if (projectId) {
+      pb.collection('projects')
+        .getOne(projectId)
+        .then((p) => {
+          setProjectDeps([p.department, ...(p.associated_departments || [])])
+        })
+    } else if (departmentId) {
+      setProjectDeps([departmentId])
+    }
+  }, [projectId, departmentId])
 
   const [selectedCycleId, setSelectedCycleId] = useState<string>('')
   const [selectedSectorId, setSelectedSectorId] = useState<string>('')
@@ -64,13 +84,19 @@ export function ScalePlanner({ departmentId }: { departmentId?: string }) {
   useEffect(() => {
     Promise.all([
       getShiftCycles(),
-      getHospitalSectors(departmentId),
+      pb.collection('hospital_sectors').getFullList({ expand: 'department', sort: 'name' }),
       getUsers(),
       getStaffContracts(),
       getTimeoffRequests(),
-    ]).then(([c, s, u, cont, to]) => {
+    ]).then(([c, sRaw, u, cont, to]) => {
       setCycles(c)
+
+      let s = sRaw
+      if (projectDeps.length > 0) {
+        s = sRaw.filter((sec: any) => projectDeps.includes(sec.department))
+      }
       setSectors(s)
+
       setUsers(u.filter((user: any) => user.expand?.staff_role))
       setContracts(cont)
       setTimeoffs(to)
@@ -80,7 +106,7 @@ export function ScalePlanner({ departmentId }: { departmentId?: string }) {
         )
       if (s.length > 0) setSelectedSectorId(s[0].id)
     })
-  }, [departmentId])
+  }, [projectDeps])
 
   useEffect(() => {
     if (selectedCycleId)

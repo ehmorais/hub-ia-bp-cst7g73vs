@@ -44,6 +44,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
+import { cn } from '@/lib/utils'
 
 export interface ShiftRulesProps {
   departmentId?: string
@@ -59,6 +60,7 @@ export function ShiftRules({ departmentId, readOnly = false }: ShiftRulesProps) 
   const [prompt, setPrompt] = useState('')
   const [selectedDeptId, setSelectedDeptId] = useState<string>(departmentId || '')
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [errors, setErrors] = useState<Record<string, string>>({})
   const { toast } = useToast()
 
   const loadData = async () => {
@@ -91,35 +93,23 @@ export function ShiftRules({ departmentId, readOnly = false }: ShiftRulesProps) 
   useRealtime('shift_rules', loadData)
 
   const handleCreate = async () => {
-    if (!name) {
-      return toast({
-        title: 'Erro',
-        description: 'Nome da regra é obrigatório',
-        variant: 'destructive',
-      })
-    }
+    const newErrors: Record<string, string> = {}
+    if (!name) newErrors.name = 'Nome da regra é obrigatório'
     const deptToSave = departmentId || selectedDeptId
-    if (!deptToSave) {
-      return toast({
-        title: 'Erro',
-        description: 'Departamento é obrigatório',
-        variant: 'destructive',
-      })
-    }
+    if (!deptToSave) newErrors.department = 'Departamento é obrigatório'
     if (type !== 'custom_prompt' && value === '') {
-      return toast({
-        title: 'Erro',
-        description: 'Valor base é obrigatório para este tipo de regra',
-        variant: 'destructive',
-      })
+      newErrors.value = 'Valor base é obrigatório'
     }
     if (type === 'custom_prompt' && !prompt.trim()) {
-      return toast({
-        title: 'Erro',
-        description: 'Instrução (prompt) é obrigatória',
-        variant: 'destructive',
-      })
+      newErrors.prompt = 'Instrução (prompt) é obrigatória'
     }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors)
+      return
+    }
+
+    setErrors({})
     try {
       await pb.collection('shift_rules').create({
         name,
@@ -191,9 +181,14 @@ export function ShiftRules({ departmentId, readOnly = false }: ShiftRulesProps) 
                   </Label>
                   <Input
                     value={name}
-                    onChange={(e) => setName(e.target.value)}
+                    onChange={(e) => {
+                      setName(e.target.value)
+                      if (errors.name) setErrors((prev) => ({ ...prev, name: '' }))
+                    }}
                     placeholder="Ex: Regra Fim de Semana"
+                    className={errors.name ? 'border-red-500' : ''}
                   />
+                  {errors.name && <p className="text-xs text-red-500">{errors.name}</p>}
                 </div>
 
                 {!departmentId && (
@@ -201,8 +196,14 @@ export function ShiftRules({ departmentId, readOnly = false }: ShiftRulesProps) 
                     <Label>
                       Departamento <span className="text-red-500">*</span>
                     </Label>
-                    <Select value={selectedDeptId} onValueChange={setSelectedDeptId}>
-                      <SelectTrigger>
+                    <Select
+                      value={selectedDeptId}
+                      onValueChange={(val) => {
+                        setSelectedDeptId(val)
+                        if (errors.department) setErrors((prev) => ({ ...prev, department: '' }))
+                      }}
+                    >
+                      <SelectTrigger className={errors.department ? 'border-red-500' : ''}>
                         <SelectValue placeholder="Selecione um departamento..." />
                       </SelectTrigger>
                       <SelectContent>
@@ -213,6 +214,9 @@ export function ShiftRules({ departmentId, readOnly = false }: ShiftRulesProps) 
                         ))}
                       </SelectContent>
                     </Select>
+                    {errors.department && (
+                      <p className="text-xs text-red-500">{errors.department}</p>
+                    )}
                   </div>
                 )}
 
@@ -242,8 +246,13 @@ export function ShiftRules({ departmentId, readOnly = false }: ShiftRulesProps) 
                     <Input
                       type="number"
                       value={value}
-                      onChange={(e) => setValue(e.target.value ? Number(e.target.value) : '')}
+                      onChange={(e) => {
+                        setValue(e.target.value ? Number(e.target.value) : '')
+                        if (errors.value) setErrors((prev) => ({ ...prev, value: '' }))
+                      }}
+                      className={errors.value ? 'border-red-500' : ''}
                     />
+                    {errors.value && <p className="text-xs text-red-500">{errors.value}</p>}
                   </div>
                 )}
 
@@ -255,13 +264,23 @@ export function ShiftRules({ departmentId, readOnly = false }: ShiftRulesProps) 
                     </Label>
                     <Textarea
                       value={prompt}
-                      onChange={(e) => setPrompt(e.target.value)}
+                      onChange={(e) => {
+                        setPrompt(e.target.value)
+                        if (errors.prompt) setErrors((prev) => ({ ...prev, prompt: '' }))
+                      }}
                       placeholder="Ex: Não escalar o colaborador X com o colaborador Y aos fins de semana..."
-                      className="min-h-[100px] resize-y"
+                      className={cn(
+                        'min-h-[100px] resize-y',
+                        errors.prompt ? 'border-red-500' : '',
+                      )}
                     />
-                    <p className="text-xs text-muted-foreground">
-                      O modelo de IA interpretará este prompt para ajustar a escala.
-                    </p>
+                    {errors.prompt ? (
+                      <p className="text-xs text-red-500">{errors.prompt}</p>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        O modelo de IA interpretará este prompt para ajustar a escala.
+                      </p>
+                    )}
                   </div>
                 )}
               </div>

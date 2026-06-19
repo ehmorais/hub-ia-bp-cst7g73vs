@@ -36,15 +36,12 @@ import { ptBR } from 'date-fns/locale'
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
 import { Bar, BarChart, XAxis, YAxis, ResponsiveContainer } from 'recharts'
 import { cn } from '@/lib/utils'
-import { EscalasManagement } from '@/components/EscalasManagement'
-import { ShiftRules } from '@/components/escala/ShiftRules'
 
 export default function Department() {
   const { id } = useParams()
   const [department, setDepartment] = useState<any>(null)
   const [departmentTools, setDepartmentTools] = useState<any[]>([])
   const [projects, setProjects] = useState<any[]>([])
-  const [showEscalaAdmin, setShowEscalaAdmin] = useState(false)
 
   useEffect(() => {
     if (id) {
@@ -95,36 +92,6 @@ export default function Department() {
 
   if (!department) return null
 
-  // If inline admin mode is active
-  if (showEscalaAdmin) {
-    return (
-      <div className="container mx-auto p-4 md:p-8 space-y-8 max-w-7xl animate-fade-in-up">
-        <div className="flex items-center gap-4 border-b pb-4">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => setShowEscalaAdmin(false)}
-            className="shrink-0 bg-white"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <div className="flex items-center gap-3">
-            <div className="p-3 rounded-xl hidden sm:block bg-blue-100 text-blue-700">
-              <Calendar className="h-6 w-6" />
-            </div>
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight text-slate-900">
-                Administração de Escalas
-              </h1>
-              <p className="text-muted-foreground">{department.name}</p>
-            </div>
-          </div>
-        </div>
-        <EscalasManagement departmentId={id} />
-      </div>
-    )
-  }
-
   return (
     <div className="container mx-auto p-4 md:p-8 space-y-8 max-w-7xl animate-fade-in-up">
       {/* Header */}
@@ -152,42 +119,6 @@ export default function Department() {
           <h2 className="text-xl font-semibold">Modelos Disponíveis</h2>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          <Card className="flex flex-col bg-white border-slate-200 overflow-hidden hover:shadow-md transition-shadow">
-            <CardHeader>
-              <div className="flex justify-between items-start mb-2">
-                <Badge
-                  variant="outline"
-                  className="bg-slate-50 uppercase text-[10px] text-primary border-primary/20"
-                >
-                  Ativo
-                </Badge>
-                <div className="flex gap-2">
-                  <span className="text-xs text-muted-foreground font-mono bg-slate-100 px-2 py-0.5 rounded">
-                    Módulo
-                  </span>
-                </div>
-              </div>
-              <CardTitle className="text-xl">Escala de Colaboradores</CardTitle>
-              <CardDescription className="line-clamp-2 h-10">
-                Gestão completa de ciclos, setores, funções e folgas para os colaboradores do
-                HBPSCS.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="flex-1 flex flex-col justify-center py-6">
-              <div className="w-full flex justify-center mb-2">
-                <Calendar className="h-12 w-12 text-slate-200" />
-              </div>
-              <p className="text-center text-sm text-slate-500 font-medium">
-                Ferramenta Administrativa
-              </p>
-            </CardContent>
-            <CardFooter className="pt-4 border-t bg-slate-50/50 mt-auto">
-              <Button className="w-full gap-2 font-medium" onClick={() => setShowEscalaAdmin(true)}>
-                <Play className="h-4 w-4" fill="currentColor" />
-                Acessar Ferramenta
-              </Button>
-            </CardFooter>
-          </Card>
           {departmentTools.map((tool) => (
             <Card
               key={tool.id}
@@ -307,15 +238,8 @@ export default function Department() {
                 </CardDescription>
               </CardHeader>
               <CardFooter className="pt-3 border-t bg-slate-50/50 mt-auto flex flex-col gap-2">
-                <Button
-                  className="w-full gap-2 font-medium bg-white"
-                  variant="outline"
-                  onClick={() => setShowEscalaAdmin(true)}
-                >
-                  Administrar Escalas
-                </Button>
                 <Button className="w-full gap-2 font-medium" variant="secondary" asChild>
-                  <Link to={`/dashboard`}>Acessar Projeto</Link>
+                  <Link to={`/project/${proj.id}`}>Acessar Projeto</Link>
                 </Button>
               </CardFooter>
             </Card>
@@ -326,15 +250,6 @@ export default function Department() {
             </div>
           )}
         </div>
-      </div>
-
-      {/* Shift Rules Section */}
-      <div className="space-y-4 pt-4">
-        <div className="flex items-center gap-2 border-b pb-2">
-          <Settings2 className="h-5 w-5 text-primary" />
-          <h2 className="text-xl font-semibold">Regras Específicas</h2>
-        </div>
-        <ShiftRules departmentId={id} readOnly={true} />
       </div>
 
       {/* History Table */}

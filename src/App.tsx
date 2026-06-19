@@ -9,6 +9,7 @@ import Layout from './components/Layout'
 // Pages
 import Dashboard from './pages/Dashboard'
 import Department from './pages/Department'
+import Project from './pages/Project'
 import AiChat from './pages/AiChat'
 import Admin from './pages/Admin'
 import RulesAdmin from './pages/RulesAdmin'
@@ -37,6 +38,7 @@ const App = () => (
               <Route path="/" element={<Index />} />
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/department/:id" element={<Department />} />
+              <Route path="/project/:id" element={<Project />} />
               <Route path="/ai/:id" element={<AiChat />} />
               <Route path="/admin" element={<Admin />} />
               <Route path="/admin/regras" element={<RulesAdmin />} />

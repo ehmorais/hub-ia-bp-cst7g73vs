@@ -29,9 +29,10 @@ import { cn } from '@/lib/utils'
 
 export interface EscalasManagementProps {
   departmentId?: string
+  projectId?: string
 }
 
-export function EscalasManagement({ departmentId }: EscalasManagementProps) {
+export function EscalasManagement({ departmentId, projectId }: EscalasManagementProps) {
   const currentDay = new Date().getDate()
 
   const phases = [
@@ -166,8 +167,15 @@ export function EscalasManagement({ departmentId }: EscalasManagementProps) {
             value="planejamento"
             className="h-10 text-xs sm:text-sm flex-1 sm:flex-none bg-primary/5 text-primary data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
           >
-            <Wand2 className="h-4 w-4 mr-1 sm:mr-2 hidden sm:block" />
+            <Calendar className="h-4 w-4 mr-1 sm:mr-2 hidden sm:block" />
             <span className="inline">Montar Escala</span>
+          </TabsTrigger>
+          <TabsTrigger
+            value="gerar_ia"
+            className="h-10 text-xs sm:text-sm flex-1 sm:flex-none bg-indigo-50 text-indigo-700 data-[state=active]:bg-indigo-600 data-[state=active]:text-white"
+          >
+            <Wand2 className="h-4 w-4 mr-1 sm:mr-2 hidden sm:block" />
+            <span className="inline">Gerar com IA</span>
           </TabsTrigger>
           <TabsTrigger value="indicadores" className="h-10 text-xs sm:text-sm flex-1 sm:flex-none">
             <Activity className="h-4 w-4 mr-1 sm:mr-2 hidden sm:block" />
@@ -183,13 +191,13 @@ export function EscalasManagement({ departmentId }: EscalasManagementProps) {
             <ShiftTypes />
           </TabsContent>
           <TabsContent value="setores" className="mt-0">
-            <Sectors departmentId={departmentId} />
+            <Sectors departmentId={departmentId} projectId={projectId} />
           </TabsContent>
           <TabsContent value="colaboradores" className="mt-0">
-            <DepartmentStaffList departmentId={departmentId} />
+            <DepartmentStaffList departmentId={departmentId} projectId={projectId} />
           </TabsContent>
           <TabsContent value="contratos" className="mt-0">
-            <StaffContracts departmentId={departmentId} />
+            <StaffContracts departmentId={departmentId} projectId={projectId} />
           </TabsContent>
           <TabsContent value="funcao" className="mt-0">
             <StaffRoles />
@@ -198,13 +206,16 @@ export function EscalasManagement({ departmentId }: EscalasManagementProps) {
             <Timeoff />
           </TabsContent>
           <TabsContent value="regras" className="mt-0">
-            <ShiftRules departmentId={departmentId} />
+            <ShiftRules departmentId={departmentId} readOnly={true} />
           </TabsContent>
           <TabsContent value="perfis" className="mt-0">
-            <StaffProfiles departmentId={departmentId} />
+            <StaffProfiles departmentId={departmentId} projectId={projectId} />
           </TabsContent>
           <TabsContent value="planejamento" className="mt-0">
-            <ScalePlanner departmentId={departmentId} />
+            <ScalePlanner departmentId={departmentId} projectId={projectId} />
+          </TabsContent>
+          <TabsContent value="gerar_ia" className="mt-0">
+            <AutoGenerate departmentId={departmentId} projectId={projectId} />
           </TabsContent>
           <TabsContent value="indicadores" className="mt-0">
             <Indicators />
