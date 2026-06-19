@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-06-19T14:38:47.007Z",
+  "generatedAt": "2026-06-19T14:54:11.488Z",
   "collections": [
     {
       "name": "users",
@@ -44,6 +44,13 @@
           "required": false,
           "system": false,
           "selectValues": ["Admin", "Operador"]
+        },
+        {
+          "name": "staff_role",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "staff_roles"
         }
       ],
       "indexes": [

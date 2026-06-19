@@ -82,11 +82,29 @@ export default function Department() {
     }
   })
 
+  const [adminModalOpen, setAdminModalOpen] = useState(false)
+
   if (!department) return null
+
+  const isProjetosGerais = department?.name === 'Projetos Gerais'
 
   return (
     <div className="container mx-auto p-4 md:p-8 space-y-8 max-w-7xl animate-fade-in-up">
+      <EscalaAdminModal
+        open={adminModalOpen}
+        onOpenChange={setAdminModalOpen}
+        project={escalaProject || department}
+      />
+
       {/* Header */}
+      {isProjetosGerais && (
+        <div className="flex justify-end mb-[-2rem] relative z-10">
+          <Button onClick={() => setAdminModalOpen(true)} className="gap-2 shadow-sm">
+            <Calendar className="h-4 w-4" />
+            Administração de Escalas
+          </Button>
+        </div>
+      )}
       <div className="flex items-center gap-4">
         <Button variant="outline" size="icon" asChild className="shrink-0 bg-white">
           <Link to="/dashboard">
