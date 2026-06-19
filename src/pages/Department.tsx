@@ -20,7 +20,16 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { ArrowLeft, Play, History, BrainCircuit, Folder, Blocks, Calendar } from 'lucide-react'
+import {
+  ArrowLeft,
+  Play,
+  History,
+  BrainCircuit,
+  Folder,
+  Blocks,
+  Calendar,
+  Settings2,
+} from 'lucide-react'
 import { useRealtime } from '@/hooks/use-realtime'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -28,6 +37,7 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/
 import { Bar, BarChart, XAxis, YAxis, ResponsiveContainer } from 'recharts'
 import { cn } from '@/lib/utils'
 import { EscalasManagement } from '@/components/EscalasManagement'
+import { ShiftRules } from '@/components/escala/ShiftRules'
 
 export default function Department() {
   const { id } = useParams()
@@ -316,6 +326,15 @@ export default function Department() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Shift Rules Section */}
+      <div className="space-y-4 pt-4">
+        <div className="flex items-center gap-2 border-b pb-2">
+          <Settings2 className="h-5 w-5 text-primary" />
+          <h2 className="text-xl font-semibold">Regras Específicas</h2>
+        </div>
+        <ShiftRules departmentId={id} />
       </div>
 
       {/* History Table */}

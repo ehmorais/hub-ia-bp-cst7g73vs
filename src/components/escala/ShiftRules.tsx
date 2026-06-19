@@ -23,6 +23,26 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+} from '@/components/ui/dialog'
 
 export function ShiftRules({ departmentId }: { departmentId?: string }) {
   const [rules, setRules] = useState<any[]>([])
@@ -30,6 +50,7 @@ export function ShiftRules({ departmentId }: { departmentId?: string }) {
   const [type, setType] = useState('min_staff')
   const [value, setValue] = useState<number | ''>('')
   const [prompt, setPrompt] = useState('')
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
   const { toast } = useToast()
 
   const loadData = async () => {
@@ -82,6 +103,7 @@ export function ShiftRules({ departmentId }: { departmentId?: string }) {
       setName('')
       setValue('')
       setPrompt('')
+      setIsDialogOpen(false)
       toast({ title: 'Regra criada' })
     } catch {
       toast({ title: 'Erro', variant: 'destructive' })
@@ -112,72 +134,82 @@ export function ShiftRules({ departmentId }: { departmentId?: string }) {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <Card>
-        <CardHeader>
-          <CardTitle>Nova Regra de Escala</CardTitle>
-          <CardDescription>
-            Defina restrições que o motor de geração automática deve respeitar.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
-            <div className="space-y-2">
-              <Label>Nome da Regra</Label>
-              <Input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Ex: Regra Fim de Semana"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Tipo de Restrição</Label>
-              <Select value={type} onValueChange={setType}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="min_staff">Mínimo de Colaboradores</SelectItem>
-                  <SelectItem value="max_consecutive">Máx. Plantões Consecutivos</SelectItem>
-                  <SelectItem value="professional_mix">Mix Profissional</SelectItem>
-                  <SelectItem value="max_hours">Máximo de Horas/Mês</SelectItem>
-                  <SelectItem value="min_rest_hours">Mínimo Horas Descanso</SelectItem>
-                  <SelectItem value="other">Outra Regra</SelectItem>
-                  <SelectItem value="custom_prompt">Regra Customizada (IA)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {type !== 'custom_prompt' && (
+      <div className="flex justify-between items-center">
+        <p className="text-muted-foreground">
+          Gerencie as regras específicas aplicadas neste departamento.
+        </p>
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus className="h-4 w-4 mr-2" />
+              Adicionar Regra
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-xl">
+            <DialogHeader>
+              <DialogTitle>Nova Regra de Escala</DialogTitle>
+              <DialogDescription>
+                Defina restrições que o motor de geração automática deve respeitar.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
               <div className="space-y-2">
-                <Label>Valor Base</Label>
+                <Label>Nome da Regra</Label>
                 <Input
-                  type="number"
-                  value={value}
-                  onChange={(e) => setValue(e.target.value ? Number(e.target.value) : '')}
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Ex: Regra Fim de Semana"
                 />
               </div>
-            )}
-
-            {type === 'custom_prompt' && (
-              <div className="space-y-2 col-span-1 md:col-span-3">
-                <Label>Instruções para a IA (Prompt)</Label>
-                <Textarea
-                  value={prompt}
-                  onChange={(e) => setPrompt(e.target.value)}
-                  placeholder="Ex: Não escalar o colaborador X com o colaborador Y aos fins de semana..."
-                  className="min-h-[80px] resize-y"
-                />
+              <div className="space-y-2">
+                <Label>Tipo de Restrição</Label>
+                <Select value={type} onValueChange={setType}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="min_staff">Mínimo de Colaboradores</SelectItem>
+                    <SelectItem value="max_consecutive">Máx. Plantões Consecutivos</SelectItem>
+                    <SelectItem value="professional_mix">Mix Profissional</SelectItem>
+                    <SelectItem value="max_hours">Máximo de Horas/Mês</SelectItem>
+                    <SelectItem value="min_rest_hours">Mínimo Horas Descanso</SelectItem>
+                    <SelectItem value="other">Outra Regra</SelectItem>
+                    <SelectItem value="custom_prompt">Regra Customizada (IA)</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-            )}
+              {type !== 'custom_prompt' && (
+                <div className="space-y-2">
+                  <Label>Valor Base</Label>
+                  <Input
+                    type="number"
+                    value={value}
+                    onChange={(e) => setValue(e.target.value ? Number(e.target.value) : '')}
+                  />
+                </div>
+              )}
 
-            <div className="col-span-1 md:col-span-3 flex justify-end mt-2">
-              <Button onClick={handleCreate} className="w-full md:w-auto">
-                <Plus className="h-4 w-4 mr-2" />
-                Adicionar Regra
-              </Button>
+              {type === 'custom_prompt' && (
+                <div className="space-y-2">
+                  <Label>Regra Description (IA Prompt)</Label>
+                  <Textarea
+                    value={prompt}
+                    onChange={(e) => setPrompt(e.target.value)}
+                    placeholder="Ex: Não escalar o colaborador X com o colaborador Y aos fins de semana..."
+                    className="min-h-[100px] resize-y"
+                  />
+                </div>
+              )}
             </div>
-          </div>
-        </CardContent>
-      </Card>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={handleCreate}>Salvar Regra</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
 
       <Card>
         <CardHeader>
@@ -211,9 +243,31 @@ export function ShiftRules({ departmentId }: { departmentId?: string }) {
                     )}
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="icon" onClick={() => handleDelete(r.id)}>
-                      <Trash2 className="h-4 w-4 text-red-500" />
-                    </Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="ghost" size="icon">
+                          <Trash2 className="h-4 w-4 text-red-500" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Excluir regra?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Tem certeza que deseja excluir esta regra? Esta ação não pode ser
+                            desfeita.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => handleDelete(r.id)}
+                            className="bg-red-500 hover:bg-red-600"
+                          >
+                            Excluir
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
                   </TableCell>
                 </TableRow>
               ))}
