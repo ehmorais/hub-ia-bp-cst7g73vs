@@ -86,7 +86,7 @@ export default function Department() {
 
   if (!department) return null
 
-  const isProjetosGerais = department?.name === 'Projetos Gerais'
+  const isProjetosGerais = department?.name?.includes('Projetos Gerais')
 
   return (
     <div className="container mx-auto p-4 md:p-8 space-y-8 max-w-7xl animate-fade-in-up">
@@ -97,14 +97,6 @@ export default function Department() {
       />
 
       {/* Header */}
-      {isProjetosGerais && (
-        <div className="flex justify-end mb-[-2rem] relative z-10">
-          <Button onClick={() => setAdminModalOpen(true)} className="gap-2 shadow-sm">
-            <Calendar className="h-4 w-4" />
-            Administração de Escalas
-          </Button>
-        </div>
-      )}
       <div className="flex items-center gap-4">
         <Button variant="outline" size="icon" asChild className="shrink-0 bg-white">
           <Link to="/dashboard">
@@ -130,6 +122,48 @@ export default function Department() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          {isProjetosGerais && (
+            <Card className="flex flex-col bg-white border-slate-200 overflow-hidden hover:shadow-md transition-shadow">
+              <CardHeader>
+                <div className="flex justify-between items-start mb-2">
+                  <Badge
+                    variant="outline"
+                    className="bg-slate-50 uppercase text-[10px] text-primary border-primary/20"
+                  >
+                    Ativo
+                  </Badge>
+                  <div className="flex gap-2">
+                    <span className="text-xs text-muted-foreground font-mono bg-slate-100 px-2 py-0.5 rounded">
+                      Módulo
+                    </span>
+                  </div>
+                </div>
+                <CardTitle className="text-xl">Escala de Colaboradores</CardTitle>
+                <CardDescription className="line-clamp-2 h-10">
+                  Gestão completa de ciclos, setores, contratos e folgas para os colaboradores do
+                  HBPSCS.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex-1 flex flex-col justify-center py-6">
+                <div className="w-full flex justify-center mb-2">
+                  <Calendar className="h-12 w-12 text-slate-200" />
+                </div>
+                <p className="text-center text-sm text-slate-500 font-medium">
+                  Ferramenta Administrativa
+                </p>
+              </CardContent>
+
+              <CardFooter className="pt-4 border-t bg-slate-50/50 mt-auto">
+                <Button
+                  className="w-full gap-2 font-medium"
+                  onClick={() => setAdminModalOpen(true)}
+                >
+                  <Play className="h-4 w-4" fill="currentColor" />
+                  Acessar Ferramenta
+                </Button>
+              </CardFooter>
+            </Card>
+          )}
           {departmentTools.map((tool) => (
             <Card
               key={tool.id}

@@ -152,24 +152,12 @@ export function AppSidebar() {
               <SidebarMenuItem>
                 <SidebarMenuButton
                   asChild
-                  isActive={location.pathname === '/admin' && location.hash !== '#escalas'}
+                  isActive={location.pathname === '/admin'}
                   tooltip="Administração"
                 >
                   <Link to="/admin">
                     <Settings className="h-4 w-4" />
                     <span>Administração</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  asChild
-                  isActive={location.pathname === '/admin' && location.hash === '#escalas'}
-                  tooltip="Escalas"
-                >
-                  <Link to="/admin#escalas">
-                    <Calendar className="h-4 w-4" />
-                    <span>Escalas</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
