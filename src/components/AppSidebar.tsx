@@ -121,14 +121,10 @@ export function AppSidebar() {
 
   return (
     <Sidebar variant="inset" className="border-r shadow-sm">
-      <SidebarHeader className="p-4 flex flex-col items-center justify-center gap-1 border-b bg-white min-h-[5rem]">
-        <div className="flex flex-col overflow-hidden text-center w-full">
-          <span className="font-bold text-xl leading-tight text-primary truncate">
-            HUB de IA BP
-          </span>
-          <span className="text-sm text-muted-foreground font-medium truncate">
-            São Caetano do Sul
-          </span>
+      <SidebarHeader className="p-4 flex flex-col justify-center border-b bg-white min-h-[4rem]">
+        <div className="flex items-center gap-2 text-primary">
+          <LayoutDashboard className="h-5 w-5" />
+          <span className="font-bold text-sm leading-tight truncate">Navegação</span>
         </div>
       </SidebarHeader>
 

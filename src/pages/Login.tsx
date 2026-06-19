@@ -71,7 +71,7 @@ export default function Login() {
               <img
                 src="https://pub-2059a4c0a5bc4bfaad3c4c9b31d04130.r2.dev/projects/11751/1cd0cd6b-ccbd-4ed2-9642-e56ef382b6be.jpg"
                 alt="Logo Beneficência Portuguesa"
-                className="h-20 md:h-24 w-auto max-w-full object-contain mix-blend-multiply"
+                className="h-20 md:h-24 w-auto max-w-[240px] object-contain mix-blend-multiply"
               />
             </div>
             <CardTitle className="text-2xl font-bold tracking-tight text-slate-900">
@@ -89,9 +89,9 @@ export default function Login() {
                   className="flex items-center gap-3 p-3 border rounded-lg bg-slate-50"
                 >
                   {checklistIndex > idx ? (
-                    <CheckCircle2 className="h-5 w-5 text-[#008260]" />
+                    <CheckCircle2 className="h-5 w-5 text-primary" />
                   ) : checklistIndex === idx && !checklistError ? (
-                    <Loader2 className="h-5 w-5 text-[#008260] animate-spin" />
+                    <Loader2 className="h-5 w-5 text-primary animate-spin" />
                   ) : checklistIndex === idx && checklistError ? (
                     <XCircle className="h-5 w-5 text-red-500" />
                   ) : (
@@ -139,7 +139,7 @@ export default function Login() {
             <img
               src="https://pub-2059a4c0a5bc4bfaad3c4c9b31d04130.r2.dev/projects/11751/1cd0cd6b-ccbd-4ed2-9642-e56ef382b6be.jpg"
               alt="Logo Beneficência Portuguesa"
-              className="h-20 md:h-24 w-auto max-w-full object-contain mix-blend-multiply"
+              className="h-20 md:h-24 w-auto max-w-[240px] object-contain mix-blend-multiply"
             />
           </div>
           <CardTitle className="text-2xl font-bold tracking-tight text-slate-900">

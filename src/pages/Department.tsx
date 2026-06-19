@@ -121,7 +121,7 @@ export default function Department() {
           </Link>
         </Button>
         <div className="flex items-center gap-3">
-          <div className="p-3 rounded-xl hidden sm:block bg-blue-100 text-blue-700">
+          <div className="p-3 rounded-xl hidden sm:block bg-primary/10 text-primary">
             <Folder className="h-6 w-6" />
           </div>
           <div>
@@ -233,8 +233,8 @@ export default function Department() {
                     className={cn(
                       'bg-slate-50 uppercase text-[10px]',
                       tool.status === 'active'
-                        ? 'text-primary border-primary/20'
-                        : 'text-amber-600 border-amber-200',
+                        ? 'text-primary border-primary/20 bg-primary/5'
+                        : 'text-amber-600 border-amber-200 bg-amber-50',
                     )}
                   >
                     {tool.status === 'active' ? 'Ativo' : tool.status}
@@ -330,7 +330,7 @@ export default function Department() {
                     className={cn(
                       'uppercase text-[10px]',
                       proj.status === 'active'
-                        ? 'bg-green-50 text-green-700 border-green-200'
+                        ? 'bg-primary/5 text-primary border-primary/20'
                         : 'bg-amber-50 text-amber-700 border-amber-200',
                     )}
                   >
