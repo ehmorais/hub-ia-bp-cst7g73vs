@@ -80,10 +80,12 @@ routerAdd(
               } catch (_) {}
             }
             if (rule) {
+              const rType = rule.getString('rule_type')
               return {
                 name: rule.getString('name'),
-                type: rule.getString('rule_type'),
+                type: rType,
                 value: rule.getInt('value'),
+                ...(rType === 'custom_prompt' ? { prompt: rule.getString('prompt') } : {}),
               }
             }
             return null
@@ -116,11 +118,15 @@ routerAdd(
       is_critical: s.getBool('is_critical'),
     }))
 
-    const ruleData = rules.map((r) => ({
-      name: r.getString('name'),
-      type: r.getString('rule_type'),
-      value: r.getInt('value'),
-    }))
+    const ruleData = rules.map((r) => {
+      const type = r.getString('rule_type')
+      return {
+        name: r.getString('name'),
+        type: type,
+        value: r.getInt('value'),
+        ...(type === 'custom_prompt' ? { prompt: r.getString('prompt') } : {}),
+      }
+    })
 
     const timeoffData = timeoffs.map((t) => ({
       user: t.getString('user'),
@@ -156,7 +162,8 @@ Constraints:
 5. Time-off Requests: Honor 'timeoff_requests'. If weight is high, block scheduling. "Dobradinha" (consecutive days off) should be prioritized if minimum staffing is met.
 6. Hours & Shifts: Respect the assigned 'shift_type' work hours. Total hours must not exceed 'hour_limit'.
 7. Individual Rules: If a user has 'assigned_rules', these rules override the general department rules for this specific professional.
-8. Output strictly a JSON array, representing the generated shifts. Assume default shifts start at 07:00:00.000Z and last for 'shift_work_hours'.
+8. Custom AI Rules: Apply all rules of type "custom_prompt" by following their textual descriptions in the "prompt" field precisely.
+9. Output strictly a JSON array, representing the generated shifts. Assume default shifts start at 07:00:00.000Z and last for 'shift_work_hours'.
 
 Output FORMAT (strictly JSON array):
 [

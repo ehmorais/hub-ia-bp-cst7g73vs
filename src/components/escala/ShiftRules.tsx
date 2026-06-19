@@ -9,6 +9,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Trash2, Plus } from 'lucide-react'
@@ -28,6 +29,7 @@ export function ShiftRules({ departmentId }: { departmentId?: string }) {
   const [name, setName] = useState('')
   const [type, setType] = useState('min_staff')
   const [value, setValue] = useState<number | ''>('')
+  const [prompt, setPrompt] = useState('')
   const { toast } = useToast()
 
   const loadData = async () => {
@@ -48,10 +50,24 @@ export function ShiftRules({ departmentId }: { departmentId?: string }) {
   useRealtime('shift_rules', loadData)
 
   const handleCreate = async () => {
-    if (!name || !departmentId || value === '') {
+    if (!name || !departmentId) {
       return toast({
         title: 'Erro',
-        description: 'Todos os campos são obrigatórios',
+        description: 'Nome da regra é obrigatório',
+        variant: 'destructive',
+      })
+    }
+    if (type !== 'custom_prompt' && value === '') {
+      return toast({
+        title: 'Erro',
+        description: 'Valor base é obrigatório para este tipo de regra',
+        variant: 'destructive',
+      })
+    }
+    if (type === 'custom_prompt' && !prompt.trim()) {
+      return toast({
+        title: 'Erro',
+        description: 'Instrução (prompt) é obrigatória',
         variant: 'destructive',
       })
     }
@@ -59,11 +75,13 @@ export function ShiftRules({ departmentId }: { departmentId?: string }) {
       await createShiftRule({
         name,
         rule_type: type,
-        value: Number(value),
+        value: type === 'custom_prompt' ? 0 : Number(value),
+        prompt: type === 'custom_prompt' ? prompt : '',
         department: departmentId,
       })
       setName('')
       setValue('')
+      setPrompt('')
       toast({ title: 'Regra criada' })
     } catch {
       toast({ title: 'Erro', variant: 'destructive' })
@@ -87,6 +105,7 @@ export function ShiftRules({ departmentId }: { departmentId?: string }) {
       max_hours: 'Máximo de Horas/Mês',
       min_rest_hours: 'Mínimo Horas Descanso',
       other: 'Outra Regra',
+      custom_prompt: 'Customizada (IA)',
     }
     return labels[t] || t
   }
@@ -101,13 +120,13 @@ export function ShiftRules({ departmentId }: { departmentId?: string }) {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
             <div className="space-y-2">
               <Label>Nome da Regra</Label>
               <Input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Ex: Folga mínima 36h"
+                placeholder="Ex: Regra Fim de Semana"
               />
             </div>
             <div className="space-y-2">
@@ -123,21 +142,39 @@ export function ShiftRules({ departmentId }: { departmentId?: string }) {
                   <SelectItem value="max_hours">Máximo de Horas/Mês</SelectItem>
                   <SelectItem value="min_rest_hours">Mínimo Horas Descanso</SelectItem>
                   <SelectItem value="other">Outra Regra</SelectItem>
+                  <SelectItem value="custom_prompt">Regra Customizada (IA)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
-              <Label>Valor Base</Label>
-              <Input
-                type="number"
-                value={value}
-                onChange={(e) => setValue(Number(e.target.value))}
-              />
+            {type !== 'custom_prompt' && (
+              <div className="space-y-2">
+                <Label>Valor Base</Label>
+                <Input
+                  type="number"
+                  value={value}
+                  onChange={(e) => setValue(e.target.value ? Number(e.target.value) : '')}
+                />
+              </div>
+            )}
+
+            {type === 'custom_prompt' && (
+              <div className="space-y-2 col-span-1 md:col-span-3">
+                <Label>Instruções para a IA (Prompt)</Label>
+                <Textarea
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  placeholder="Ex: Não escalar o colaborador X com o colaborador Y aos fins de semana..."
+                  className="min-h-[80px] resize-y"
+                />
+              </div>
+            )}
+
+            <div className="col-span-1 md:col-span-3 flex justify-end mt-2">
+              <Button onClick={handleCreate} className="w-full md:w-auto">
+                <Plus className="h-4 w-4 mr-2" />
+                Adicionar Regra
+              </Button>
             </div>
-            <Button onClick={handleCreate} className="w-full">
-              <Plus className="h-4 w-4 mr-2" />
-              Adicionar Regra
-            </Button>
           </div>
         </CardContent>
       </Card>
@@ -161,7 +198,18 @@ export function ShiftRules({ departmentId }: { departmentId?: string }) {
                 <TableRow key={r.id}>
                   <TableCell className="font-medium">{r.name}</TableCell>
                   <TableCell>{getTypeLabel(r.rule_type)}</TableCell>
-                  <TableCell>{r.value}</TableCell>
+                  <TableCell>
+                    {r.rule_type === 'custom_prompt' ? (
+                      <span
+                        className="text-muted-foreground text-sm line-clamp-2 max-w-[300px]"
+                        title={r.prompt}
+                      >
+                        {r.prompt}
+                      </span>
+                    ) : (
+                      r.value
+                    )}
+                  </TableCell>
                   <TableCell className="text-right">
                     <Button variant="ghost" size="icon" onClick={() => handleDelete(r.id)}>
                       <Trash2 className="h-4 w-4 text-red-500" />
