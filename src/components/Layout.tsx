@@ -19,7 +19,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { SystemChecklistModal } from './SystemChecklistModal'
 
 export default function Layout() {
   const location = useLocation()
@@ -96,12 +95,10 @@ export default function Layout() {
     .toUpperCase()
 
   useEffect(() => {
-    // Inicialização do cliente Skip Cloud para métricas, auditoria futura e projetos
     skipCloud.collection('logs').then((col: any) => col.find())
     skipCloud.collection('projects').then((col: any) => col.find())
   }, [])
 
-  // Do not render sidebar layout for the login page
   if (location.pathname === '/') {
     return (
       <main className="flex flex-col min-h-screen">
@@ -120,27 +117,29 @@ export default function Layout() {
             <SidebarTrigger className="shrink-0 md:hidden" />
             <Link
               to="/dashboard"
-              className="flex items-center gap-2 ml-1 transition-opacity hover:opacity-80"
+              className="flex items-center gap-2 ml-1 transition-opacity hover:opacity-80 shrink-0"
             >
               <img
                 src="https://img.usecurling.com/i?q=hospital&color=green&shape=fill"
-                alt="Logo HBPSCS"
-                className="h-10 w-auto object-contain"
+                alt="Logo Beneficência Portuguesa"
+                className="h-8 md:h-10 w-auto max-w-[120px] object-contain"
               />
-              <div className="flex flex-col md:hidden lg:flex">
-                <span className="font-bold text-sm leading-none text-primary">HUB de IA BP</span>
-                <span className="text-[10px] text-muted-foreground font-medium">
+              <div className="hidden md:flex lg:flex flex-col">
+                <span className="font-bold text-sm leading-none text-primary">
+                  Beneficência Portuguesa
+                </span>
+                <span className="text-[10px] text-muted-foreground font-medium mt-0.5">
                   São Caetano do Sul
                 </span>
               </div>
             </Link>
           </div>
           <div className="flex-1">
-            <div className="relative max-w-md hidden md:flex items-center">
+            <div className="relative max-w-md hidden md:flex items-center ml-4">
               <Search className="absolute left-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 type="search"
-                placeholder="Buscar ferramentas ou pacientes (anonimizado)..."
+                placeholder="Buscar ferramentas ou pacientes..."
                 className="pl-8 bg-muted/50 border-none focus-visible:ring-1 focus-visible:bg-background"
               />
             </div>
@@ -238,8 +237,6 @@ export default function Layout() {
           </div>
         </header>
 
-        {isAuthenticated && <SystemChecklistModal tools={tools} />}
-
         {/* Main Content Area */}
         <main className="flex-1 overflow-auto animate-fade-in">
           <Outlet />
@@ -260,7 +257,7 @@ export default function Layout() {
                 Reportar Problema
               </Button>
               <span>•</span>
-              <span>HUB de IA BP v1.0.0</span>
+              <span>Beneficência Portuguesa SCS v1.0.0</span>
             </div>
           </div>
         </footer>

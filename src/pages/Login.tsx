@@ -4,7 +4,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { ShieldCheck, CheckCircle2, Loader2, XCircle } from 'lucide-react'
+import { CheckCircle2, Loader2, XCircle } from 'lucide-react'
 import pb from '@/lib/pocketbase/client'
 import { cn } from '@/lib/utils'
 
@@ -32,16 +32,13 @@ export default function Login() {
 
       setChecklistIndex(2)
       await new Promise((r) => setTimeout(r, 600))
-      await pb.collection('shift_cycles').getList(1, 1)
-
-      setChecklistIndex(3)
-      await new Promise((r) => setTimeout(r, 600))
       await Promise.all([
         pb.collection('departments').getList(1, 1),
         pb.collection('projects').getList(1, 1),
+        pb.collection('ia_tools').getList(1, 1),
       ])
 
-      setChecklistIndex(4)
+      setChecklistIndex(3)
       await new Promise((r) => setTimeout(r, 800))
       navigate('/dashboard')
     } catch (err: any) {
@@ -70,45 +67,47 @@ export default function Login() {
       <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 p-4">
         <Card className="w-full max-w-md border-slate-200/60 shadow-xl bg-white/80 backdrop-blur-sm animate-fade-in">
           <CardHeader className="text-center space-y-2 pb-6">
-            <div className="mx-auto mb-4">
+            <div className="mx-auto mb-6 flex justify-center w-full px-4">
               <img
                 src="https://img.usecurling.com/i?q=hospital&color=green&shape=fill"
-                alt="Logo HBPSCS"
-                className="h-16 w-auto object-contain mx-auto"
+                alt="Logo Beneficência Portuguesa"
+                className="h-20 md:h-24 w-auto max-w-full object-contain"
               />
             </div>
-            <CardTitle className="text-2xl font-bold tracking-tight">All Systems Go</CardTitle>
+            <CardTitle className="text-2xl font-bold tracking-tight text-slate-900">
+              All Systems Go
+            </CardTitle>
             <CardDescription className="text-base">
               Verificando integridade dos módulos...
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {[
-              'Autenticação e integridade da sessão',
-              'Conectividade com o banco de dados',
-              'Módulo de Escala de Colaboradores',
-              'Projetos e Departamentos',
-            ].map((label, idx) => (
-              <div key={idx} className="flex items-center gap-3 p-3 border rounded-lg bg-slate-50">
-                {checklistIndex > idx ? (
-                  <CheckCircle2 className="h-5 w-5 text-green-500" />
-                ) : checklistIndex === idx && !checklistError ? (
-                  <Loader2 className="h-5 w-5 text-primary animate-spin" />
-                ) : checklistIndex === idx && checklistError ? (
-                  <XCircle className="h-5 w-5 text-red-500" />
-                ) : (
-                  <div className="h-5 w-5 rounded-full border-2 border-slate-200" />
-                )}
-                <span
-                  className={cn(
-                    'text-sm font-medium',
-                    checklistIndex >= idx ? 'text-slate-700' : 'text-slate-400',
-                  )}
+            {['Session Integrity', 'Database Connection', 'Administrative Modules Readiness'].map(
+              (label, idx) => (
+                <div
+                  key={idx}
+                  className="flex items-center gap-3 p-3 border rounded-lg bg-slate-50"
                 >
-                  {label}
-                </span>
-              </div>
-            ))}
+                  {checklistIndex > idx ? (
+                    <CheckCircle2 className="h-5 w-5 text-[#008260]" />
+                  ) : checklistIndex === idx && !checklistError ? (
+                    <Loader2 className="h-5 w-5 text-[#008260] animate-spin" />
+                  ) : checklistIndex === idx && checklistError ? (
+                    <XCircle className="h-5 w-5 text-red-500" />
+                  ) : (
+                    <div className="h-5 w-5 rounded-full border-2 border-slate-200" />
+                  )}
+                  <span
+                    className={cn(
+                      'text-sm font-medium',
+                      checklistIndex >= idx ? 'text-slate-800' : 'text-slate-400',
+                    )}
+                  >
+                    {label}
+                  </span>
+                </div>
+              ),
+            )}
             {checklistError && (
               <div className="mt-4 p-4 bg-red-50 text-red-700 text-sm rounded-lg border border-red-200 text-center font-medium animate-fade-in-up">
                 {checklistError}
@@ -136,42 +135,54 @@ export default function Login() {
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 p-4">
       <Card className="w-full max-w-md border-slate-200/60 shadow-xl bg-white/80 backdrop-blur-sm animate-fade-in">
         <CardHeader className="text-center space-y-2 pb-6">
-          <div className="mx-auto mb-4">
+          <div className="mx-auto mb-6 flex justify-center w-full px-4">
             <img
               src="https://img.usecurling.com/i?q=hospital&color=green&shape=fill"
-              alt="Logo HBPSCS"
-              className="h-16 w-auto object-contain mx-auto"
+              alt="Logo Beneficência Portuguesa"
+              className="h-20 md:h-24 w-auto max-w-full object-contain"
             />
           </div>
-          <CardTitle className="text-2xl font-bold tracking-tight">Portal IA</CardTitle>
+          <CardTitle className="text-2xl font-bold tracking-tight text-slate-900">
+            Acesso Restrito
+          </CardTitle>
           <CardDescription className="text-base">
-            Entre com suas credenciais de acesso
+            Entre com suas credenciais institucionais
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleLogin} className="space-y-4">
-            {error && <p className="text-sm text-red-500 text-center font-medium">{error}</p>}
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">Email</label>
+          <form onSubmit={handleLogin} className="space-y-5">
+            {error && (
+              <p className="text-sm text-red-500 text-center font-medium bg-red-50 p-2 rounded">
+                {error}
+              </p>
+            )}
+            <div className="space-y-2 text-left">
+              <label className="text-sm font-semibold text-slate-700">Usuário ou E-mail</label>
               <Input
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="bg-white"
+                className="bg-white h-11 border-slate-300 focus-visible:ring-[#008260]"
+                placeholder="nome.sobrenome@idcorp.com.br"
               />
             </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">Senha</label>
+            <div className="space-y-2 text-left">
+              <label className="text-sm font-semibold text-slate-700">Senha</label>
               <Input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="bg-white"
+                className="bg-white h-11 border-slate-300 focus-visible:ring-[#008260]"
+                placeholder="••••••••"
               />
             </div>
-            <Button type="submit" className="w-full h-11 text-base shadow-sm" disabled={loading}>
-              {loading ? 'Entrando...' : 'Entrar no Sistema'}
+            <Button
+              type="submit"
+              className="w-full h-11 text-base shadow-sm font-semibold mt-2"
+              disabled={loading}
+            >
+              {loading ? 'Autenticando...' : 'Entrar no Sistema'}
             </Button>
           </form>
         </CardContent>

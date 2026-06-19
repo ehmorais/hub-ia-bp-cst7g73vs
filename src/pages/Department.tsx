@@ -20,16 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import {
-  ArrowLeft,
-  Play,
-  History,
-  BrainCircuit,
-  Folder,
-  Blocks,
-  Calendar,
-  Settings2,
-} from 'lucide-react'
+import { ArrowLeft, Play, History, BrainCircuit, Folder, Blocks, Calendar } from 'lucide-react'
 import { useRealtime } from '@/hooks/use-realtime'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -166,8 +157,8 @@ export default function Department() {
                   Módulo centralizado para gestão de escalas, plantões e regras de dimensionamento.
                 </CardDescription>
               </CardHeader>
-              <CardFooter className="pt-3 border-t bg-slate-50/50 mt-auto flex flex-col gap-2">
-                <Button className="w-full gap-2 font-medium" asChild>
+              <CardFooter className="pt-3 border-t bg-slate-50/50 mt-auto flex justify-start">
+                <Button className="gap-2 font-medium" asChild>
                   <Link to="/admin#escalas">Acessar Módulo de Escalas</Link>
                 </Button>
               </CardFooter>
@@ -301,8 +292,8 @@ export default function Department() {
                   </div>
                 </div>
               </CardContent>
-              <CardFooter className="pt-4 border-t bg-slate-50/50">
-                <Button className="w-full gap-2 font-medium" asChild>
+              <CardFooter className="pt-4 border-t bg-slate-50/50 flex justify-start">
+                <Button className="gap-2 font-medium" asChild>
                   <Link to={(tool as any).path || `/ai/${tool.id}`}>
                     <Play className="h-4 w-4" fill="currentColor" />
                     Acessar Ferramenta
@@ -345,8 +336,8 @@ export default function Department() {
                   {proj.description || 'Sem descrição'}
                 </CardDescription>
               </CardHeader>
-              <CardFooter className="pt-3 border-t bg-slate-50/50 mt-auto flex flex-col gap-2">
-                <Button className="w-full gap-2 font-medium" variant="secondary" asChild>
+              <CardFooter className="pt-3 border-t bg-slate-50/50 mt-auto flex justify-start">
+                <Button className="gap-2 font-medium" variant="secondary" asChild>
                   <Link to={`/project/${proj.id}`}>Acessar Projeto</Link>
                 </Button>
               </CardFooter>
