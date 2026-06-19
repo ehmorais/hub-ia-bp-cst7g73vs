@@ -69,9 +69,9 @@ export default function Login() {
           <CardHeader className="text-center space-y-2 pb-6">
             <div className="mx-auto mb-6 flex justify-center w-full px-4">
               <img
-                src="https://img.usecurling.com/i?q=hospital&color=green&shape=fill"
+                src="https://pub-2059a4c0a5bc4bfaad3c4c9b31d04130.r2.dev/projects/11751/1cd0cd6b-ccbd-4ed2-9642-e56ef382b6be.jpg"
                 alt="Logo Beneficência Portuguesa"
-                className="h-20 md:h-24 w-auto max-w-full object-contain"
+                className="h-20 md:h-24 w-auto max-w-full object-contain mix-blend-multiply"
               />
             </div>
             <CardTitle className="text-2xl font-bold tracking-tight text-slate-900">
@@ -137,9 +137,9 @@ export default function Login() {
         <CardHeader className="text-center space-y-2 pb-6">
           <div className="mx-auto mb-6 flex justify-center w-full px-4">
             <img
-              src="https://img.usecurling.com/i?q=hospital&color=green&shape=fill"
+              src="https://pub-2059a4c0a5bc4bfaad3c4c9b31d04130.r2.dev/projects/11751/1cd0cd6b-ccbd-4ed2-9642-e56ef382b6be.jpg"
               alt="Logo Beneficência Portuguesa"
-              className="h-20 md:h-24 w-auto max-w-full object-contain"
+              className="h-20 md:h-24 w-auto max-w-full object-contain mix-blend-multiply"
             />
           </div>
           <CardTitle className="text-2xl font-bold tracking-tight text-slate-900">
@@ -162,7 +162,7 @@ export default function Login() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="bg-white h-11 border-slate-300 focus-visible:ring-[#008260]"
+                className="bg-white h-11 border-slate-300 focus-visible:ring-primary"
                 placeholder="nome.sobrenome@idcorp.com.br"
               />
             </div>
@@ -173,13 +173,13 @@ export default function Login() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="bg-white h-11 border-slate-300 focus-visible:ring-[#008260]"
+                className="bg-white h-11 border-slate-300 focus-visible:ring-primary"
                 placeholder="••••••••"
               />
             </div>
             <Button
               type="submit"
-              className="w-full h-11 text-base shadow-sm font-semibold mt-2"
+              className="w-full h-11 text-base shadow-sm font-semibold mt-2 bg-primary hover:bg-primary/90 text-primary-foreground"
               disabled={loading}
             >
               {loading ? 'Autenticando...' : 'Entrar no Sistema'}

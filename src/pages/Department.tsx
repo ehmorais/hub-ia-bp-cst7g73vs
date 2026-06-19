@@ -138,7 +138,7 @@ export default function Department() {
             <Blocks className="h-5 w-5 text-primary" />
             <h2 className="text-xl font-semibold">Módulos Integrados</h2>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 items-start">
             <Card className="flex flex-col bg-white border-slate-200 overflow-hidden hover:shadow-md transition-shadow">
               <CardHeader className="pb-4">
                 <div className="flex justify-between items-start mb-2">
@@ -158,7 +158,10 @@ export default function Department() {
                 </CardDescription>
               </CardHeader>
               <CardFooter className="pt-3 border-t bg-slate-50/50 mt-auto flex justify-start">
-                <Button className="gap-2 font-medium" asChild>
+                <Button
+                  className="gap-2 font-medium bg-primary hover:bg-primary/90 text-primary-foreground"
+                  asChild
+                >
                   <Link to="/admin#escalas">Acessar Módulo de Escalas</Link>
                 </Button>
               </CardFooter>
@@ -217,7 +220,7 @@ export default function Department() {
           <BrainCircuit className="h-5 w-5 text-primary" />
           <h2 className="text-xl font-semibold">Modelos Disponíveis</h2>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 items-start">
           {departmentTools.map((tool) => (
             <Card
               key={tool.id}
@@ -293,7 +296,10 @@ export default function Department() {
                 </div>
               </CardContent>
               <CardFooter className="pt-4 border-t bg-slate-50/50 flex justify-start">
-                <Button className="gap-2 font-medium" asChild>
+                <Button
+                  className="gap-2 font-medium bg-primary hover:bg-primary/90 text-primary-foreground"
+                  asChild
+                >
                   <Link to={(tool as any).path || `/ai/${tool.id}`}>
                     <Play className="h-4 w-4" fill="currentColor" />
                     Acessar Ferramenta
@@ -311,7 +317,7 @@ export default function Department() {
           <Blocks className="h-5 w-5 text-primary" />
           <h2 className="text-xl font-semibold">Projetos</h2>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start">
           {projects.map((proj) => (
             <Card
               key={proj.id}

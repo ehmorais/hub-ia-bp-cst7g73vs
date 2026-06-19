@@ -42,10 +42,10 @@ export default function Index() {
         </CardHeader>
         <CardContent className="pb-8">
           <Button
-            className="w-full h-12 text-base font-semibold bg-primary hover:bg-primary/90"
-            onClick={() => navigate('/dashboard')}
+            className="w-full h-12 text-base font-semibold bg-primary hover:bg-primary/90 text-primary-foreground"
+            onClick={() => navigate('/login')}
           >
-            Acesso via Active Directory / LDAP
+            Acessar o Sistema
           </Button>
 
           <div className="mt-6 flex items-center gap-2 text-sm text-slate-500 justify-center">

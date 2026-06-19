@@ -120,9 +120,9 @@ export default function Layout() {
               className="flex items-center gap-2 ml-1 transition-opacity hover:opacity-80 shrink-0"
             >
               <img
-                src="https://img.usecurling.com/i?q=hospital&color=green&shape=fill"
+                src="https://pub-2059a4c0a5bc4bfaad3c4c9b31d04130.r2.dev/projects/11751/1cd0cd6b-ccbd-4ed2-9642-e56ef382b6be.jpg"
                 alt="Logo Beneficência Portuguesa"
-                className="h-8 md:h-10 w-auto max-w-[120px] object-contain"
+                className="h-8 md:h-10 w-auto max-w-[120px] object-contain mix-blend-multiply"
               />
               <div className="hidden md:flex lg:flex flex-col">
                 <span className="font-bold text-sm leading-none text-primary">
