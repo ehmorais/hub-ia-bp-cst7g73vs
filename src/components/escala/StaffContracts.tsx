@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Trash2 } from 'lucide-react'
 import {
   Table,
   TableBody,
@@ -24,6 +26,7 @@ import {
   updateUser,
   createStaffContract,
   updateStaffContract,
+  deleteStaffContract,
 } from '@/services/escala'
 import { useRealtime } from '@/hooks/use-realtime'
 import pb from '@/lib/pocketbase/client'
@@ -77,6 +80,15 @@ export function StaffContracts() {
     }
   }
 
+  const handleDeleteContract = async (contractId: string) => {
+    try {
+      await deleteStaffContract(contractId)
+      toast({ title: 'Contrato removido' })
+    } catch {
+      toast({ title: 'Erro', variant: 'destructive' })
+    }
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -93,6 +105,7 @@ export function StaffContracts() {
               <TableHead>Função</TableHead>
               <TableHead>Tipo de Contrato</TableHead>
               <TableHead>Carga Horária (mês)</TableHead>
+              <TableHead className="text-right">Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -159,6 +172,17 @@ export function StaffContracts() {
                       </div>
                     ) : (
                       <span className="text-muted-foreground text-sm">-</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {userContract && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDeleteContract(userContract.id)}
+                      >
+                        <Trash2 className="h-4 w-4 text-red-500" />
+                      </Button>
                     )}
                   </TableCell>
                 </TableRow>

@@ -35,6 +35,31 @@ export const getStaffContracts = () =>
 export const createStaffContract = (data: any) => pb.collection('staff_contracts').create(data)
 export const updateStaffContract = (id: string, data: any) =>
   pb.collection('staff_contracts').update(id, data)
+export const deleteStaffContract = (id: string) => pb.collection('staff_contracts').delete(id)
+
+// Shift Rules
+export const getShiftRules = (departmentId?: string) => {
+  const opts: any = { sort: '-created' }
+  if (departmentId) opts.filter = `department="${departmentId}"`
+  return pb.collection('shift_rules').getFullList(opts)
+}
+export const createShiftRule = (data: any) => pb.collection('shift_rules').create(data)
+export const updateShiftRule = (id: string, data: any) =>
+  pb.collection('shift_rules').update(id, data)
+export const deleteShiftRule = (id: string) => pb.collection('shift_rules').delete(id)
+
+// Shifts
+export const getShifts = (cycleId?: string) => {
+  const opts: any = { sort: 'start_time', expand: 'user,sector' }
+  if (cycleId) opts.filter = `cycle="${cycleId}"`
+  return pb.collection('shifts').getFullList(opts)
+}
+export const generateShifts = (cycleId: string, departmentId: string) =>
+  pb.send('/backend/v1/escala/generate', {
+    method: 'POST',
+    body: JSON.stringify({ cycle_id: cycleId, department_id: departmentId }),
+    headers: { 'Content-Type': 'application/json' },
+  })
 
 // Timeoff Requests
 export const getTimeoffRequests = () =>

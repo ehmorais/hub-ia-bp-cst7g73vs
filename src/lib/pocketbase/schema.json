@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-06-19T16:13:36.393Z",
+  "generatedAt": "2026-06-19T16:38:20.449Z",
   "collections": [
     {
       "name": "users",
@@ -573,6 +573,128 @@
           "required": false,
           "system": false,
           "selectValues": ["pending", "fulfilled", "not_fulfilled"]
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": []
+    },
+    {
+      "name": "shift_rules",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != ''",
+        "delete": "@request.auth.id != ''"
+      },
+      "fields": [
+        {
+          "name": "name",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "rule_type",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": [
+            "min_staff",
+            "max_consecutive",
+            "professional_mix",
+            "max_hours",
+            "min_rest_hours",
+            "other"
+          ]
+        },
+        {
+          "name": "value",
+          "type": "number",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "department",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "departments"
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": []
+    },
+    {
+      "name": "shifts",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != ''",
+        "delete": "@request.auth.id != ''"
+      },
+      "fields": [
+        {
+          "name": "user",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "sector",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "hospital_sectors"
+        },
+        {
+          "name": "cycle",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "shift_cycles"
+        },
+        {
+          "name": "start_time",
+          "type": "date",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "end_time",
+          "type": "date",
+          "required": true,
+          "system": false
         },
         {
           "name": "created",

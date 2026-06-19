@@ -1,11 +1,22 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Clock, Building2, Users, Activity, FileText, CalendarOff } from 'lucide-react'
+import {
+  Clock,
+  Building2,
+  Users,
+  Activity,
+  FileText,
+  CalendarOff,
+  Settings,
+  Wand2,
+} from 'lucide-react'
 import { ShiftCycles } from './escala/ShiftCycles'
 import { Sectors } from './escala/Sectors'
 import { StaffContracts } from './escala/StaffContracts'
 import { StaffRoles } from './escala/StaffRoles'
 import { Timeoff } from './escala/Timeoff'
 import { Indicators } from './escala/Indicators'
+import { ShiftRules } from './escala/ShiftRules'
+import { AutoGenerate } from './escala/AutoGenerate'
 
 export interface EscalasManagementProps {
   departmentId?: string
@@ -22,29 +33,40 @@ export function EscalasManagement({ departmentId }: EscalasManagementProps) {
       </div>
 
       <Tabs defaultValue="ciclos" className="flex flex-col overflow-hidden">
-        <TabsList className="grid grid-cols-2 md:grid-cols-6 w-full h-auto min-h-12 py-1 mb-4 gap-1">
+        <TabsList className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 w-full h-auto min-h-12 py-1 mb-4 gap-1">
           <TabsTrigger value="ciclos" className="h-10 text-xs sm:text-sm">
-            <Clock className="h-4 w-4 mr-1 sm:mr-2" />
+            <Clock className="h-4 w-4 mr-1 sm:mr-2 hidden sm:block" />
             <span className="inline">Ciclos</span>
           </TabsTrigger>
           <TabsTrigger value="setores" className="h-10 text-xs sm:text-sm">
-            <Building2 className="h-4 w-4 mr-1 sm:mr-2" />
+            <Building2 className="h-4 w-4 mr-1 sm:mr-2 hidden sm:block" />
             <span className="inline">Setores</span>
           </TabsTrigger>
           <TabsTrigger value="colaboradores" className="h-10 text-xs sm:text-sm">
-            <Users className="h-4 w-4 mr-1 sm:mr-2" />
-            <span className="inline">Colaboradores</span>
+            <Users className="h-4 w-4 mr-1 sm:mr-2 hidden sm:block" />
+            <span className="inline">Colab.</span>
           </TabsTrigger>
           <TabsTrigger value="funcao" className="h-10 text-xs sm:text-sm">
-            <FileText className="h-4 w-4 mr-1 sm:mr-2" />
+            <FileText className="h-4 w-4 mr-1 sm:mr-2 hidden sm:block" />
             <span className="inline">Função</span>
           </TabsTrigger>
           <TabsTrigger value="folgas" className="h-10 text-xs sm:text-sm">
-            <CalendarOff className="h-4 w-4 mr-1 sm:mr-2" />
+            <CalendarOff className="h-4 w-4 mr-1 sm:mr-2 hidden sm:block" />
             <span className="inline">Folgas</span>
           </TabsTrigger>
+          <TabsTrigger value="regras" className="h-10 text-xs sm:text-sm">
+            <Settings className="h-4 w-4 mr-1 sm:mr-2 hidden sm:block" />
+            <span className="inline">Regras</span>
+          </TabsTrigger>
+          <TabsTrigger
+            value="gerar"
+            className="h-10 text-xs sm:text-sm bg-primary/5 text-primary data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+          >
+            <Wand2 className="h-4 w-4 mr-1 sm:mr-2 hidden sm:block" />
+            <span className="inline">Gerar</span>
+          </TabsTrigger>
           <TabsTrigger value="indicadores" className="h-10 text-xs sm:text-sm">
-            <Activity className="h-4 w-4 mr-1 sm:mr-2" />
+            <Activity className="h-4 w-4 mr-1 sm:mr-2 hidden sm:block" />
             <span className="inline">Indicadores</span>
           </TabsTrigger>
         </TabsList>
@@ -64,6 +86,12 @@ export function EscalasManagement({ departmentId }: EscalasManagementProps) {
           </TabsContent>
           <TabsContent value="folgas" className="mt-0">
             <Timeoff />
+          </TabsContent>
+          <TabsContent value="regras" className="mt-0">
+            <ShiftRules departmentId={departmentId} />
+          </TabsContent>
+          <TabsContent value="gerar" className="mt-0">
+            <AutoGenerate departmentId={departmentId} />
           </TabsContent>
           <TabsContent value="indicadores" className="mt-0">
             <Indicators />
