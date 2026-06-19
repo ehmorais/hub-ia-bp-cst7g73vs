@@ -22,32 +22,27 @@ import {
 } from '@/components/ui/table'
 import { ArrowLeft, Play, History, BrainCircuit, Folder, Blocks, Calendar } from 'lucide-react'
 import { useRealtime } from '@/hooks/use-realtime'
-import { EscalaAdminModal } from '@/components/EscalaAdminModal'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
 import { Bar, BarChart, XAxis, YAxis, ResponsiveContainer } from 'recharts'
 import { cn } from '@/lib/utils'
+import { EscalasManagement } from '@/components/EscalasManagement'
 
 export default function Department() {
   const { id } = useParams()
   const [department, setDepartment] = useState<any>(null)
   const [departmentTools, setDepartmentTools] = useState<any[]>([])
   const [projects, setProjects] = useState<any[]>([])
-  const [escalaProject, setEscalaProject] = useState<any>(null)
+  const [showEscalaAdmin, setShowEscalaAdmin] = useState(false)
 
   useEffect(() => {
     if (id) {
       pb.collection('departments').getOne(id).then(setDepartment).catch(console.error)
-
       pb.collection('ia_tools')
-        .getFullList({
-          filter: `associated_departments~"${id}"`,
-          sort: 'name',
-        })
+        .getFullList({ filter: `associated_departments~"${id}"`, sort: 'name' })
         .then(setDepartmentTools)
         .catch(console.error)
-
       pb.collection('projects')
         .getFullList({
           filter: `department="${id}" || associated_departments~"${id}"`,
@@ -59,7 +54,7 @@ export default function Department() {
   }, [id])
 
   useRealtime('projects', () => {
-    if (id) {
+    if (id)
       pb.collection('projects')
         .getFullList({
           filter: `department="${id}" || associated_departments~"${id}"`,
@@ -67,35 +62,52 @@ export default function Department() {
         })
         .then(setProjects)
         .catch(console.error)
-    }
   })
 
   useRealtime('ia_tools', () => {
-    if (id) {
+    if (id)
       pb.collection('ia_tools')
-        .getFullList({
-          filter: `associated_departments~"${id}"`,
-          sort: 'name',
-        })
+        .getFullList({ filter: `associated_departments~"${id}"`, sort: 'name' })
         .then(setDepartmentTools)
         .catch(console.error)
-    }
   })
 
-  const [adminModalOpen, setAdminModalOpen] = useState(false)
-
   if (!department) return null
+
+  // If inline admin mode is active
+  if (showEscalaAdmin) {
+    return (
+      <div className="container mx-auto p-4 md:p-8 space-y-8 max-w-7xl animate-fade-in-up">
+        <div className="flex items-center gap-4 border-b pb-4">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => setShowEscalaAdmin(false)}
+            className="shrink-0 bg-white"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <div className="flex items-center gap-3">
+            <div className="p-3 rounded-xl hidden sm:block bg-blue-100 text-blue-700">
+              <Calendar className="h-6 w-6" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+                Administração de Escalas
+              </h1>
+              <p className="text-muted-foreground">{department.name}</p>
+            </div>
+          </div>
+        </div>
+        <EscalasManagement departmentId={id} />
+      </div>
+    )
+  }
 
   const isProjetosGerais = department?.name?.includes('Projetos Gerais')
 
   return (
     <div className="container mx-auto p-4 md:p-8 space-y-8 max-w-7xl animate-fade-in-up">
-      <EscalaAdminModal
-        open={adminModalOpen}
-        onOpenChange={setAdminModalOpen}
-        project={escalaProject || department}
-      />
-
       {/* Header */}
       <div className="flex items-center gap-4">
         <Button variant="outline" size="icon" asChild className="shrink-0 bg-white">
@@ -120,7 +132,6 @@ export default function Department() {
           <BrainCircuit className="h-5 w-5 text-primary" />
           <h2 className="text-xl font-semibold">Modelos Disponíveis</h2>
         </div>
-
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           {isProjetosGerais && (
             <Card className="flex flex-col bg-white border-slate-200 overflow-hidden hover:shadow-md transition-shadow">
@@ -152,11 +163,10 @@ export default function Department() {
                   Ferramenta Administrativa
                 </p>
               </CardContent>
-
               <CardFooter className="pt-4 border-t bg-slate-50/50 mt-auto">
                 <Button
                   className="w-full gap-2 font-medium"
-                  onClick={() => setAdminModalOpen(true)}
+                  onClick={() => setShowEscalaAdmin(true)}
                 >
                   <Play className="h-4 w-4" fill="currentColor" />
                   Acessar Ferramenta
@@ -198,7 +208,6 @@ export default function Department() {
                   {tool.description || 'Sem descrição'}
                 </CardDescription>
               </CardHeader>
-
               <CardContent className="flex-1">
                 <div className="space-y-2">
                   <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">
@@ -239,7 +248,6 @@ export default function Department() {
                   </div>
                 </div>
               </CardContent>
-
               <CardFooter className="pt-4 border-t bg-slate-50/50">
                 <Button className="w-full gap-2 font-medium" asChild>
                   <Link to={(tool as any).path || `/ai/${tool.id}`}>
@@ -253,14 +261,12 @@ export default function Department() {
         </div>
       </div>
 
-      {/* History Table */}
       {/* Projects Grid */}
       <div className="space-y-4 pt-4">
         <div className="flex items-center gap-2 border-b pb-2">
           <Blocks className="h-5 w-5 text-primary" />
           <h2 className="text-xl font-semibold">Projetos</h2>
         </div>
-
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {projects.map((proj) => (
             <Card
@@ -290,7 +296,7 @@ export default function Department() {
                 <Button
                   className="w-full gap-2 font-medium bg-white"
                   variant="outline"
-                  onClick={() => setEscalaProject(proj)}
+                  onClick={() => setShowEscalaAdmin(true)}
                 >
                   Administrar Escalas
                 </Button>
@@ -302,19 +308,11 @@ export default function Department() {
           ))}
           {projects.length === 0 && (
             <div className="col-span-full p-8 text-center text-muted-foreground border rounded-lg bg-slate-50">
-              Nenhum projeto associado a este departamento.
+              Nenhum projeto associado.
             </div>
           )}
         </div>
       </div>
-
-      {escalaProject && (
-        <EscalaAdminModal
-          open={!!escalaProject}
-          onOpenChange={(open) => !open && setEscalaProject(null)}
-          project={escalaProject}
-        />
-      )}
 
       {/* History Table */}
       <div className="space-y-4 pt-4">
@@ -322,7 +320,6 @@ export default function Department() {
           <History className="h-5 w-5 text-slate-500" />
           <h2 className="text-xl font-semibold">Histórico Recente</h2>
         </div>
-
         <Card className="border-slate-200 bg-white">
           <Table>
             <TableHeader>
