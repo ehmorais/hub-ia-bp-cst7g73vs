@@ -10,6 +10,8 @@ import {
   Wand2,
   Calendar,
   Layers,
+  FileSignature,
+  Briefcase,
 } from 'lucide-react'
 import { ShiftCycles } from './escala/ShiftCycles'
 import { Sectors } from './escala/Sectors'
@@ -22,6 +24,7 @@ import { ShiftRules } from './escala/ShiftRules'
 import { StaffProfiles } from './escala/StaffProfiles'
 import { AutoGenerate } from './escala/AutoGenerate'
 import { ScalePlanner } from './escala/ScalePlanner'
+import { DepartmentStaffList } from './escala/DepartmentStaffList'
 import { cn } from '@/lib/utils'
 
 export interface EscalasManagementProps {
@@ -132,12 +135,19 @@ export function EscalasManagement({ departmentId }: EscalasManagementProps) {
             <Building2 className="h-4 w-4 mr-1 sm:mr-2 hidden sm:block" />
             <span className="inline">Setores</span>
           </TabsTrigger>
-          <TabsTrigger value="contratos" className="h-10 text-xs sm:text-sm flex-1 sm:flex-none">
+          <TabsTrigger
+            value="colaboradores"
+            className="h-10 text-xs sm:text-sm flex-1 sm:flex-none"
+          >
             <Users className="h-4 w-4 mr-1 sm:mr-2 hidden sm:block" />
+            <span className="inline">Colaboradores</span>
+          </TabsTrigger>
+          <TabsTrigger value="contratos" className="h-10 text-xs sm:text-sm flex-1 sm:flex-none">
+            <FileSignature className="h-4 w-4 mr-1 sm:mr-2 hidden sm:block" />
             <span className="inline">Contratos</span>
           </TabsTrigger>
           <TabsTrigger value="funcao" className="h-10 text-xs sm:text-sm flex-1 sm:flex-none">
-            <FileText className="h-4 w-4 mr-1 sm:mr-2 hidden sm:block" />
+            <Briefcase className="h-4 w-4 mr-1 sm:mr-2 hidden sm:block" />
             <span className="inline">Função</span>
           </TabsTrigger>
           <TabsTrigger value="folgas" className="h-10 text-xs sm:text-sm flex-1 sm:flex-none">
@@ -174,6 +184,9 @@ export function EscalasManagement({ departmentId }: EscalasManagementProps) {
           </TabsContent>
           <TabsContent value="setores" className="mt-0">
             <Sectors departmentId={departmentId} />
+          </TabsContent>
+          <TabsContent value="colaboradores" className="mt-0">
+            <DepartmentStaffList departmentId={departmentId} />
           </TabsContent>
           <TabsContent value="contratos" className="mt-0">
             <StaffContracts departmentId={departmentId} />
