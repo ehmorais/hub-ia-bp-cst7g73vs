@@ -147,7 +147,7 @@ export default function Department() {
             <Blocks className="h-5 w-5 text-primary" />
             <h2 className="text-xl font-semibold">Módulos Integrados</h2>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
             <Card className="flex flex-col bg-white border-slate-200 overflow-hidden hover:shadow-md transition-shadow">
               <CardHeader className="pb-4">
                 <div className="flex justify-between items-start mb-2">
@@ -167,10 +167,7 @@ export default function Department() {
                 </CardDescription>
               </CardHeader>
               <CardFooter className="pt-3 border-t bg-slate-50/50 mt-auto flex flex-col gap-2">
-                <Button
-                  className="w-full gap-2 font-medium bg-green-600 hover:bg-green-700 text-white"
-                  asChild
-                >
+                <Button className="w-full gap-2 font-medium" asChild>
                   <Link to="/admin#escalas">Acessar Módulo de Escalas</Link>
                 </Button>
               </CardFooter>
