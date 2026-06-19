@@ -32,7 +32,12 @@ export function ShiftRules({ departmentId }: { departmentId?: string }) {
 
   const loadData = async () => {
     if (departmentId) {
-      getShiftRules(departmentId).then(setRules)
+      getShiftRules(departmentId)
+        .then(setRules)
+        .catch((err) => {
+          console.error(err)
+          setRules([])
+        })
     }
   }
 

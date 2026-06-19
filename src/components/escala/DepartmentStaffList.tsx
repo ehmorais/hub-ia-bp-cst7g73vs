@@ -79,13 +79,14 @@ export function DepartmentStaffList({ departmentId }: { departmentId: string }) 
   })
 
   const loadData = async () => {
-    Promise.all([
-      getUsers(),
-      getHospitalSectors(departmentId),
-      getStaffRoles(),
-      getStaffProfiles(),
-      getShiftRules(departmentId),
-    ]).then(([u, s, r, p, sr]) => {
+    try {
+      const [u, s, r, p, sr] = await Promise.all([
+        getUsers().catch(() => []),
+        getHospitalSectors(departmentId).catch(() => []),
+        getStaffRoles().catch(() => []),
+        getStaffProfiles().catch(() => []),
+        getShiftRules(departmentId).catch(() => []),
+      ])
       const sectorIds = s.map((sec: any) => sec.id)
       setUsers(
         u.filter((user: any) => !user.default_sector || sectorIds.includes(user.default_sector)),
@@ -94,7 +95,9 @@ export function DepartmentStaffList({ departmentId }: { departmentId: string }) 
       setRoles(r)
       setProfiles(p)
       setRules(sr)
-    })
+    } catch (e) {
+      console.error('Failed to load staff list data', e)
+    }
   }
 
   useEffect(() => {
@@ -266,6 +269,11 @@ export function DepartmentStaffList({ departmentId }: { departmentId: string }) 
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Sem perfil</SelectItem>
+                    {profiles.length === 0 && (
+                      <SelectItem value="empty" disabled>
+                        Nenhum perfil cadastrado
+                      </SelectItem>
+                    )}
                     {profiles.map((p) => (
                       <SelectItem key={p.id} value={p.id}>
                         {p.name}
@@ -282,8 +290,10 @@ export function DepartmentStaffList({ departmentId }: { departmentId: string }) 
                 <Label>Regras Associadas (Exceções ou Adições)</Label>
                 <ScrollArea className="h-32 border rounded-md p-2 bg-slate-50">
                   {rules.length === 0 ? (
-                    <p className="text-xs text-slate-500 p-2 text-center">
+                    <p className="text-xs text-slate-500 p-4 text-center leading-relaxed">
                       Nenhuma regra cadastrada neste departamento.
+                      <br />
+                      Por favor, adicione regras na área de administração de escalas.
                     </p>
                   ) : (
                     rules.map((rule) => (

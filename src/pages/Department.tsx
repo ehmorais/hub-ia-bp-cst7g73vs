@@ -40,18 +40,29 @@ export default function Department() {
 
   useEffect(() => {
     if (id) {
-      pb.collection('departments').getOne(id).then(setDepartment).catch(console.error)
+      pb.collection('departments')
+        .getOne(id)
+        .then(setDepartment)
+        .catch((e) => console.error('Error loading department:', e))
+
       pb.collection('ia_tools')
         .getFullList({ filter: `associated_departments~"${id}"`, sort: 'name' })
         .then(setDepartmentTools)
-        .catch(console.error)
+        .catch((e) => {
+          console.error('Error loading tools:', e)
+          setDepartmentTools([])
+        })
+
       pb.collection('projects')
         .getFullList({
           filter: `department="${id}" || associated_departments~"${id}"`,
           sort: 'sort_order,name',
         })
         .then(setProjects)
-        .catch(console.error)
+        .catch((e) => {
+          console.error('Error loading projects:', e)
+          setProjects([])
+        })
     }
   }, [id])
 
@@ -63,7 +74,7 @@ export default function Department() {
           sort: 'sort_order,name',
         })
         .then(setProjects)
-        .catch(console.error)
+        .catch((e) => console.error('Error on projects realtime:', e))
   })
 
   useRealtime('ia_tools', () => {
@@ -71,7 +82,7 @@ export default function Department() {
       pb.collection('ia_tools')
         .getFullList({ filter: `associated_departments~"${id}"`, sort: 'name' })
         .then(setDepartmentTools)
-        .catch(console.error)
+        .catch((e) => console.error('Error on tools realtime:', e))
   })
 
   if (!department) return null

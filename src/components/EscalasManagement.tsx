@@ -19,6 +19,7 @@ import { ShiftTypes } from './escala/ShiftTypes'
 import { Timeoff } from './escala/Timeoff'
 import { Indicators } from './escala/Indicators'
 import { ShiftRules } from './escala/ShiftRules'
+import { StaffProfiles } from './escala/StaffProfiles'
 import { AutoGenerate } from './escala/AutoGenerate'
 import { ScalePlanner } from './escala/ScalePlanner'
 import { cn } from '@/lib/utils'
@@ -118,7 +119,7 @@ export function EscalasManagement({ departmentId }: EscalasManagementProps) {
       </div>
 
       <Tabs defaultValue="ciclos" className="flex flex-col overflow-hidden">
-        <TabsList className="grid grid-cols-3 md:grid-cols-5 lg:grid-cols-9 w-full h-auto min-h-12 py-1 mb-4 gap-1">
+        <TabsList className="grid grid-cols-3 md:grid-cols-5 lg:grid-cols-10 w-full h-auto min-h-12 py-1 mb-4 gap-1">
           <TabsTrigger value="ciclos" className="h-10 text-xs sm:text-sm">
             <Clock className="h-4 w-4 mr-1 sm:mr-2 hidden sm:block" />
             <span className="inline">Ciclos</span>
@@ -146,6 +147,10 @@ export function EscalasManagement({ departmentId }: EscalasManagementProps) {
           <TabsTrigger value="regras" className="h-10 text-xs sm:text-sm">
             <Settings className="h-4 w-4 mr-1 sm:mr-2 hidden sm:block" />
             <span className="inline">Regras</span>
+          </TabsTrigger>
+          <TabsTrigger value="perfis" className="h-10 text-xs sm:text-sm">
+            <Users className="h-4 w-4 mr-1 sm:mr-2 hidden sm:block" />
+            <span className="inline">Perfis</span>
           </TabsTrigger>
           <TabsTrigger
             value="planejamento"
@@ -181,6 +186,9 @@ export function EscalasManagement({ departmentId }: EscalasManagementProps) {
           </TabsContent>
           <TabsContent value="regras" className="mt-0">
             <ShiftRules departmentId={departmentId} />
+          </TabsContent>
+          <TabsContent value="perfis" className="mt-0">
+            <StaffProfiles departmentId={departmentId} />
           </TabsContent>
           <TabsContent value="planejamento" className="mt-0">
             <ScalePlanner departmentId={departmentId} />
