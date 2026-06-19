@@ -2,14 +2,7 @@ import { useEffect, useState } from 'react'
 import pb from '@/lib/pocketbase/client'
 import { useParams, Link } from 'react-router-dom'
 import { RECENT_HISTORY } from '@/lib/mock-data'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  CardFooter,
-} from '@/components/ui/card'
+import { Card, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -20,12 +13,10 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { ArrowLeft, Play, History, BrainCircuit, Folder, Blocks, Calendar } from 'lucide-react'
+import { ArrowLeft, Play, History, BrainCircuit, Folder, Blocks } from 'lucide-react'
 import { useRealtime } from '@/hooks/use-realtime'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
-import { Bar, BarChart, XAxis, YAxis, ResponsiveContainer } from 'recharts'
 import { cn } from '@/lib/utils'
 
 export default function Department() {
@@ -33,7 +24,6 @@ export default function Department() {
   const [department, setDepartment] = useState<any>(null)
   const [departmentTools, setDepartmentTools] = useState<any[]>([])
   const [projects, setProjects] = useState<any[]>([])
-  const [todayShifts, setTodayShifts] = useState<any[]>([])
 
   useEffect(() => {
     if (id) {
@@ -60,35 +50,8 @@ export default function Department() {
           console.error('Error loading projects:', e)
           setProjects([])
         })
-
-      const today = new Date().toISOString().split('T')[0]
-      pb.collection('shifts')
-        .getFullList({
-          filter: `sector.department="${id}" && start_time >= "${today} 00:00:00" && start_time <= "${today} 23:59:59"`,
-          expand: 'user,sector',
-          sort: 'start_time',
-        })
-        .then(setTodayShifts)
-        .catch((e) => {
-          console.error('Error loading shifts:', e)
-          setTodayShifts([])
-        })
     }
   }, [id])
-
-  useRealtime('shifts', () => {
-    if (id) {
-      const today = new Date().toISOString().split('T')[0]
-      pb.collection('shifts')
-        .getFullList({
-          filter: `sector.department="${id}" && start_time >= "${today} 00:00:00" && start_time <= "${today} 23:59:59"`,
-          expand: 'user,sector',
-          sort: 'start_time',
-        })
-        .then(setTodayShifts)
-        .catch(() => {})
-    }
-  })
 
   useRealtime('projects', () => {
     if (id)
@@ -113,7 +76,6 @@ export default function Department() {
 
   return (
     <div className="container mx-auto p-4 md:p-8 space-y-8 max-w-7xl animate-fade-in-up">
-      {/* Header */}
       <div className="flex items-center gap-4">
         <Button variant="outline" size="icon" asChild className="shrink-0 bg-white">
           <Link to="/dashboard">
@@ -131,91 +93,7 @@ export default function Department() {
         </div>
       </div>
 
-      {/* Projetos Gerais Integration */}
-      {department.name === 'Projetos Gerais HBPSCS' && (
-        <div className="space-y-4 pt-2">
-          <div className="flex items-center gap-2 border-b pb-2">
-            <Blocks className="h-5 w-5 text-primary" />
-            <h2 className="text-xl font-semibold">Módulos Integrados</h2>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 items-start">
-            <Card className="flex flex-col bg-white border-slate-200 overflow-hidden hover:shadow-md transition-shadow">
-              <CardHeader className="pb-4">
-                <div className="flex justify-between items-start mb-2">
-                  <Badge
-                    variant="outline"
-                    className="bg-primary/5 text-primary border-primary/20 uppercase text-[10px]"
-                  >
-                    Gestão Integrada
-                  </Badge>
-                </div>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Calendar className="h-5 w-5 text-primary" />
-                  Escala de Colaboradores
-                </CardTitle>
-                <CardDescription className="line-clamp-2 h-10 mt-1">
-                  Módulo centralizado para gestão de escalas, plantões e regras de dimensionamento.
-                </CardDescription>
-              </CardHeader>
-              <CardFooter className="pt-3 border-t bg-slate-50/50 mt-auto flex justify-start">
-                <Button
-                  className="gap-2 font-medium bg-primary hover:bg-primary/90 text-primary-foreground"
-                  asChild
-                >
-                  <Link to="/admin#escalas">Acessar Módulo de Escalas</Link>
-                </Button>
-              </CardFooter>
-            </Card>
-          </div>
-        </div>
-      )}
-
-      {/* Operational View: Today's Shifts */}
       <div className="space-y-4 pt-2">
-        <div className="flex items-center gap-2 border-b pb-2">
-          <Calendar className="h-5 w-5 text-primary" />
-          <h2 className="text-xl font-semibold">Plantões do Dia (Operacional)</h2>
-        </div>
-        <Card className="border-slate-200 bg-white">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-slate-50/80 hover:bg-slate-50/80">
-                <TableHead>Colaborador</TableHead>
-                <TableHead>Setor</TableHead>
-                <TableHead>Horário</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {todayShifts.map((shift) => (
-                <TableRow key={shift.id}>
-                  <TableCell className="font-medium text-slate-800">
-                    {shift.expand?.user?.name || shift.expand?.user?.email}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="font-normal text-slate-600">
-                      {shift.expand?.sector?.name || 'N/A'}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-slate-600">
-                    {format(new Date(shift.start_time), 'HH:mm')} -{' '}
-                    {format(new Date(shift.end_time), 'HH:mm')}
-                  </TableCell>
-                </TableRow>
-              ))}
-              {todayShifts.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={3} className="text-center text-muted-foreground py-8">
-                    Nenhum plantão agendado para hoje neste departamento.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </Card>
-      </div>
-
-      {/* Tools Grid */}
-      <div className="space-y-4">
         <div className="flex items-center gap-2 border-b pb-2">
           <BrainCircuit className="h-5 w-5 text-primary" />
           <h2 className="text-xl font-semibold">Modelos Disponíveis</h2>
@@ -231,10 +109,10 @@ export default function Department() {
                   <Badge
                     variant="outline"
                     className={cn(
-                      'bg-slate-50 uppercase text-[10px]',
+                      'uppercase text-[10px]',
                       tool.status === 'active'
-                        ? 'text-primary border-primary/20 bg-primary/5'
-                        : 'text-amber-600 border-amber-200 bg-amber-50',
+                        ? 'bg-primary/5 text-primary border-primary/20'
+                        : 'bg-amber-50 text-amber-700 border-amber-200',
                     )}
                   >
                     {tool.status === 'active' ? 'Ativo' : tool.status}
@@ -251,55 +129,12 @@ export default function Department() {
                   </div>
                 </div>
                 <CardTitle className="text-xl">{tool.name}</CardTitle>
-                <CardDescription className="line-clamp-2 h-10">
+                <CardDescription className="line-clamp-2 mt-1">
                   {tool.description || 'Sem descrição'}
                 </CardDescription>
               </CardHeader>
-              <CardContent className="flex-1">
-                <div className="space-y-2">
-                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">
-                    Uso nos últimos 7 dias
-                  </p>
-                  <div className="h-[80px] w-full mt-2">
-                    <ChartContainer
-                      config={{ calls: { label: 'Interações', color: 'hsl(var(--primary))' } }}
-                      className="h-full w-full"
-                    >
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart
-                          data={
-                            tool.usageData || [
-                              { day: 'Seg', calls: 10 },
-                              { day: 'Ter', calls: 15 },
-                              { day: 'Qua', calls: 8 },
-                              { day: 'Qui', calls: 20 },
-                              { day: 'Sex', calls: 25 },
-                              { day: 'Sab', calls: 5 },
-                              { day: 'Dom', calls: 2 },
-                            ]
-                          }
-                          margin={{ top: 0, right: 0, left: -20, bottom: 0 }}
-                        >
-                          <XAxis dataKey="day" fontSize={10} tickLine={false} axisLine={false} />
-                          <YAxis fontSize={10} tickLine={false} axisLine={false} hide />
-                          <ChartTooltip content={<ChartTooltipContent />} />
-                          <Bar
-                            dataKey="calls"
-                            fill="var(--color-calls)"
-                            radius={[2, 2, 0, 0]}
-                            opacity={0.8}
-                          />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </ChartContainer>
-                  </div>
-                </div>
-              </CardContent>
-              <CardFooter className="pt-4 border-t bg-slate-50/50 flex justify-start">
-                <Button
-                  className="gap-2 font-medium bg-primary hover:bg-primary/90 text-primary-foreground"
-                  asChild
-                >
+              <CardFooter className="pt-4 border-t bg-slate-50/50 mt-auto flex justify-start">
+                <Button className="gap-2 font-medium" asChild>
                   <Link to={(tool as any).path || `/ai/${tool.id}`}>
                     <Play className="h-4 w-4" fill="currentColor" />
                     Acessar Ferramenta
@@ -308,10 +143,14 @@ export default function Department() {
               </CardFooter>
             </Card>
           ))}
+          {departmentTools.length === 0 && (
+            <div className="col-span-full p-8 text-center text-muted-foreground border rounded-lg bg-slate-50">
+              Nenhuma ferramenta associada.
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Projects Grid */}
       <div className="space-y-4 pt-4">
         <div className="flex items-center gap-2 border-b pb-2">
           <Blocks className="h-5 w-5 text-primary" />
@@ -338,7 +177,7 @@ export default function Department() {
                   </Badge>
                 </div>
                 <CardTitle className="text-lg">{proj.name}</CardTitle>
-                <CardDescription className="line-clamp-2 h-10 mt-1">
+                <CardDescription className="line-clamp-2 mt-1">
                   {proj.description || 'Sem descrição'}
                 </CardDescription>
               </CardHeader>
@@ -357,7 +196,6 @@ export default function Department() {
         </div>
       </div>
 
-      {/* History Table */}
       <div className="space-y-4 pt-4">
         <div className="flex items-center gap-2 border-b pb-2">
           <History className="h-5 w-5 text-slate-500" />

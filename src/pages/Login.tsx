@@ -4,7 +4,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { CheckCircle2, Loader2, XCircle } from 'lucide-react'
+import { CheckCircle2, Loader2, XCircle, BrainCircuit } from 'lucide-react'
 import pb from '@/lib/pocketbase/client'
 import { cn } from '@/lib/utils'
 
@@ -68,11 +68,9 @@ export default function Login() {
         <Card className="w-full max-w-md border-slate-200/60 shadow-xl bg-white/80 backdrop-blur-sm animate-fade-in">
           <CardHeader className="text-center space-y-2 pb-6">
             <div className="mx-auto mb-6 flex justify-center w-full px-4">
-              <img
-                src="https://pub-2059a4c0a5bc4bfaad3c4c9b31d04130.r2.dev/projects/11751/1cd0cd6b-ccbd-4ed2-9642-e56ef382b6be.jpg"
-                alt="Logo Beneficência Portuguesa"
-                className="h-20 md:h-24 w-auto max-w-[240px] object-contain mix-blend-multiply"
-              />
+              <div className="bg-primary text-primary-foreground p-3 rounded-xl shadow-sm">
+                <BrainCircuit className="h-10 w-10" />
+              </div>
             </div>
             <CardTitle className="text-2xl font-bold tracking-tight text-slate-900">
               All Systems Go
@@ -136,11 +134,9 @@ export default function Login() {
       <Card className="w-full max-w-md border-slate-200/60 shadow-xl bg-white/80 backdrop-blur-sm animate-fade-in">
         <CardHeader className="text-center space-y-2 pb-6">
           <div className="mx-auto mb-6 flex justify-center w-full px-4">
-            <img
-              src="https://pub-2059a4c0a5bc4bfaad3c4c9b31d04130.r2.dev/projects/11751/1cd0cd6b-ccbd-4ed2-9642-e56ef382b6be.jpg"
-              alt="Logo Beneficência Portuguesa"
-              className="h-20 md:h-24 w-auto max-w-[240px] object-contain mix-blend-multiply"
-            />
+            <div className="bg-primary text-primary-foreground p-3 rounded-xl shadow-sm">
+              <BrainCircuit className="h-10 w-10" />
+            </div>
           </div>
           <CardTitle className="text-2xl font-bold tracking-tight text-slate-900">
             Acesso Restrito

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Outlet, useLocation, Link, useNavigate } from 'react-router-dom'
 import { SidebarProvider, SidebarInset, SidebarTrigger } from '@/components/ui/sidebar'
 import { AppSidebar } from './AppSidebar'
-import { Bell, Search, User, AlertCircle, Activity } from 'lucide-react'
+import { Bell, Search, User, Activity, BrainCircuit } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -111,7 +111,6 @@ export default function Layout() {
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset className="flex flex-col min-h-screen bg-slate-50/50">
-        {/* Header */}
         <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6 shadow-sm">
           <div className="flex items-center gap-3">
             <SidebarTrigger className="shrink-0" />
@@ -119,19 +118,10 @@ export default function Layout() {
               to="/dashboard"
               className="flex items-center gap-2 transition-opacity hover:opacity-80 shrink-0"
             >
-              <img
-                src="https://pub-2059a4c0a5bc4bfaad3c4c9b31d04130.r2.dev/projects/11751/1cd0cd6b-ccbd-4ed2-9642-e56ef382b6be.jpg"
-                alt="Logo Beneficência Portuguesa"
-                className="h-9 md:h-10 w-auto max-w-[140px] object-contain mix-blend-multiply"
-              />
-              <div className="hidden sm:flex flex-col">
-                <span className="font-bold text-sm leading-tight text-primary">
-                  Beneficência Portuguesa
-                </span>
-                <span className="text-[11px] text-muted-foreground font-medium leading-none">
-                  São Caetano do Sul
-                </span>
+              <div className="bg-primary text-primary-foreground p-1.5 rounded-lg">
+                <BrainCircuit className="h-5 w-5" />
               </div>
+              <span className="font-bold text-lg hidden sm:inline-block">Hub IA BP</span>
             </Link>
           </div>
           <div className="flex-1">
@@ -237,35 +227,9 @@ export default function Layout() {
           </div>
         </header>
 
-        {/* Main Content Area */}
         <main className="flex-1 overflow-auto animate-fade-in">
           <Outlet />
         </main>
-
-        {/* Global Footer / Disclaimer */}
-        <footer className="mt-auto border-t bg-white p-4">
-          <div className="container mx-auto flex flex-col lg:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-2 text-sm text-primary bg-primary/5 px-4 py-2 rounded-md border border-primary/20 max-w-4xl">
-              <AlertCircle className="h-4 w-4 shrink-0" />
-              <p className="font-medium leading-tight">
-                <strong>Atenção Institucional:</strong> As respostas da IA são geradas
-                automaticamente e devem ser obrigatoriamente validadas por profissionais de saúde
-                habilitados da Beneficência Portuguesa.
-              </p>
-            </div>
-            <div className="flex items-center gap-3 text-sm text-muted-foreground shrink-0">
-              <Button
-                variant="link"
-                size="sm"
-                className="text-muted-foreground hover:text-primary p-0 h-auto"
-              >
-                Suporte Técnico
-              </Button>
-              <span>•</span>
-              <span className="font-medium text-slate-600">HBPSCS v1.0.0</span>
-            </div>
-          </div>
-        </footer>
       </SidebarInset>
     </SidebarProvider>
   )
