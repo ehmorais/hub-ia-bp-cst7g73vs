@@ -79,4 +79,6 @@ export const deleteTimeoffRequest = (id: string) => pb.collection('timeoff_reque
 // Users
 export const getUsers = () =>
   pb.collection('users').getFullList({ sort: 'name', expand: 'staff_role,default_sector' })
+export const createUser = (data: any) => pb.collection('users').create(data)
 export const updateUser = (id: string, data: any) => pb.collection('users').update(id, data)
+export const deleteUser = (id: string) => pb.collection('users').delete(id)
