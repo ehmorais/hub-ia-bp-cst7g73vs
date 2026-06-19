@@ -334,7 +334,7 @@ export default function Department() {
           <Settings2 className="h-5 w-5 text-primary" />
           <h2 className="text-xl font-semibold">Regras Específicas</h2>
         </div>
-        <ShiftRules departmentId={id} />
+        <ShiftRules departmentId={id} readOnly={true} />
       </div>
 
       {/* History Table */}

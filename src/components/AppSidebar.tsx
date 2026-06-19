@@ -166,6 +166,26 @@ export function AppSidebar() {
         </SidebarGroup>
 
         <SidebarGroup>
+          <SidebarGroupLabel>Administração de Escalas</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={location.pathname === '/admin/regras'}
+                  tooltip="Regras"
+                >
+                  <Link to="/admin/regras">
+                    <Calendar className="h-4 w-4" />
+                    <span>Regras</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
           <SidebarGroupLabel>Departamentos</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
