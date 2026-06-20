@@ -201,7 +201,7 @@ export default function Department() {
               {departmentTools.map((tool) => (
                 <Card
                   key={tool.id}
-                  className="group hover:shadow-soft transition-all duration-300 border-border/60 bg-card flex flex-col overflow-hidden rounded-xl"
+                  className="group shadow-sm hover:shadow-soft transition-all duration-300 border-border/60 bg-card flex flex-col overflow-hidden rounded-xl"
                 >
                   <CardHeader className="p-6 pb-4 flex-1">
                     <div className="flex justify-between items-start gap-4 mb-2">
@@ -212,7 +212,7 @@ export default function Department() {
                         className={cn(
                           'shrink-0 font-medium rounded-md px-2.5 py-0.5 shadow-none',
                           tool.status === 'active'
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200/50 hover:bg-emerald-50'
+                            ? 'bg-primary/10 text-primary border-primary/20 hover:bg-primary/10'
                             : 'bg-muted text-muted-foreground border-transparent',
                         )}
                         variant="outline"
@@ -271,7 +271,7 @@ export default function Department() {
               {projects.map((proj) => (
                 <Card
                   key={proj.id}
-                  className="group hover:shadow-soft transition-all duration-300 border-border/60 bg-card flex flex-col rounded-xl"
+                  className="group shadow-sm hover:shadow-soft transition-all duration-300 border-border/60 bg-card flex flex-col rounded-xl"
                 >
                   <CardHeader className="p-6 pb-4 flex-1">
                     <div className="flex justify-between items-start gap-4 mb-2">
@@ -282,7 +282,7 @@ export default function Department() {
                         className={cn(
                           'shrink-0 font-medium rounded-md px-2.5 py-0.5 shadow-none',
                           proj.status === 'active'
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200/50 hover:bg-emerald-50'
+                            ? 'bg-primary/10 text-primary border-primary/20 hover:bg-primary/10'
                             : 'bg-muted text-muted-foreground border-transparent',
                         )}
                         variant="outline"
@@ -337,7 +337,7 @@ export default function Department() {
             {sectors.map((sector) => (
               <Card
                 key={sector.id}
-                className="border-border/60 hover:shadow-soft transition-all duration-300 overflow-hidden bg-card rounded-xl"
+                className="shadow-sm border-border/60 hover:shadow-soft transition-all duration-300 overflow-hidden bg-card rounded-xl"
               >
                 <div className="h-1.5 w-full bg-gradient-to-r from-primary/80 to-primary/30" />
                 <CardHeader className="p-5 pb-3">
@@ -455,7 +455,7 @@ export default function Department() {
                           {log.token_usage > 0 && (
                             <Badge
                               variant="secondary"
-                              className="bg-emerald-50 text-emerald-700 hover:bg-emerald-50 border-transparent text-[10px] px-1.5 py-0 h-5"
+                              className="bg-primary/10 text-primary hover:bg-primary/20 border-transparent text-[10px] px-1.5 py-0 h-5"
                             >
                               <Zap className="w-3 h-3 mr-1" />
                               {log.token_usage}

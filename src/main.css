@@ -6,10 +6,10 @@
 
 @layer base {
   :root {
-    --background: 164 20% 99%;
+    --background: 210 40% 98%; /* slate-50 */
     --foreground: 240 10% 12%;
 
-    --card: 0 0% 100%;
+    --card: 0 0% 100%; /* white */
     --card-foreground: 240 10% 12%;
 
     --popover: 0 0% 100%;
@@ -19,14 +19,14 @@
     --primary: 164 86% 16%;
     --primary-foreground: 0 0% 100%;
 
-    /* Muted Emerald for secondary */
-    --secondary: 164 20% 96%;
+    /* Light slate for secondary */
+    --secondary: 210 40% 96.1%; /* slate-100 */
     --secondary-foreground: 164 86% 16%;
 
     --muted: 240 5% 96%;
     --muted-foreground: 240 5% 45%;
 
-    --accent: 164 20% 96%;
+    --accent: 210 40% 96.1%;
     --accent-foreground: 164 86% 16%;
 
     --destructive: 0 84.2% 60.2%;
@@ -38,14 +38,14 @@
 
     --radius: 0.75rem;
 
-    /* Deep Emerald Sidebar */
-    --sidebar-background: 166 91% 9%; /* Emerald 950 */
-    --sidebar-foreground: 166 20% 85%;
+    /* Clean White Sidebar */
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 240 10% 12%;
     --sidebar-primary: 164 86% 16%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 166 80% 14%;
-    --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 166 91% 12%;
+    --sidebar-accent: 240 5% 96%;
+    --sidebar-accent-foreground: 164 86% 16%;
+    --sidebar-border: 240 6% 90%;
     --sidebar-ring: 164 86% 16%;
   }
 

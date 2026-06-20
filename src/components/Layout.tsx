@@ -31,8 +31,8 @@ export default function Layout() {
   return (
     <SidebarProvider>
       <AppSidebar />
-      <SidebarInset className="flex flex-col min-h-screen bg-muted/30">
-        <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b border-border/40 bg-background/90 backdrop-blur-xl px-4 md:px-8 shadow-sm transition-all">
+      <SidebarInset className="flex flex-col min-h-screen bg-background">
+        <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b border-border/40 bg-card/90 backdrop-blur-xl px-4 md:px-8 shadow-sm transition-all">
           <div className="flex items-center gap-4">
             <SidebarTrigger className="shrink-0 text-muted-foreground hover:text-foreground transition-colors" />
             <div className="h-5 w-px bg-border/60 mx-1 hidden md:block" />

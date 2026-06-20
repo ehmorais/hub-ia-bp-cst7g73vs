@@ -52,16 +52,16 @@ export function AppSidebar() {
   })
 
   return (
-    <Sidebar className="border-r-0 shadow-2xl bg-white">
-      <SidebarHeader className="p-6 min-h-[5rem] flex items-center justify-center border-b border-emerald-900/10">
-        <span className="font-bold text-[11px] tracking-[0.25em] uppercase text-emerald-950/50">
+    <Sidebar className="border-r border-border shadow-sm bg-sidebar">
+      <SidebarHeader className="p-6 min-h-[5rem] flex items-center justify-center border-b border-border/50">
+        <span className="font-bold text-[11px] tracking-[0.25em] uppercase text-muted-foreground">
           Menu Principal
         </span>
       </SidebarHeader>
 
       <SidebarContent className="px-3 py-6 gap-8">
         <SidebarGroup>
-          <SidebarGroupLabel className="text-emerald-950/50 text-xs tracking-wider font-semibold mb-3 px-2">
+          <SidebarGroupLabel className="text-muted-foreground text-xs tracking-wider font-semibold mb-3 px-2">
             Navegação
           </SidebarGroupLabel>
           <SidebarGroupContent>
@@ -71,7 +71,7 @@ export function AppSidebar() {
                   asChild
                   isActive={location.pathname === '/' || location.pathname === '/dashboard'}
                   tooltip="Dashboard"
-                  className="h-10 transition-all duration-200 data-[active=true]:bg-emerald-50 data-[active=true]:text-emerald-950 data-[active=true]:font-medium text-emerald-950/70 hover:text-emerald-950 hover:bg-emerald-50/50 rounded-lg px-3"
+                  className="h-10 transition-all duration-200 data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:font-medium text-muted-foreground hover:text-foreground hover:bg-secondary rounded-lg px-3"
                 >
                   <Link to="/" className="flex items-center gap-3">
                     <LayoutDashboard className="h-4 w-4" />
@@ -84,7 +84,7 @@ export function AppSidebar() {
                   asChild
                   isActive={location.pathname === '/admin'}
                   tooltip="Administração"
-                  className="h-10 transition-all duration-200 data-[active=true]:bg-emerald-50 data-[active=true]:text-emerald-950 data-[active=true]:font-medium text-emerald-950/70 hover:text-emerald-950 hover:bg-emerald-50/50 rounded-lg px-3"
+                  className="h-10 transition-all duration-200 data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:font-medium text-muted-foreground hover:text-foreground hover:bg-secondary rounded-lg px-3"
                 >
                   <Link to="/admin" className="flex items-center gap-3">
                     <Settings className="h-4 w-4" />
@@ -97,7 +97,7 @@ export function AppSidebar() {
         </SidebarGroup>
 
         <SidebarGroup>
-          <SidebarGroupLabel className="text-emerald-950/50 text-xs tracking-wider font-semibold mb-3 px-2">
+          <SidebarGroupLabel className="text-muted-foreground text-xs tracking-wider font-semibold mb-3 px-2">
             Departamentos
           </SidebarGroupLabel>
           <SidebarGroupContent>
@@ -107,10 +107,10 @@ export function AppSidebar() {
                   <SidebarMenuButton
                     asChild
                     isActive={location.pathname === `/department/${dept.id}`}
-                    className="h-9 transition-all duration-200 data-[active=true]:bg-emerald-50 data-[active=true]:text-emerald-950 data-[active=true]:font-medium text-emerald-950/70 hover:text-emerald-950 hover:bg-emerald-50/50 rounded-lg px-3 group"
+                    className="h-9 transition-all duration-200 data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:font-medium text-muted-foreground hover:text-foreground hover:bg-secondary rounded-lg px-3 group"
                   >
                     <Link to={`/department/${dept.id}`} className="flex items-center gap-3">
-                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-950/20 group-data-[active=true]:bg-emerald-950 group-hover:bg-emerald-950/40 shrink-0 transition-colors" />
+                      <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/30 group-data-[active=true]:bg-primary group-hover:bg-primary/60 shrink-0 transition-colors" />
                       <span className="line-clamp-1">{dept.name}</span>
                     </Link>
                   </SidebarMenuButton>
