@@ -64,10 +64,7 @@ export function AppSidebar() {
     return <Icon className="h-4 w-4" />
   }
 
-  const generalProjectDept = departments.find((d) => d.name === 'Projetos Gerais HBPSCS')
-  const otherDepartments = departments
-    .filter((d) => d.name !== 'Projetos Gerais HBPSCS')
-    .sort((a, b) => a.sort_order - b.sort_order)
+  const sortedDepartments = [...departments].sort((a, b) => a.sort_order - b.sort_order)
 
   const renderDeptItem = (dept: any) => {
     const isDeptActive = location.pathname === `/department/${dept.id}`
@@ -164,10 +161,7 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupLabel>Departamentos</SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu>
-              {generalProjectDept && renderDeptItem(generalProjectDept)}
-              {otherDepartments.map((dept: any) => renderDeptItem(dept))}
-            </SidebarMenu>
+            <SidebarMenu>{sortedDepartments.map((dept: any) => renderDeptItem(dept))}</SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>

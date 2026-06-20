@@ -73,7 +73,7 @@ export default function Login() {
               </div>
             </div>
             <CardTitle className="text-2xl font-bold tracking-tight text-slate-900">
-              All Systems Go
+              Portal Corporativo
             </CardTitle>
             <CardDescription className="text-base">
               Verificando integridade dos módulos...

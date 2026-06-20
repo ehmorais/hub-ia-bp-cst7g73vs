@@ -7,7 +7,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import { Hospital, ShieldCheck } from 'lucide-react'
+import { BrainCircuit, ShieldCheck } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 
 export default function Index() {
@@ -28,16 +28,12 @@ export default function Index() {
 
       <Card className="z-10 w-full max-w-md shadow-elevation border-0 bg-white/95 backdrop-blur-md">
         <CardHeader className="space-y-3 text-center pb-8 pt-8">
-          <div className="mx-auto w-48 h-auto flex items-center justify-center mb-6">
-            <img
-              src="https://pub-2059a4c0a5bc4bfaad3c4c9b31d04130.r2.dev/projects/11751/1cd0cd6b-ccbd-4ed2-9642-e56ef382b6be.jpg"
-              alt="Beneficência Portuguesa Logo"
-              className="w-full h-full object-contain mix-blend-multiply"
-            />
+          <div className="mx-auto flex items-center justify-center mb-6 bg-primary text-primary-foreground p-5 rounded-2xl w-fit shadow-md">
+            <BrainCircuit className="h-16 w-16" />
           </div>
-          <CardTitle className="text-3xl font-bold text-slate-800">All Systems Go</CardTitle>
+          <CardTitle className="text-3xl font-bold text-slate-800">Hub IA BP</CardTitle>
           <CardDescription className="text-base font-medium text-slate-600">
-            São Caetano do Sul
+            Portal Corporativo de Inteligência Artificial
           </CardDescription>
         </CardHeader>
         <CardContent className="pb-8">
