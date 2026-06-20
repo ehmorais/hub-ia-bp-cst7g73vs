@@ -39,12 +39,6 @@ export function UserManagement() {
   const { user } = useAuth()
   const { toast } = useToast()
 
-  if (user?.role !== 'Admin') {
-    return (
-      <div className="p-8 text-center text-red-500">Acesso negado. Apenas administradores.</div>
-    )
-  }
-
   const [users, setUsers] = useState<any[]>([])
   const [sectors, setSectors] = useState<any[]>([])
   const [roles, setRoles] = useState<any[]>([])
@@ -70,6 +64,7 @@ export function UserManagement() {
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const loadData = async () => {
+    if (user?.role !== 'Admin') return
     try {
       const [u, s, r, p, sr] = await Promise.all([
         pb.collection('users').getFullList({ sort: 'name', expand: 'default_sector,staff_role' }),
@@ -89,9 +84,16 @@ export function UserManagement() {
   }
 
   useEffect(() => {
-    loadData()
-  }, [])
-  useRealtime('users', () => loadData())
+    if (user?.role === 'Admin') {
+      loadData()
+    }
+  }, [user?.role])
+
+  useRealtime('users', () => {
+    if (user?.role === 'Admin') {
+      loadData()
+    }
+  })
 
   const filteredUsers = useMemo(() => {
     const q = search.toLowerCase()
@@ -194,6 +196,12 @@ export function UserManagement() {
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  if (user?.role !== 'Admin') {
+    return (
+      <div className="p-8 text-center text-red-500">Acesso negado. Apenas administradores.</div>
+    )
   }
 
   return (
