@@ -40,8 +40,13 @@ onRecordBeforeDeleteRequest((e) => {
   )
   if (linked && linked.length > 0) {
     throw new BadRequestError(
-      'Não é possível excluir este turno pois está vinculado a contratos.',
-      { shift_type: new ValidationError('validation_linked', 'Turno em uso por contratos.') },
+      'Não é possível excluir este turno pois está vinculado a contratos ativos ou plantões gerados.',
+      {
+        shift_type: new ValidationError(
+          'validation_linked',
+          'Turno em uso por contratos/plantões.',
+        ),
+      },
     )
   }
   e.next()

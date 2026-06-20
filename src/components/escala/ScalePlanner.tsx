@@ -232,23 +232,36 @@ export function ScalePlanner({
               `${user.name} alocado em dia de folga ${reqStatus === 'pending' ? '(pendente)' : ''} (${format(day, 'dd/MM')})`,
             )
           }
-          if (cell === 'D' || cell === 'N') {
-            uh += 12
-            if (lastEnd) {
-              const cs = new Date(day)
-              cs.setHours(cell === 'D' ? 7 : 19, 0, 0, 0)
-              if (stName.includes('12x36') && (cs.getTime() - lastEnd.getTime()) / 3600000 < 36) {
-                alerts.push(`${user.name} sem descanso de 36h (${format(day, 'dd/MM')})`)
-              }
-            }
-            lastEnd = new Date(day)
-            lastEnd.setDate(lastEnd.getDate() + (cell === 'N' ? 1 : 0))
-            lastEnd.setHours(cell === 'N' ? 7 : 19, 0, 0, 0)
-          } else if (cell === 'M' || cell === 'T') {
-            uh += 6
-            lastEnd = new Date(day)
-            lastEnd.setHours(cell === 'M' ? 13 : 19, 0, 0, 0)
+
+          const wh = contract?.expand?.shift_type?.work_hours || 12
+          const restH = contract?.expand?.shift_type?.rest_hours || 36
+
+          let duration = wh
+          let stHour = 7
+          if (cell === 'D') {
+            duration = wh
+            stHour = 7
+          } else if (cell === 'N') {
+            duration = wh
+            stHour = 19
+          } else if (cell === 'M') {
+            duration = wh || 6
+            stHour = 7
+          } else if (cell === 'T') {
+            duration = wh || 6
+            stHour = 13
           }
+
+          uh += duration
+
+          const cs = new Date(day)
+          cs.setHours(stHour, 0, 0, 0)
+
+          if (lastEnd && (cs.getTime() - lastEnd.getTime()) / 3600000 < restH) {
+            alerts.push(`${user.name} sem descanso de ${restH}h (${format(day, 'dd/MM')})`)
+          }
+
+          lastEnd = new Date(cs.getTime() + duration * 3600000)
         }
       })
       if (uh > maxH) alerts.push(`${user.name} excede o limite mensal (Total: ${uh}h / ${maxH}h)`)
@@ -269,33 +282,37 @@ export function ScalePlanner({
           const dateStr = format(d, 'yyyy-MM-dd')
           const cell = draft[u.id]?.[dateStr]
           if (cell && cell !== 'F') {
-            let st = '',
-              et = ''
+            let st = '07:00:00'
+            let duration = 12
+
+            const contract = contracts.find((c) => c.user === u.id)
+            const wh = contract?.expand?.shift_type?.work_hours
+
             if (cell === 'D') {
               st = '07:00:00'
-              et = '19:00:00'
-            }
-            if (cell === 'N') {
+              duration = wh || 12
+            } else if (cell === 'N') {
               st = '19:00:00'
-              et = '07:00:00'
-            }
-            if (cell === 'M') {
+              duration = wh || 12
+            } else if (cell === 'M') {
               st = '07:00:00'
-              et = '13:00:00'
-            }
-            if (cell === 'T') {
+              duration = wh || 6
+            } else if (cell === 'T') {
               st = '13:00:00'
-              et = '19:00:00'
+              duration = wh || 6
             }
+
+            const startDate = new Date(`${dateStr}T${st}.000Z`)
+            const endDate = new Date(startDate.getTime() + duration * 3600000)
+
+            const formattedEnd = endDate.toISOString().replace('T', ' ').substring(0, 23) + 'Z'
+
             toCreate.push({
               user: u.id,
               sector: selectedSectorId,
               cycle: selectedCycleId,
               start_time: `${dateStr} ${st}.000Z`,
-              end_time:
-                cell === 'N'
-                  ? `${format(addDays(d, 1), 'yyyy-MM-dd')} ${et}.000Z`
-                  : `${dateStr} ${et}.000Z`,
+              end_time: formattedEnd,
             })
           }
         }),
