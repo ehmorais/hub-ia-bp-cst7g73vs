@@ -88,67 +88,71 @@ export default function Department() {
   if (!department) return null
 
   return (
-    <div className="space-y-10 animate-in fade-in duration-500 pb-12 max-w-6xl mx-auto">
-      {/* HEADER */}
-      <div className="flex flex-col gap-6">
-        <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            asChild
-            className="text-muted-foreground hover:text-foreground shrink-0 rounded-full"
-          >
-            <Link to="/">
-              <ArrowLeft className="h-5 w-5" />
-            </Link>
-          </Button>
-          <div>
-            <h1 className="text-3xl md:text-4xl font-semibold tracking-tight text-foreground">
+    <div className="space-y-10 animate-in fade-in duration-500 pb-12 max-w-[85rem] mx-auto">
+      {/* HEADER SECTION */}
+      <div className="relative overflow-hidden rounded-2xl bg-card border border-border/50 shadow-soft p-8 md:p-10 flex flex-col gap-8">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-primary/5 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none" />
+
+        <div className="relative z-10 flex flex-col gap-6">
+          <div className="flex items-center gap-5">
+            <Button
+              variant="outline"
+              size="icon"
+              asChild
+              className="rounded-full shadow-sm hover:bg-secondary border-border/50 shrink-0 h-10 w-10"
+            >
+              <Link to="/">
+                <ArrowLeft className="h-4 w-4" />
+              </Link>
+            </Button>
+            <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">
               {department.name}
             </h1>
           </div>
-        </div>
 
-        {department.description && (
-          <p className="text-muted-foreground text-lg max-w-3xl leading-relaxed pl-14">
-            {department.description}
-          </p>
-        )}
+          {department.description && (
+            <p className="text-muted-foreground text-lg max-w-4xl leading-relaxed md:pl-[3.75rem]">
+              {department.description}
+            </p>
+          )}
 
-        <div className="flex flex-wrap gap-3 pl-14">
-          <Badge
-            variant="secondary"
-            className="bg-card hover:bg-card border border-border/50 px-3 py-1.5 text-sm font-medium text-muted-foreground shadow-sm"
-          >
-            <Users className="w-4 h-4 mr-2 text-primary" />
-            {sectors.length} Setores
-          </Badge>
-          <Badge
-            variant="secondary"
-            className="bg-card hover:bg-card border border-border/50 px-3 py-1.5 text-sm font-medium text-muted-foreground shadow-sm"
-          >
-            <Cpu className="w-4 h-4 mr-2 text-primary" />
-            {departmentTools.length} Modelos de IA
-          </Badge>
-          <Badge
-            variant="secondary"
-            className="bg-card hover:bg-card border border-border/50 px-3 py-1.5 text-sm font-medium text-muted-foreground shadow-sm"
-          >
-            <FolderKanban className="w-4 h-4 mr-2 text-primary" />
-            {projects.length} Projetos
-          </Badge>
+          <div className="flex flex-wrap gap-3 md:pl-[3.75rem]">
+            <Badge
+              variant="secondary"
+              className="bg-secondary/60 hover:bg-secondary/80 text-secondary-foreground border-transparent px-3 py-1.5 font-medium rounded-lg shadow-sm transition-colors"
+            >
+              <Users className="w-4 h-4 mr-2 text-primary" />
+              {sectors.length} Setores
+            </Badge>
+            <Badge
+              variant="secondary"
+              className="bg-secondary/60 hover:bg-secondary/80 text-secondary-foreground border-transparent px-3 py-1.5 font-medium rounded-lg shadow-sm transition-colors"
+            >
+              <Cpu className="w-4 h-4 mr-2 text-primary" />
+              {departmentTools.length} Modelos
+            </Badge>
+            <Badge
+              variant="secondary"
+              className="bg-secondary/60 hover:bg-secondary/80 text-secondary-foreground border-transparent px-3 py-1.5 font-medium rounded-lg shadow-sm transition-colors"
+            >
+              <FolderKanban className="w-4 h-4 mr-2 text-primary" />
+              {projects.length} Projetos
+            </Badge>
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-10 pl-0 md:pl-14">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-10">
         {/* LEFT COLUMN: IA TOOLS & PROJECTS */}
         <div className="xl:col-span-2 space-y-12">
           {/* IA TOOLS */}
           <section className="space-y-6">
             <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold tracking-tight text-foreground flex items-center gap-2">
-                <Cpu className="w-5 h-5 text-primary" />
-                Modelos Disponíveis
+              <h2 className="text-2xl font-semibold tracking-tight text-foreground flex items-center gap-3">
+                <div className="p-2 bg-primary/10 rounded-lg">
+                  <Cpu className="w-5 h-5 text-primary" />
+                </div>
+                Modelos de IA
               </h2>
             </div>
 
@@ -156,18 +160,18 @@ export default function Department() {
               {departmentTools.map((tool) => (
                 <Card
                   key={tool.id}
-                  className="group hover:shadow-elevation transition-all duration-300 border-border/40 bg-card flex flex-col overflow-hidden"
+                  className="group hover:shadow-soft transition-all duration-300 border-border/60 bg-card flex flex-col overflow-hidden rounded-xl"
                 >
-                  <CardHeader className="pb-4 flex-1">
-                    <div className="flex justify-between items-start gap-3">
+                  <CardHeader className="p-6 pb-4 flex-1">
+                    <div className="flex justify-between items-start gap-4 mb-2">
                       <CardTitle className="text-lg font-semibold text-foreground leading-tight">
                         {tool.name}
                       </CardTitle>
                       <Badge
                         className={cn(
-                          'shrink-0 font-medium rounded-full px-2.5 shadow-none',
+                          'shrink-0 font-medium rounded-md px-2.5 py-0.5 shadow-none',
                           tool.status === 'active'
-                            ? 'bg-secondary text-primary border-primary/20 hover:bg-secondary'
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200/50 hover:bg-emerald-50'
                             : 'bg-muted text-muted-foreground border-transparent',
                         )}
                         variant="outline"
@@ -175,14 +179,19 @@ export default function Department() {
                         {tool.status}
                       </Badge>
                     </div>
-                    <CardDescription className="line-clamp-2 mt-2 text-sm leading-relaxed">
+                    <CardDescription className="line-clamp-2 text-sm leading-relaxed text-muted-foreground">
                       {tool.description}
                     </CardDescription>
                   </CardHeader>
-                  <CardFooter className="pt-0 pb-5 px-6">
+                  <CardFooter className="p-6 pt-0">
                     <Button
                       asChild
-                      className="w-full group-hover:bg-primary group-hover:text-primary-foreground transition-all duration-300 shadow-sm"
+                      className={cn(
+                        'w-full transition-all duration-300 shadow-sm rounded-lg',
+                        tool.status === 'active'
+                          ? 'bg-primary hover:bg-primary/90 text-primary-foreground'
+                          : '',
+                      )}
                       variant={tool.status === 'active' ? 'default' : 'secondary'}
                     >
                       <Link to={(tool as any).path || `/ai/${tool.id}`}>Acessar Ferramenta</Link>
@@ -191,8 +200,16 @@ export default function Department() {
                 </Card>
               ))}
               {departmentTools.length === 0 && (
-                <div className="col-span-full py-12 text-center text-muted-foreground bg-muted/20 border border-dashed rounded-xl">
-                  Nenhuma ferramenta de IA associada a este departamento.
+                <div className="col-span-full py-16 flex flex-col items-center justify-center text-center bg-card border border-border/40 rounded-2xl shadow-sm">
+                  <div className="w-12 h-12 rounded-full bg-primary/5 flex items-center justify-center mb-4">
+                    <Cpu className="w-6 h-6 text-primary/60" />
+                  </div>
+                  <h3 className="text-lg font-medium text-foreground mb-1">
+                    Nenhum modelo associado
+                  </h3>
+                  <p className="text-sm text-muted-foreground max-w-sm">
+                    Este departamento ainda não possui ferramentas de IA disponíveis.
+                  </p>
                 </div>
               )}
             </div>
@@ -201,9 +218,11 @@ export default function Department() {
           {/* PROJECTS */}
           <section className="space-y-6">
             <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold tracking-tight text-foreground flex items-center gap-2">
-                <FolderKanban className="w-5 h-5 text-primary" />
-                Projetos em Andamento
+              <h2 className="text-2xl font-semibold tracking-tight text-foreground flex items-center gap-3">
+                <div className="p-2 bg-primary/10 rounded-lg">
+                  <FolderKanban className="w-5 h-5 text-primary" />
+                </div>
+                Projetos
               </h2>
             </div>
 
@@ -211,18 +230,18 @@ export default function Department() {
               {projects.map((proj) => (
                 <Card
                   key={proj.id}
-                  className="group hover:shadow-elevation transition-all duration-300 border-border/40 bg-card flex flex-col"
+                  className="group hover:shadow-soft transition-all duration-300 border-border/60 bg-card flex flex-col rounded-xl"
                 >
-                  <CardHeader className="pb-4 flex-1">
-                    <div className="flex justify-between items-start gap-3">
+                  <CardHeader className="p-6 pb-4 flex-1">
+                    <div className="flex justify-between items-start gap-4 mb-2">
                       <CardTitle className="text-lg font-semibold text-foreground leading-tight">
                         {proj.name}
                       </CardTitle>
                       <Badge
                         className={cn(
-                          'shrink-0 font-medium rounded-full px-2.5 shadow-none',
+                          'shrink-0 font-medium rounded-md px-2.5 py-0.5 shadow-none',
                           proj.status === 'active'
-                            ? 'bg-secondary text-primary border-primary/20 hover:bg-secondary'
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200/50 hover:bg-emerald-50'
                             : 'bg-muted text-muted-foreground border-transparent',
                         )}
                         variant="outline"
@@ -230,15 +249,15 @@ export default function Department() {
                         {proj.status}
                       </Badge>
                     </div>
-                    <CardDescription className="line-clamp-2 mt-2 text-sm leading-relaxed">
+                    <CardDescription className="line-clamp-2 text-sm leading-relaxed text-muted-foreground">
                       {proj.description}
                     </CardDescription>
                   </CardHeader>
-                  <CardFooter className="pt-0 pb-5 px-6">
+                  <CardFooter className="p-6 pt-0">
                     <Button
                       asChild
                       variant="outline"
-                      className="w-full border-border/60 hover:bg-secondary hover:text-primary transition-colors shadow-sm"
+                      className="w-full border-border/60 hover:bg-secondary hover:text-primary transition-colors shadow-sm rounded-lg"
                     >
                       <Link to={`/project/${proj.id}`}>Acessar Projeto</Link>
                     </Button>
@@ -246,8 +265,16 @@ export default function Department() {
                 </Card>
               ))}
               {projects.length === 0 && (
-                <div className="col-span-full py-12 text-center text-muted-foreground bg-muted/20 border border-dashed rounded-xl">
-                  Nenhum projeto associado a este departamento.
+                <div className="col-span-full py-16 flex flex-col items-center justify-center text-center bg-card border border-border/40 rounded-2xl shadow-sm">
+                  <div className="w-12 h-12 rounded-full bg-primary/5 flex items-center justify-center mb-4">
+                    <FolderKanban className="w-6 h-6 text-primary/60" />
+                  </div>
+                  <h3 className="text-lg font-medium text-foreground mb-1">
+                    Nenhum projeto associado
+                  </h3>
+                  <p className="text-sm text-muted-foreground max-w-sm">
+                    Não há projetos em andamento vinculados a este departamento.
+                  </p>
                 </div>
               )}
             </div>
@@ -257,8 +284,10 @@ export default function Department() {
         {/* RIGHT COLUMN: SECTORS */}
         <div className="space-y-6">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold tracking-tight text-foreground flex items-center gap-2">
-              <Users className="w-5 h-5 text-primary" />
+            <h2 className="text-2xl font-semibold tracking-tight text-foreground flex items-center gap-3">
+              <div className="p-2 bg-primary/10 rounded-lg">
+                <Users className="w-5 h-5 text-primary" />
+              </div>
               Setores
             </h2>
           </div>
@@ -267,48 +296,48 @@ export default function Department() {
             {sectors.map((sector) => (
               <Card
                 key={sector.id}
-                className="border-border/40 hover:shadow-subtle transition-shadow overflow-hidden bg-card"
+                className="border-border/60 hover:shadow-soft transition-all duration-300 overflow-hidden bg-card rounded-xl"
               >
-                <div className="h-1 w-full bg-primary/20" />
+                <div className="h-1.5 w-full bg-gradient-to-r from-primary/80 to-primary/30" />
                 <CardHeader className="p-5 pb-3">
-                  <div className="flex justify-between items-start gap-2">
+                  <div className="flex justify-between items-start gap-3">
                     <CardTitle className="text-base font-semibold text-foreground leading-tight">
                       {sector.name}
                     </CardTitle>
                     {sector.is_critical && (
                       <Badge
                         variant="destructive"
-                        className="shrink-0 flex items-center gap-1 shadow-none bg-red-50 text-red-700 border-red-200 hover:bg-red-50"
+                        className="shrink-0 flex items-center gap-1.5 shadow-none bg-red-50 text-red-700 border-red-200 hover:bg-red-50 px-2 py-0.5 rounded-md"
                       >
-                        <AlertTriangle className="w-3 h-3" />
+                        <AlertTriangle className="w-3.5 h-3.5" />
                         Crítico
                       </Badge>
                     )}
                   </div>
                 </CardHeader>
-                <CardContent className="p-5 pt-0">
-                  <div className="flex flex-col gap-3 mt-2">
-                    <div className="flex items-center justify-between text-sm">
+                <CardContent className="p-5 pt-1">
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center justify-between text-sm py-1 border-b border-border/40 last:border-0">
                       <span className="text-muted-foreground flex items-center gap-2">
-                        <Bed className="w-4 h-4" /> Capacidade
+                        <Bed className="w-4 h-4 text-muted-foreground/70" /> Capacidade
                       </span>
-                      <span className="font-medium text-foreground">
+                      <span className="font-semibold text-foreground">
                         {sector.bed_capacity || 0} leitos
                       </span>
                     </div>
-                    <div className="flex items-center justify-between text-sm">
+                    <div className="flex items-center justify-between text-sm py-1 border-b border-border/40 last:border-0">
                       <span className="text-muted-foreground flex items-center gap-2">
-                        <Users className="w-4 h-4" /> Equipe Ideal
+                        <Users className="w-4 h-4 text-muted-foreground/70" /> Equipe Ideal
                       </span>
-                      <span className="font-medium text-foreground">
+                      <span className="font-semibold text-foreground">
                         {sector.ideal_staffing || 0} prof.
                       </span>
                     </div>
-                    <div className="flex items-center justify-between text-sm">
+                    <div className="flex items-center justify-between text-sm py-1 border-b border-border/40 last:border-0">
                       <span className="text-muted-foreground flex items-center gap-2">
-                        <Activity className="w-4 h-4" /> Equipe Mínima
+                        <Activity className="w-4 h-4 text-muted-foreground/70" /> Equipe Mínima
                       </span>
-                      <span className="font-medium text-foreground">
+                      <span className="font-semibold text-foreground">
                         {sector.min_staffing || 0} prof.
                       </span>
                     </div>
@@ -317,8 +346,16 @@ export default function Department() {
               </Card>
             ))}
             {sectors.length === 0 && (
-              <div className="py-12 text-center text-muted-foreground bg-muted/20 border border-dashed rounded-xl">
-                Nenhum setor registrado.
+              <div className="py-16 flex flex-col items-center justify-center text-center bg-card border border-border/40 rounded-2xl shadow-sm">
+                <div className="w-12 h-12 rounded-full bg-primary/5 flex items-center justify-center mb-4">
+                  <Users className="w-6 h-6 text-primary/60" />
+                </div>
+                <h3 className="text-lg font-medium text-foreground mb-1">
+                  Nenhum setor registrado
+                </h3>
+                <p className="text-sm text-muted-foreground max-w-[200px]">
+                  Não há setores configurados para este departamento.
+                </p>
               </div>
             )}
           </div>
