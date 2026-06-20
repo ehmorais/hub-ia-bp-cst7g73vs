@@ -2,7 +2,6 @@ import { Link, useLocation } from 'react-router-dom'
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -11,30 +10,21 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from '@/components/ui/sidebar'
-import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
-import { LayoutDashboard, Settings, LogOut, ShieldAlert } from 'lucide-react'
+import { LayoutDashboard, Settings } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import pb from '@/lib/pocketbase/client'
 import { useRealtime } from '@/hooks/use-realtime'
 import { useAuth } from '@/hooks/use-auth'
-import { getIcon } from '@/lib/icons'
 
 export function AppSidebar() {
   const location = useLocation()
-  const { signOut, isAuthenticated } = useAuth()
+  const { isAuthenticated } = useAuth()
   const [departments, setDepartments] = useState<any[]>([])
-  const [projects, setProjects] = useState<any[]>([])
 
   const loadData = async () => {
     try {
-      const [depRecords, projRecords] = await Promise.all([
-        pb.collection('departments').getFullList({ sort: 'sort_order,name' }),
-        pb
-          .collection('projects')
-          .getFullList({ sort: 'sort_order,name', filter: 'status = "active"' }),
-      ])
+      const depRecords = await pb.collection('departments').getFullList({ sort: 'sort_order,name' })
       setDepartments(depRecords)
-      setProjects(projRecords)
     } catch (e) {
       console.error(e)
     }
@@ -51,94 +41,29 @@ export function AppSidebar() {
     },
     isAuthenticated,
   )
-  useRealtime(
-    'projects',
-    () => {
-      loadData()
-    },
-    isAuthenticated,
-  )
-
-  const renderIcon = (iconName: string) => {
-    const Icon = getIcon(iconName)
-    return <Icon className="h-4 w-4" />
-  }
 
   const sortedDepartments = [...departments].sort((a, b) => a.sort_order - b.sort_order)
 
-  const renderDeptItem = (dept: any) => {
-    const isDeptActive = location.pathname === `/department/${dept.id}`
-    const deptProjects = projects.filter(
-      (p) => p.associated_departments?.includes(dept.id) || p.department === dept.id,
-    )
-
-    return (
-      <SidebarMenuItem key={dept.id}>
-        <HoverCard openDelay={200} closeDelay={100}>
-          <HoverCardTrigger asChild>
-            <SidebarMenuButton asChild isActive={isDeptActive} tooltip={dept.name}>
-              <Link to={`/department/${dept.id}`}>
-                <div
-                  style={{ color: dept.color || 'inherit' }}
-                  className="flex items-center justify-center"
-                >
-                  {renderIcon(dept.icon)}
-                </div>
-                <span style={{ color: dept.color || 'inherit', fontWeight: 500 }}>{dept.name}</span>
-              </Link>
-            </SidebarMenuButton>
-          </HoverCardTrigger>
-          {deptProjects.length > 0 && (
-            <HoverCardContent side="right" align="start" className="w-64 p-2 z-50">
-              <div className="space-y-1">
-                <h4 className="font-semibold text-sm mb-2 text-muted-foreground px-2">Projetos</h4>
-                {deptProjects.map((proj: any) => {
-                  const isProjActive = location.pathname === `/project/${proj.id}`
-                  return (
-                    <Link
-                      key={proj.id}
-                      to={`/project/${proj.id}`}
-                      className={`block px-2 py-1.5 text-sm rounded-md transition-colors hover:bg-muted ${
-                        isProjActive
-                          ? 'bg-muted font-medium text-foreground'
-                          : 'text-muted-foreground'
-                      }`}
-                    >
-                      {proj.name}
-                    </Link>
-                  )
-                })}
-              </div>
-            </HoverCardContent>
-          )}
-        </HoverCard>
-      </SidebarMenuItem>
-    )
-  }
-
   return (
-    <Sidebar variant="inset" className="border-r shadow-sm">
-      <SidebarHeader className="p-4 flex flex-col justify-center border-b bg-white min-h-[4rem]">
-        <div className="flex items-center gap-2 text-primary">
-          <LayoutDashboard className="h-5 w-5" />
-          <span className="font-bold text-sm leading-tight truncate">Navegação</span>
-        </div>
+    <Sidebar className="border-r shadow-sm">
+      <SidebarHeader className="p-4 border-b min-h-[3.5rem] flex items-center justify-center">
+        <span className="font-bold text-lg">Menu Principal</span>
       </SidebarHeader>
 
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Principal</SidebarGroupLabel>
+          <SidebarGroupLabel>Navegação</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton
                   asChild
-                  isActive={location.pathname === '/dashboard'}
+                  isActive={location.pathname === '/' || location.pathname === '/dashboard'}
                   tooltip="Dashboard"
                 >
-                  <Link to="/dashboard">
+                  <Link to="/">
                     <LayoutDashboard className="h-4 w-4" />
-                    <span>Dashboard</span>
+                    <span>Visão Geral</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -161,33 +86,23 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupLabel>Departamentos</SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu>{sortedDepartments.map((dept: any) => renderDeptItem(dept))}</SidebarMenu>
+            <SidebarMenu>
+              {sortedDepartments.map((dept: any) => (
+                <SidebarMenuItem key={dept.id}>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={location.pathname === `/department/${dept.id}`}
+                  >
+                    <Link to={`/department/${dept.id}`}>
+                      <span>{dept.name}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-
-      <SidebarFooter className="p-4">
-        <div className="flex flex-col gap-4">
-          <div className="bg-primary/10 rounded-lg p-3 text-xs flex items-start gap-2">
-            <ShieldAlert className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-            <span className="text-primary-foreground text-primary font-medium">
-              LGPD & Compliance Ativos
-            </span>
-          </div>
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                variant="default"
-                className="text-destructive hover:bg-destructive/10 hover:text-destructive cursor-pointer"
-                onClick={signOut}
-              >
-                <LogOut className="h-4 w-4" />
-                <span>Sair do Sistema</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </div>
-      </SidebarFooter>
     </Sidebar>
   )
 }

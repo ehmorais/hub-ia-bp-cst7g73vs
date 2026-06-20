@@ -1,64 +1,74 @@
-import { Button } from '@/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
-import { BrainCircuit, ShieldCheck } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import pb from '@/lib/pocketbase/client'
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { Building2, Activity, FileText } from 'lucide-react'
+import { useAuth } from '@/hooks/use-auth'
 
 export default function Index() {
-  const navigate = useNavigate()
+  const { user } = useAuth()
+  const [stats, setStats] = useState({
+    departments: 0,
+    tools: 0,
+    projects: 0,
+  })
+
+  useEffect(() => {
+    Promise.all([
+      pb.collection('departments').getList(1, 1),
+      pb.collection('ia_tools').getList(1, 1, { filter: 'status="active"' }),
+      pb.collection('projects').getList(1, 1, { filter: 'status="active"' }),
+    ]).then(([deps, tools, projects]) => {
+      setStats({
+        departments: deps.totalItems,
+        tools: tools.totalItems,
+        projects: projects.totalItems,
+      })
+    })
+  }, [])
 
   return (
-    <div className="min-h-screen relative flex items-center justify-center p-4">
-      {/* Background Image */}
-      <div
-        className="absolute inset-0 z-0 bg-cover bg-center"
-        style={{
-          backgroundImage:
-            'url("https://img.usecurling.com/p/1920/1080?q=modern%20hospital%20interior&color=green")',
-        }}
-      >
-        <div className="absolute inset-0 bg-black/40 backdrop-blur-sm"></div>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Visão Geral</h1>
+        <p className="text-muted-foreground">
+          Bem-vindo ao portal corporativo, {user?.name || 'Usuário'}.
+        </p>
       </div>
 
-      <Card className="z-10 w-full max-w-md shadow-elevation border-0 bg-white/95 backdrop-blur-md">
-        <CardHeader className="space-y-3 text-center pb-8 pt-8">
-          <div className="mx-auto flex items-center justify-center mb-6 bg-primary text-primary-foreground p-5 rounded-2xl w-fit shadow-md">
-            <BrainCircuit className="h-16 w-16" />
-          </div>
-          <CardTitle className="text-3xl font-bold text-slate-800">Hub IA BP</CardTitle>
-          <CardDescription className="text-base font-medium text-slate-600">
-            Portal Corporativo de Inteligência Artificial
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="pb-8">
-          <Button
-            className="w-full h-12 text-base font-semibold bg-primary hover:bg-primary/90 text-primary-foreground"
-            onClick={() => navigate('/login')}
-          >
-            Acessar o Sistema
-          </Button>
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Departamentos</CardTitle>
+            <Building2 className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.departments}</div>
+            <p className="text-xs text-muted-foreground">Departamentos registrados</p>
+          </CardContent>
+        </Card>
 
-          <div className="mt-6 flex items-center gap-2 text-sm text-slate-500 justify-center">
-            <ShieldCheck className="h-4 w-4 text-green-600" />
-            <span>Acesso seguro e auditado.</span>
-          </div>
-        </CardContent>
-        <CardFooter className="flex justify-center border-t border-slate-100 pt-6 pb-6 text-xs text-slate-400 gap-4">
-          <a href="#" className="hover:text-primary transition-colors">
-            Política de Privacidade
-          </a>
-          <span>•</span>
-          <a href="#" className="hover:text-primary transition-colors">
-            Termos de Uso (LGPD)
-          </a>
-        </CardFooter>
-      </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Ferramentas de IA</CardTitle>
+            <Activity className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.tools}</div>
+            <p className="text-xs text-muted-foreground">Ferramentas ativas</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Projetos</CardTitle>
+            <FileText className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.projects}</div>
+            <p className="text-xs text-muted-foreground">Projetos ativos</p>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
 }

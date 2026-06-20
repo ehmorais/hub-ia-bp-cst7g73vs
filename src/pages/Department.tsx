@@ -1,29 +1,11 @@
 import { useEffect, useState } from 'react'
 import pb from '@/lib/pocketbase/client'
 import { useParams, Link } from 'react-router-dom'
-import {
-  Card,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  CardFooter,
-  CardContent,
-} from '@/components/ui/card'
+import { Card, CardDescription, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import {
-  ArrowLeft,
-  Play,
-  BrainCircuit,
-  Folder,
-  Blocks,
-  Building2,
-  Users,
-  AlertCircle,
-} from 'lucide-react'
 import { useRealtime } from '@/hooks/use-realtime'
-import { getIcon } from '@/lib/icons'
-import { cn } from '@/lib/utils'
+import { ArrowLeft } from 'lucide-react'
 
 export default function Department() {
   const { id } = useParams()
@@ -98,191 +80,99 @@ export default function Department() {
   if (!department) return null
 
   return (
-    <div className="container mx-auto p-4 md:p-8 space-y-8 max-w-7xl animate-fade-in-up">
+    <div className="space-y-6">
       <div className="flex items-center gap-4">
-        <Button variant="outline" size="icon" asChild className="shrink-0 bg-white">
-          <Link to="/dashboard">
+        <Button variant="outline" size="icon" asChild>
+          <Link to="/">
             <ArrowLeft className="h-4 w-4" />
           </Link>
         </Button>
-        <div className="flex items-center gap-3">
-          <div
-            className="p-3 rounded-xl hidden sm:flex items-center justify-center text-white"
-            style={{ backgroundColor: department.color || '#0f172a' }}
-          >
-            {getIcon(department.icon, <Folder className="h-6 w-6" />)}
-          </div>
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-slate-900">{department.name}</h1>
-            <p className="text-muted-foreground">{department.description}</p>
-          </div>
+        <div>
+          <h1 className="text-2xl font-bold">{department.name}</h1>
+          <p className="text-muted-foreground">{department.description}</p>
         </div>
       </div>
 
-      <div className="space-y-4 pt-4">
-        <div className="flex items-center gap-2 border-b pb-2">
-          <Building2 className="h-5 w-5 text-primary" />
-          <h2 className="text-xl font-semibold">Setores do Departamento</h2>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start">
+      <div className="space-y-4">
+        <h2 className="text-lg font-semibold">Setores do Departamento</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {sectors.map((sector) => (
-            <Card
-              key={sector.id}
-              className={cn(
-                'bg-white border-slate-200 hover:shadow-md transition-shadow flex flex-col h-full',
-                sector.is_critical && 'border-red-200 shadow-sm shadow-red-100',
-              )}
-            >
-              <CardHeader className="pb-4">
-                <div className="flex justify-between items-start mb-2">
-                  <Badge
-                    variant={sector.is_critical ? 'destructive' : 'secondary'}
-                    className={cn(
-                      'flex items-center gap-1',
-                      sector.is_critical
-                        ? 'bg-red-100 text-red-700 hover:bg-red-200 border-transparent'
-                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border-transparent',
-                    )}
-                  >
-                    {sector.is_critical && <AlertCircle className="w-3 h-3" />}
-                    {sector.is_critical ? 'Crítico' : 'Normal'}
-                  </Badge>
-                  <div className="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-1 rounded-md">
-                    Ratio: {sector.staffing_ratio || 0}
-                  </div>
+            <Card key={sector.id}>
+              <CardHeader>
+                <div className="flex justify-between items-start">
+                  <CardTitle className="text-base">{sector.name}</CardTitle>
+                  {sector.is_critical && <Badge variant="destructive">Crítico</Badge>}
                 </div>
-                <CardTitle className="text-lg">{sector.name}</CardTitle>
-                <CardDescription className="flex items-center gap-1 mt-1">
-                  <Users className="w-4 h-4" />
-                  Capacidade: {sector.bed_capacity || 0} leitos
-                </CardDescription>
+                <CardDescription>Capacidade: {sector.bed_capacity || 0} leitos</CardDescription>
               </CardHeader>
-              <CardContent className="mt-auto">
-                <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-100">
-                  <div className="space-y-1">
-                    <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">
-                      Staff Mínimo
-                    </p>
-                    <p className="text-2xl font-bold text-slate-700">{sector.min_staffing || 0}</p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">
-                      Staff Ideal
-                    </p>
-                    <p className="text-2xl font-bold text-emerald-600">
-                      {sector.ideal_staffing || 0}
-                    </p>
-                  </div>
+              <CardContent>
+                <div className="text-sm">
+                  <p>Staff Mínimo: {sector.min_staffing || 0}</p>
+                  <p>Staff Ideal: {sector.ideal_staffing || 0}</p>
                 </div>
               </CardContent>
             </Card>
           ))}
           {sectors.length === 0 && (
-            <div className="col-span-full p-8 text-center text-muted-foreground border rounded-lg bg-slate-50 flex flex-col items-center justify-center">
-              <Building2 className="h-10 w-10 text-slate-300 mb-3" />
-              <p>Nenhum setor associado a este departamento.</p>
+            <div className="col-span-3 p-4 text-center text-muted-foreground border rounded-md">
+              Nenhum setor associado.
             </div>
           )}
         </div>
       </div>
 
-      <div className="space-y-4 pt-2">
-        <div className="flex items-center gap-2 border-b pb-2">
-          <BrainCircuit className="h-5 w-5 text-primary" />
-          <h2 className="text-xl font-semibold">Modelos Disponíveis</h2>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 items-start">
+      <div className="space-y-4">
+        <h2 className="text-lg font-semibold">Modelos Disponíveis</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {departmentTools.map((tool) => (
-            <Card
-              key={tool.id}
-              className="flex flex-col bg-white border-slate-200 overflow-hidden hover:shadow-md transition-shadow h-full"
-            >
+            <Card key={tool.id}>
               <CardHeader>
-                <div className="flex justify-between items-start mb-2">
-                  <Badge
-                    variant="outline"
-                    className={cn(
-                      'uppercase text-[10px]',
-                      tool.status === 'active'
-                        ? 'bg-primary/5 text-primary border-primary/20'
-                        : 'bg-amber-50 text-amber-700 border-amber-200',
-                    )}
-                  >
-                    {tool.status === 'active' ? 'Ativo' : tool.status}
+                <div className="flex justify-between items-start">
+                  <CardTitle className="text-base">{tool.name}</CardTitle>
+                  <Badge variant={tool.status === 'active' ? 'default' : 'secondary'}>
+                    {tool.status}
                   </Badge>
-                  <div className="flex gap-2">
-                    {tool.version && (
-                      <span className="text-xs text-muted-foreground font-mono bg-slate-100 px-2 py-0.5 rounded">
-                        v{tool.version}
-                      </span>
-                    )}
-                    <span className="text-xs text-muted-foreground font-mono bg-slate-100 px-2 py-0.5 rounded">
-                      {tool.model_alias}
-                    </span>
-                  </div>
                 </div>
-                <CardTitle className="text-xl">{tool.name}</CardTitle>
-                <CardDescription className="line-clamp-2 mt-1">
-                  {tool.description || 'Sem descrição'}
-                </CardDescription>
+                <CardDescription className="line-clamp-2">{tool.description}</CardDescription>
               </CardHeader>
-              <CardFooter className="pt-4 border-t bg-slate-50/50 mt-auto flex justify-start">
-                <Button className="gap-2 font-medium" asChild>
-                  <Link to={(tool as any).path || `/ai/${tool.id}`}>
-                    <Play className="h-4 w-4" fill="currentColor" />
-                    Acessar Ferramenta
-                  </Link>
+              <CardContent>
+                <Button asChild variant="secondary" className="w-full">
+                  <Link to={(tool as any).path || `/ai/${tool.id}`}>Acessar Ferramenta</Link>
                 </Button>
-              </CardFooter>
+              </CardContent>
             </Card>
           ))}
           {departmentTools.length === 0 && (
-            <div className="col-span-full p-8 text-center text-muted-foreground border rounded-lg bg-slate-50">
+            <div className="col-span-3 p-4 text-center text-muted-foreground border rounded-md">
               Nenhuma ferramenta associada.
             </div>
           )}
         </div>
       </div>
 
-      <div className="space-y-4 pt-4">
-        <div className="flex items-center gap-2 border-b pb-2">
-          <Blocks className="h-5 w-5 text-primary" />
-          <h2 className="text-xl font-semibold">Projetos</h2>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start">
+      <div className="space-y-4">
+        <h2 className="text-lg font-semibold">Projetos</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {projects.map((proj) => (
-            <Card
-              key={proj.id}
-              className="flex flex-col bg-white border-slate-200 overflow-hidden hover:shadow-md transition-shadow h-full"
-            >
-              <CardHeader className="pb-4">
-                <div className="flex justify-between items-start mb-2">
-                  <Badge
-                    variant="outline"
-                    className={cn(
-                      'uppercase text-[10px]',
-                      proj.status === 'active'
-                        ? 'bg-primary/5 text-primary border-primary/20'
-                        : 'bg-amber-50 text-amber-700 border-amber-200',
-                    )}
-                  >
-                    {proj.status === 'active' ? 'Ativo' : 'Inativo'}
+            <Card key={proj.id}>
+              <CardHeader>
+                <div className="flex justify-between items-start">
+                  <CardTitle className="text-base">{proj.name}</CardTitle>
+                  <Badge variant={proj.status === 'active' ? 'default' : 'secondary'}>
+                    {proj.status}
                   </Badge>
                 </div>
-                <CardTitle className="text-lg">{proj.name}</CardTitle>
-                <CardDescription className="line-clamp-2 mt-1">
-                  {proj.description || 'Sem descrição'}
-                </CardDescription>
+                <CardDescription className="line-clamp-2">{proj.description}</CardDescription>
               </CardHeader>
-              <CardFooter className="pt-3 border-t bg-slate-50/50 mt-auto flex justify-start">
-                <Button className="gap-2 font-medium" variant="secondary" asChild>
+              <CardContent>
+                <Button asChild variant="outline" className="w-full">
                   <Link to={`/project/${proj.id}`}>Acessar Projeto</Link>
                 </Button>
-              </CardFooter>
+              </CardContent>
             </Card>
           ))}
           {projects.length === 0 && (
-            <div className="col-span-full p-8 text-center text-muted-foreground border rounded-lg bg-slate-50">
+            <div className="col-span-3 p-4 text-center text-muted-foreground border rounded-md">
               Nenhum projeto associado.
             </div>
           )}
