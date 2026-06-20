@@ -12,8 +12,20 @@ import {
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { useRealtime } from '@/hooks/use-realtime'
-import { ArrowLeft, Activity, FolderKanban, Cpu, Users, Bed, AlertTriangle } from 'lucide-react'
+import {
+  ArrowLeft,
+  Activity,
+  FolderKanban,
+  Cpu,
+  Users,
+  Bed,
+  AlertTriangle,
+  History,
+  Clock,
+  Zap,
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 
 export default function Department() {
   const { id } = useParams()
@@ -21,6 +33,7 @@ export default function Department() {
   const [departmentTools, setDepartmentTools] = useState<any[]>([])
   const [projects, setProjects] = useState<any[]>([])
   const [sectors, setSectors] = useState<any[]>([])
+  const [auditLogs, setAuditLogs] = useState<any[]>([])
 
   useEffect(() => {
     if (id) {
@@ -58,6 +71,21 @@ export default function Department() {
     }
   }, [id])
 
+  useEffect(() => {
+    if (id && department?.name) {
+      pb.collection('audit_logs')
+        .getList(1, 15, {
+          filter: `department="${department.name}" || department="${id}"`,
+          sort: '-created',
+          expand: 'user',
+        })
+        .then((res) => setAuditLogs(res.items))
+        .catch((e) => {
+          console.error('Error loading audit logs:', e)
+        })
+    }
+  }, [id, department?.name])
+
   useRealtime('projects', () => {
     if (id)
       pb.collection('projects')
@@ -83,6 +111,19 @@ export default function Department() {
         .getFullList({ filter: `associated_departments~"${id}"`, sort: 'name' })
         .then(setDepartmentTools)
         .catch((e) => console.error('Error on tools realtime:', e))
+  })
+
+  useRealtime('audit_logs', () => {
+    if (id && department?.name) {
+      pb.collection('audit_logs')
+        .getList(1, 15, {
+          filter: `department="${department.name}" || department="${id}"`,
+          sort: '-created',
+          expand: 'user',
+        })
+        .then((res) => setAuditLogs(res.items))
+        .catch((e) => console.error('Error on audit logs realtime:', e))
+    }
   })
 
   if (!department) return null
@@ -358,6 +399,85 @@ export default function Department() {
                 </p>
               </div>
             )}
+          </div>
+
+          {/* USAGE HISTORY */}
+          <div className="flex items-center justify-between mt-10 mb-4">
+            <h2 className="text-2xl font-semibold tracking-tight text-foreground flex items-center gap-3">
+              <div className="p-2 bg-primary/10 rounded-lg">
+                <History className="w-5 h-5 text-primary" />
+              </div>
+              Histórico de Uso de IA
+            </h2>
+          </div>
+
+          <div className="relative">
+            {auditLogs.length > 0 && (
+              <div className="absolute top-0 bottom-0 left-4 w-0.5 bg-border/60 z-0"></div>
+            )}
+            <div className="space-y-4">
+              {auditLogs.length > 0 ? (
+                auditLogs.map((log) => (
+                  <div key={log.id} className="relative flex items-start gap-4">
+                    <div className="flex items-center justify-center w-8 h-8 rounded-full border-2 border-background bg-card shadow-sm shrink-0 z-10 mt-1">
+                      <Avatar className="w-7 h-7">
+                        <AvatarImage
+                          src={
+                            log.expand?.user?.avatar
+                              ? `${import.meta.env.VITE_POCKETBASE_URL}/api/files/users/${log.expand.user.id}/${log.expand.user.avatar}`
+                              : undefined
+                          }
+                        />
+                        <AvatarFallback className="bg-primary/10 text-primary text-[10px]">
+                          {log.expand?.user?.name?.charAt(0) || 'U'}
+                        </AvatarFallback>
+                      </Avatar>
+                    </div>
+
+                    <Card className="flex-1 p-3.5 shadow-sm border-border/40 hover:border-primary/20 transition-colors bg-card z-10">
+                      <div className="flex flex-col gap-1.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-semibold text-sm text-foreground truncate">
+                            {log.expand?.user?.name || 'Usuário'}
+                          </span>
+                        </div>
+                        <p className="text-sm text-muted-foreground leading-snug">{log.action}</p>
+                        <div className="flex items-center justify-between mt-1">
+                          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground shrink-0">
+                            <Clock className="w-3 h-3" />
+                            {new Date(log.created).toLocaleDateString('pt-BR', {
+                              day: '2-digit',
+                              month: 'short',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </div>
+                          {log.token_usage > 0 && (
+                            <Badge
+                              variant="secondary"
+                              className="bg-emerald-50 text-emerald-700 hover:bg-emerald-50 border-transparent text-[10px] px-1.5 py-0 h-5"
+                            >
+                              <Zap className="w-3 h-3 mr-1" />
+                              {log.token_usage}
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    </Card>
+                  </div>
+                ))
+              ) : (
+                <div className="py-12 flex flex-col items-center justify-center text-center bg-card border border-border/40 rounded-2xl shadow-sm">
+                  <div className="w-12 h-12 rounded-full bg-primary/5 flex items-center justify-center mb-4">
+                    <History className="w-6 h-6 text-primary/60" />
+                  </div>
+                  <h3 className="text-lg font-medium text-foreground mb-1">Nenhum registro</h3>
+                  <p className="text-sm text-muted-foreground max-w-[200px]">
+                    O histórico de uso de IA aparecerá aqui.
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
