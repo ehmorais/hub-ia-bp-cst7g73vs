@@ -143,7 +143,7 @@ export default function Department() {
                 <CardDescription className="line-clamp-2">{tool.description}</CardDescription>
               </CardHeader>
               <CardContent>
-                <Button asChild variant="secondary" className="w-full">
+                <Button asChild className="w-full">
                   <Link to={(tool as any).path || `/ai/${tool.id}`}>Acessar Ferramenta</Link>
                 </Button>
               </CardContent>

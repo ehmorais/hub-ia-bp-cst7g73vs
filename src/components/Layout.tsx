@@ -42,7 +42,7 @@ export default function Layout() {
               <div className="flex h-6 w-6 items-center justify-center rounded bg-primary text-primary-foreground">
                 <span className="font-bold text-sm leading-none">+</span>
               </div>
-              <span className="font-bold text-lg">Hub IA BP</span>
+              <span className="font-bold text-lg">HUB IA BPSCS</span>
             </Link>
           </div>
           <div className="flex-1"></div>

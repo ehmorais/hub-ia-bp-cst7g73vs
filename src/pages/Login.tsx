@@ -30,7 +30,7 @@ export default function Login() {
     <div className="flex min-h-screen items-center justify-center bg-slate-50 p-4">
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold">Acesso ao Sistema</CardTitle>
+          <CardTitle className="text-2xl font-bold">HUB IA BPSCS</CardTitle>
           <CardDescription>Entre com suas credenciais institucionais</CardDescription>
         </CardHeader>
         <CardContent>
