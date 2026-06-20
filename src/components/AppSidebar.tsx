@@ -71,7 +71,7 @@ export function AppSidebar() {
                   asChild
                   isActive={location.pathname === '/' || location.pathname === '/dashboard'}
                   tooltip="Dashboard"
-                  className="h-10 transition-all duration-200 data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:font-medium text-muted-foreground hover:text-foreground hover:bg-secondary rounded-lg px-3"
+                  className="h-10 transition-colors duration-200 data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:font-medium text-muted-foreground hover:text-primary hover:bg-primary/10 data-[active=true]:hover:bg-primary/15 rounded-lg px-3"
                 >
                   <Link to="/" className="flex items-center gap-3">
                     <LayoutDashboard className="h-4 w-4" />
@@ -84,7 +84,7 @@ export function AppSidebar() {
                   asChild
                   isActive={location.pathname === '/admin'}
                   tooltip="Administração"
-                  className="h-10 transition-all duration-200 data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:font-medium text-muted-foreground hover:text-foreground hover:bg-secondary rounded-lg px-3"
+                  className="h-10 transition-colors duration-200 data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:font-medium text-muted-foreground hover:text-primary hover:bg-primary/10 data-[active=true]:hover:bg-primary/15 rounded-lg px-3"
                 >
                   <Link to="/admin" className="flex items-center gap-3">
                     <Settings className="h-4 w-4" />
@@ -107,10 +107,10 @@ export function AppSidebar() {
                   <SidebarMenuButton
                     asChild
                     isActive={location.pathname === `/department/${dept.id}`}
-                    className="h-9 transition-all duration-200 data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:font-medium text-muted-foreground hover:text-foreground hover:bg-secondary rounded-lg px-3 group"
+                    className="h-9 transition-colors duration-200 data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:font-medium text-muted-foreground hover:text-primary hover:bg-primary/10 data-[active=true]:hover:bg-primary/15 rounded-lg px-3 group"
                   >
                     <Link to={`/department/${dept.id}`} className="flex items-center gap-3">
-                      <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/30 group-data-[active=true]:bg-primary group-hover:bg-primary/60 shrink-0 transition-colors" />
+                      <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/30 group-data-[active=true]:bg-primary group-hover:bg-primary shrink-0 transition-colors" />
                       <span className="line-clamp-1">{dept.name}</span>
                     </Link>
                   </SidebarMenuButton>
