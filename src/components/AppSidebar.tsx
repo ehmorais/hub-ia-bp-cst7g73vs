@@ -58,11 +58,7 @@ export function AppSidebar() {
           to="/"
           className="flex w-full items-center justify-center transition-opacity hover:opacity-80"
         >
-          <img
-            src="https://skip-assets.s3.amazonaws.com/11751/36965/images/f3821035-7c01-443b-8534-106596b6537d.gif"
-            alt="Beneficência Portuguesa São Caetano do Sul"
-            className="max-h-12 max-w-full w-auto object-contain"
-          />
+          <span className="font-bold text-lg tracking-tight">HUB IA BPSCS</span>
         </Link>
       </SidebarHeader>
 
