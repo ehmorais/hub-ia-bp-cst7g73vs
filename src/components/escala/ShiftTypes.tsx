@@ -16,6 +16,7 @@ import { useToast } from '@/components/ui/use-toast'
 import { Switch } from '@/components/ui/switch'
 import { getShiftTypes, createShiftType, updateShiftType, deleteShiftType } from '@/services/escala'
 import { useRealtime } from '@/hooks/use-realtime'
+import { getErrorMessage } from '@/lib/pocketbase/errors'
 
 export function ShiftTypes() {
   const [types, setTypes] = useState<any[]>([])
@@ -39,6 +40,13 @@ export function ShiftTypes() {
         description: 'Nome e código obrigatórios',
         variant: 'destructive',
       })
+    if (types.some((t) => t.code === code)) {
+      return toast({
+        title: 'Erro',
+        description: 'Código de turno já existe.',
+        variant: 'destructive',
+      })
+    }
     try {
       await createShiftType({
         name,
@@ -52,17 +60,27 @@ export function ShiftTypes() {
       setWorkHours(12)
       setRestHours(36)
       setIsAdministrative(false)
-      toast({ title: 'Tipo de escala criado' })
+      toast({
+        title: 'Tipo de escala criado',
+        className: 'bg-emerald-50 border-emerald-200 text-emerald-800',
+      })
     } catch (e: any) {
-      toast({ title: 'Erro', description: e.message, variant: 'destructive' })
+      toast({ title: 'Erro', description: getErrorMessage(e), variant: 'destructive' })
     }
   }
 
   const handleUpdate = async (id: string, field: string, val: any) => {
+    if (field === 'code' && types.some((t) => t.id !== id && t.code === val)) {
+      return toast({
+        title: 'Erro',
+        description: 'Código de turno já existe.',
+        variant: 'destructive',
+      })
+    }
     try {
       await updateShiftType(id, { [field]: val })
     } catch (e: any) {
-      toast({ title: 'Erro', description: e.message, variant: 'destructive' })
+      toast({ title: 'Erro', description: getErrorMessage(e), variant: 'destructive' })
     }
   }
 
@@ -71,7 +89,7 @@ export function ShiftTypes() {
       await deleteShiftType(id)
       toast({ title: 'Tipo de escala removido' })
     } catch (e: any) {
-      toast({ title: 'Erro', description: e.message, variant: 'destructive' })
+      toast({ title: 'Erro', description: getErrorMessage(e), variant: 'destructive' })
     }
   }
 

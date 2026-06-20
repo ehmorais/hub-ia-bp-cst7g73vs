@@ -47,6 +47,8 @@ import {
 import { Input } from '@/components/ui/input'
 import { useToast } from '@/components/ui/use-toast'
 import { Badge } from '@/components/ui/badge'
+import { AlertCircle } from 'lucide-react'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
 export function StaffContracts({ departmentId }: { departmentId?: string }) {
   const [contracts, setContracts] = useState<any[]>([])
@@ -54,6 +56,7 @@ export function StaffContracts({ departmentId }: { departmentId?: string }) {
   const [shiftTypes, setShiftTypes] = useState<any[]>([])
   const [isOpen, setIsOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [userHours, setUserHours] = useState<Record<string, number>>({})
 
   const [formData, setFormData] = useState({
     user: '',
@@ -64,8 +67,15 @@ export function StaffContracts({ departmentId }: { departmentId?: string }) {
 
   const { toast } = useToast()
 
-  const loadData = () => {
-    Promise.all([getStaffContracts(), getUsers(), getShiftTypes()]).then(([c, u, st]) => {
+  const loadData = async () => {
+    try {
+      const [c, u, st, cycles] = await Promise.all([
+        getStaffContracts(),
+        getUsers(),
+        getShiftTypes(),
+        import('@/services/escala').then((m) => m.getShiftCycles()),
+      ])
+
       let filteredContracts = c
       let filteredUsers = u
 
@@ -75,7 +85,7 @@ export function StaffContracts({ departmentId }: { departmentId?: string }) {
           if (userSector?.department) {
             return userSector.department === departmentId
           }
-          return true // fallback to showing if expansion missing
+          return true
         })
 
         filteredUsers = u.filter((user: any) => {
@@ -83,14 +93,30 @@ export function StaffContracts({ departmentId }: { departmentId?: string }) {
           if (userSector?.department) {
             return userSector.department === departmentId
           }
-          return true // fallback to showing if expansion missing
+          return true
         })
       }
 
       setContracts(filteredContracts)
       setUsers(filteredUsers)
       setShiftTypes(st)
-    })
+
+      const activeCycle = cycles.find((cy: any) => cy.status === 'active') || cycles[0]
+      if (activeCycle) {
+        const { getShifts } = await import('@/services/escala')
+        const allShifts = await getShifts(activeCycle.id)
+        const hoursMap: Record<string, number> = {}
+        allShifts.forEach((s: any) => {
+          const start = new Date(s.start_time)
+          const end = new Date(s.end_time)
+          const hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60)
+          hoursMap[s.user] = (hoursMap[s.user] || 0) + hours
+        })
+        setUserHours(hoursMap)
+      }
+    } catch (e) {
+      console.error(e)
+    }
   }
 
   useEffect(() => {
@@ -101,10 +127,18 @@ export function StaffContracts({ departmentId }: { departmentId?: string }) {
     try {
       if (editingId) {
         await updateStaffContract(editingId, formData)
-        toast({ title: 'Sucesso', description: 'Contrato atualizado' })
+        toast({
+          title: 'Sucesso',
+          description: 'Contrato atualizado',
+          className: 'bg-emerald-50 border-emerald-200 text-emerald-800',
+        })
       } else {
         await createStaffContract(formData)
-        toast({ title: 'Sucesso', description: 'Contrato criado' })
+        toast({
+          title: 'Sucesso',
+          description: 'Contrato criado',
+          className: 'bg-emerald-50 border-emerald-200 text-emerald-800',
+        })
       }
       setIsOpen(false)
       loadData()
@@ -240,9 +274,31 @@ export function StaffContracts({ departmentId }: { departmentId?: string }) {
               <TableRow key={c.id}>
                 <TableCell className="font-medium">{c.expand?.user?.name}</TableCell>
                 <TableCell>{c.contract_type}</TableCell>
-                <TableCell>{c.monthly_hour_limit}h</TableCell>
                 <TableCell>
-                  <Badge variant="outline">{c.expand?.shift_type?.name || 'Não associado'}</Badge>
+                  <div className="flex items-center gap-2">
+                    <span>{c.monthly_hour_limit}h</span>
+                    {(userHours[c.user] || 0) > c.monthly_hour_limit && (
+                      <Tooltip>
+                        <TooltipTrigger>
+                          <AlertCircle className="h-4 w-4 text-amber-500" />
+                        </TooltipTrigger>
+                        <TooltipContent className="bg-white text-slate-800 border-amber-200">
+                          <p>
+                            Atenção: Colaborador com {(userHours[c.user] || 0).toFixed(1)}h
+                            agendadas (excede o limite de {c.monthly_hour_limit}h).
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <Badge
+                    variant="outline"
+                    className="border-emerald-200 text-emerald-800 bg-emerald-50"
+                  >
+                    {c.expand?.shift_type?.name || 'Não associado'}
+                  </Badge>
                 </TableCell>
                 <TableCell className="text-right flex items-center justify-end gap-2">
                   <Button

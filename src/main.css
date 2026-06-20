@@ -1,91 +1,87 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    --background: 210 40% 98%; /* slate-50 */
-    --foreground: 240 10% 12%;
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
 
-    --card: 0 0% 100%; /* white */
-    --card-foreground: 240 10% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 12%;
+    --popover-foreground: 222.2 84% 4.9%;
 
-    /* Emerald 900 */
-    --primary: 164 86% 16%;
-    --primary-foreground: 0 0% 100%;
+    /* Emerald (#10b981) highlights */
+    --primary: 160 84% 39%;
+    --primary-foreground: 210 40% 98%;
 
-    /* Light slate for secondary */
-    --secondary: 210 40% 96.1%; /* slate-100 */
-    --secondary-foreground: 164 86% 16%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
 
-    --muted: 240 5% 96%;
-    --muted-foreground: 240 5% 45%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
 
     --accent: 210 40% 96.1%;
-    --accent-foreground: 164 86% 16%;
+    --accent-foreground: 222.2 47.4% 11.2%;
 
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 240 6% 90%;
-    --input: 240 6% 90%;
-    --ring: 164 86% 16%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 160 84% 39%;
 
-    --radius: 0.75rem;
+    --radius: 0.5rem;
 
-    /* Clean White Sidebar */
     --sidebar-background: 0 0% 100%;
-    --sidebar-foreground: 240 10% 12%;
-    --sidebar-primary: 164 86% 16%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 160 84% 39%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 5% 96%;
-    --sidebar-accent-foreground: 164 86% 16%;
-    --sidebar-border: 240 6% 90%;
-    --sidebar-ring: 164 86% 16%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 160 84% 39%;
   }
 
   .dark {
-    --background: 166 91% 5%;
-    --foreground: 166 20% 90%;
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
 
-    --card: 166 91% 7%;
-    --card-foreground: 166 20% 90%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
 
-    --popover: 166 91% 7%;
-    --popover-foreground: 166 20% 90%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
 
-    --primary: 164 86% 40%;
-    --primary-foreground: 0 0% 100%;
+    --primary: 160 84% 39%;
+    --primary-foreground: 222.2 47.4% 11.2%;
 
-    --secondary: 164 40% 15%;
-    --secondary-foreground: 164 86% 80%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
 
-    --muted: 166 40% 12%;
-    --muted-foreground: 166 20% 65%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
 
-    --accent: 164 40% 15%;
-    --accent-foreground: 164 86% 80%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
 
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 166 40% 12%;
-    --input: 166 40% 12%;
-    --ring: 164 86% 40%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 160 84% 39%;
 
-    --sidebar-background: 166 91% 5%;
-    --sidebar-foreground: 166 20% 85%;
-    --sidebar-primary: 164 86% 40%;
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 160 84% 39%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 166 80% 10%;
-    --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 166 40% 12%;
-    --sidebar-ring: 164 86% 40%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 160 84% 39%;
   }
 }
 
@@ -94,6 +90,6 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground antialiased;
+    @apply bg-background text-foreground;
   }
 }
