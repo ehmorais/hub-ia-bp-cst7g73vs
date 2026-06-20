@@ -50,7 +50,7 @@ export function SystemChecklistModal({ tools }: SystemChecklistModalProps) {
               <div className="space-y-2">
                 {activeTools.map((tool) => (
                   <div key={tool.id} className="flex items-center gap-3">
-                    <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
+                    <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />
                     <span className="text-sm text-slate-700 font-medium">{tool.name}</span>
                   </div>
                 ))}

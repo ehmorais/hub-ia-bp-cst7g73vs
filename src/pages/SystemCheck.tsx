@@ -141,7 +141,7 @@ export default function SystemCheck() {
                 <div className="flex items-center">
                   {tool.checkStatus === 'pending' && <Circle className="h-5 w-5 text-slate-300" />}
                   {tool.checkStatus === 'checking' && (
-                    <Loader2 className="h-5 w-5 text-blue-500 animate-spin" />
+                    <Loader2 className="h-5 w-5 text-primary animate-spin" />
                   )}
                   {tool.checkStatus === 'success' && (
                     <CheckCircle2 className="h-5 w-5 text-primary" />
@@ -159,7 +159,7 @@ export default function SystemCheck() {
               <p className="text-sm text-slate-500">Iniciando verificação...</p>
             )}
             {globalStatus === 'checking' && (
-              <p className="text-sm text-blue-600 font-medium animate-pulse">
+              <p className="text-sm text-primary font-medium animate-pulse">
                 Verificando ferramentas de IA...
               </p>
             )}

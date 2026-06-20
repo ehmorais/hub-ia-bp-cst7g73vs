@@ -42,7 +42,14 @@ export function AppSidebar() {
     isAuthenticated,
   )
 
-  const sortedDepartments = [...departments].sort((a, b) => a.sort_order - b.sort_order)
+  const sortedDepartments = [...departments].sort((a, b) => {
+    const aIsGeneral = a.name.includes('Projetos Gerais')
+    const bIsGeneral = b.name.includes('Projetos Gerais')
+    if (aIsGeneral && !bIsGeneral) return -1
+    if (!aIsGeneral && bIsGeneral) return 1
+    if (a.sort_order !== b.sort_order) return a.sort_order - b.sort_order
+    return a.name.localeCompare(b.name)
+  })
 
   return (
     <Sidebar className="border-r shadow-sm">
