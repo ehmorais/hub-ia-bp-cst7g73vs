@@ -39,10 +39,12 @@ export default function Layout() {
               to="/"
               className="flex items-center gap-3 transition-opacity hover:opacity-80 shrink-0"
             >
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
-                <span className="font-bold text-xl leading-none mb-[2px]">+</span>
+              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground shadow-sm">
+                <span className="font-semibold text-lg leading-none mb-[2px]">+</span>
               </div>
-              <span className="font-bold text-xl tracking-tight text-primary">HUB IA BPSCS</span>
+              <span className="font-semibold text-lg tracking-tight text-primary">
+                HUB IA BPSCS
+              </span>
             </Link>
           </div>
           <div className="flex-1"></div>
@@ -86,7 +88,7 @@ export default function Layout() {
           </div>
         </header>
 
-        <main className="flex-1 overflow-auto p-4 md:p-8">
+        <main className="flex-1 overflow-auto p-4 md:p-8 md:pt-10">
           <Outlet />
         </main>
       </SidebarInset>
