@@ -39,12 +39,19 @@ export default function Layout() {
             <div className="h-5 w-px bg-emerald-600/20 mx-1 hidden md:block" />
             <Link
               to="/"
-              className="flex items-center gap-3 transition-opacity hover:opacity-80 shrink-0"
+              className="flex items-center gap-3 transition-opacity hover:opacity-80 shrink-0 md:hidden"
             >
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-600 text-white shadow-sm">
-                <span className="font-bold text-lg leading-none mb-[2px]">H</span>
-              </div>
-              <span className="font-bold text-lg tracking-tight text-emerald-950 hidden sm:block">
+              <img
+                src="https://skip-assets.s3.amazonaws.com/11751/36965/images/f3821035-7c01-443b-8534-106596b6537d.gif"
+                alt="Beneficência Portuguesa São Caetano do Sul"
+                className="max-h-8 w-auto object-contain"
+              />
+            </Link>
+            <Link
+              to="/"
+              className="hidden md:flex items-center gap-3 transition-opacity hover:opacity-80 shrink-0"
+            >
+              <span className="font-bold text-lg tracking-tight text-emerald-950">
                 HUB IA <span className="text-emerald-600 font-medium">BPSCS</span>
               </span>
             </Link>

@@ -53,10 +53,17 @@ export function AppSidebar() {
 
   return (
     <Sidebar className="border-r border-border shadow-sm bg-sidebar">
-      <SidebarHeader className="p-6 min-h-[5rem] flex items-center justify-center border-b border-border/50">
-        <span className="font-bold text-[11px] tracking-[0.25em] uppercase text-muted-foreground">
-          Menu Principal
-        </span>
+      <SidebarHeader className="p-4 min-h-[5rem] flex items-center justify-center border-b border-border/50 bg-white">
+        <Link
+          to="/"
+          className="flex w-full items-center justify-center transition-opacity hover:opacity-80"
+        >
+          <img
+            src="https://skip-assets.s3.amazonaws.com/11751/36965/images/f3821035-7c01-443b-8534-106596b6537d.gif"
+            alt="Beneficência Portuguesa São Caetano do Sul"
+            className="max-h-12 max-w-full w-auto object-contain"
+          />
+        </Link>
       </SidebarHeader>
 
       <SidebarContent className="px-3 py-6 gap-8">
