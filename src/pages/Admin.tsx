@@ -427,7 +427,7 @@ export default function Admin() {
   return (
     <div className="container mx-auto p-4 md:p-8 space-y-8 max-w-[1400px] animate-fade-in">
       <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-3">
+        <h1 className="text-3xl font-bold tracking-tight text-primary flex items-center gap-3">
           <ShieldCheck className="h-8 w-8 text-primary" />
           Painel de Administração
         </h1>
@@ -484,7 +484,7 @@ export default function Admin() {
 
         <TabsContent value="performance" className="space-y-6">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-semibold flex items-center gap-2">
+            <h2 className="text-xl font-semibold flex items-center gap-2 text-primary">
               <Activity className="h-5 w-5" /> Performance Dashboard
             </h2>
             <Button onClick={handleExportCSV} className="gap-2">
@@ -528,7 +528,7 @@ export default function Admin() {
                       </div>
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-slate-500">Projetos Ativos</span>
-                        <span className="font-semibold text-green-600">
+                        <span className="font-semibold text-primary">
                           {active} ({activePercent}%)
                         </span>
                       </div>
@@ -797,7 +797,7 @@ export default function Admin() {
 
         <TabsContent value="users" className="space-y-4">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-semibold flex items-center gap-2">
+            <h2 className="text-xl font-semibold flex items-center gap-2 text-primary">
               <Users className="h-5 w-5" /> Gestão de Acessos
             </h2>
             {isAdmin && (
@@ -1019,7 +1019,7 @@ export default function Admin() {
                           className={cn(
                             'text-[10px] uppercase h-5 px-1.5',
                             tool.status === 'active'
-                              ? 'text-green-600 border-green-200 bg-green-50'
+                              ? 'text-primary border-primary/20 bg-primary/10'
                               : 'text-amber-600 border-amber-200 bg-amber-50',
                           )}
                         >
@@ -1304,7 +1304,7 @@ export default function Admin() {
                           variant="outline"
                           className={
                             proj.status === 'active'
-                              ? 'text-green-600 border-green-200 bg-green-50'
+                              ? 'text-primary border-primary/20 bg-primary/10'
                               : 'text-amber-600 border-amber-200 bg-amber-50'
                           }
                         >

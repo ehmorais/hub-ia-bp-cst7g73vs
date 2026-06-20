@@ -47,7 +47,7 @@ export function AppSidebar() {
   return (
     <Sidebar className="border-r shadow-sm">
       <SidebarHeader className="p-4 border-b min-h-[3.5rem] flex items-center justify-center">
-        <span className="font-bold text-lg">Menu Principal</span>
+        <span className="font-bold text-lg text-primary">Menu Principal</span>
       </SidebarHeader>
 
       <SidebarContent>
@@ -60,6 +60,7 @@ export function AppSidebar() {
                   asChild
                   isActive={location.pathname === '/' || location.pathname === '/dashboard'}
                   tooltip="Dashboard"
+                  className="hover:text-primary hover:bg-primary/5 data-[active=true]:bg-primary/10 data-[active=true]:text-primary font-medium transition-colors"
                 >
                   <Link to="/">
                     <LayoutDashboard className="h-4 w-4" />
@@ -72,6 +73,7 @@ export function AppSidebar() {
                   asChild
                   isActive={location.pathname === '/admin'}
                   tooltip="Administração"
+                  className="hover:text-primary hover:bg-primary/5 data-[active=true]:bg-primary/10 data-[active=true]:text-primary font-medium transition-colors"
                 >
                   <Link to="/admin">
                     <Settings className="h-4 w-4" />
@@ -92,6 +94,7 @@ export function AppSidebar() {
                   <SidebarMenuButton
                     asChild
                     isActive={location.pathname === `/department/${dept.id}`}
+                    className="hover:text-primary hover:bg-primary/5 data-[active=true]:bg-primary/10 data-[active=true]:text-primary font-medium transition-colors"
                   >
                     <Link to={`/department/${dept.id}`}>
                       <span>{dept.name}</span>

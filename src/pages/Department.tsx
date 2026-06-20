@@ -88,13 +88,13 @@ export default function Department() {
           </Link>
         </Button>
         <div>
-          <h1 className="text-2xl font-bold">{department.name}</h1>
+          <h1 className="text-2xl font-bold text-primary">{department.name}</h1>
           <p className="text-muted-foreground">{department.description}</p>
         </div>
       </div>
 
       <div className="space-y-4">
-        <h2 className="text-lg font-semibold">Setores do Departamento</h2>
+        <h2 className="text-lg font-semibold text-primary">Setores do Departamento</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {sectors.map((sector) => (
             <Card key={sector.id}>
@@ -122,14 +122,21 @@ export default function Department() {
       </div>
 
       <div className="space-y-4">
-        <h2 className="text-lg font-semibold">Modelos Disponíveis</h2>
+        <h2 className="text-lg font-semibold text-primary">Modelos Disponíveis</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {departmentTools.map((tool) => (
             <Card key={tool.id}>
               <CardHeader>
                 <div className="flex justify-between items-start">
                   <CardTitle className="text-base">{tool.name}</CardTitle>
-                  <Badge variant={tool.status === 'active' ? 'default' : 'secondary'}>
+                  <Badge
+                    className={
+                      tool.status === 'active'
+                        ? 'bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary shadow-none'
+                        : ''
+                    }
+                    variant={tool.status === 'active' ? 'outline' : 'secondary'}
+                  >
                     {tool.status}
                   </Badge>
                 </div>
@@ -151,14 +158,21 @@ export default function Department() {
       </div>
 
       <div className="space-y-4">
-        <h2 className="text-lg font-semibold">Projetos</h2>
+        <h2 className="text-lg font-semibold text-primary">Projetos</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {projects.map((proj) => (
             <Card key={proj.id}>
               <CardHeader>
                 <div className="flex justify-between items-start">
                   <CardTitle className="text-base">{proj.name}</CardTitle>
-                  <Badge variant={proj.status === 'active' ? 'default' : 'secondary'}>
+                  <Badge
+                    className={
+                      proj.status === 'active'
+                        ? 'bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary shadow-none'
+                        : ''
+                    }
+                    variant={proj.status === 'active' ? 'outline' : 'secondary'}
+                  >
                     {proj.status}
                   </Badge>
                 </div>
