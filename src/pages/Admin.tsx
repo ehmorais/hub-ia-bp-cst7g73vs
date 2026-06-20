@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/hooks/use-auth'
+import { UserManagement } from '@/components/UserManagement'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
@@ -87,6 +88,36 @@ const ICONS_LIST = [
 ]
 
 export default function Admin() {
+  const location = useLocation()
+  const { user } = useAuth()
+
+  if (user?.role !== 'Admin') {
+    return (
+      <div className="p-8 text-center text-red-500">Acesso negado. Apenas administradores.</div>
+    )
+  }
+
+  if (location.hash === '#users') {
+    return <UserManagement />
+  }
+
+  return (
+    <div className="relative h-full w-full">
+      <AdminContent />
+      <div className="fixed bottom-6 right-6 z-50">
+        <Button
+          onClick={() => (window.location.hash = '#users')}
+          className="bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg rounded-full px-6 h-12"
+        >
+          <Users className="w-5 h-5 mr-2" />
+          Gerenciar Usuários
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+function AdminContent() {
   const location = useLocation()
   const { toast } = useToast()
   const { user } = useAuth()
