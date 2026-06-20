@@ -19,19 +19,23 @@ export default function Login() {
     setError('')
     const res = await signIn(email, password)
     if (res.error) {
-      setError('Credenciais inválidas.')
+      setError('Credenciais inválidas. Verifique seu e-mail e senha e tente novamente.')
       setLoading(false)
     } else {
-      navigate('/')
+      navigate('/system-check')
     }
   }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 p-4">
-      <Card className="w-full max-w-sm">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold">HUB IA BPSCS</CardTitle>
-          <CardDescription>Entre com suas credenciais institucionais</CardDescription>
+      <Card className="w-full max-w-sm shadow-lg border-primary/20">
+        <CardHeader className="text-center pb-6">
+          <CardTitle className="text-3xl font-bold text-primary tracking-tight">
+            HUB IA BPSCS
+          </CardTitle>
+          <CardDescription className="text-sm mt-2">
+            Entre com suas credenciais institucionais
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleLogin} className="space-y-4">

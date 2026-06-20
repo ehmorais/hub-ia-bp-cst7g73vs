@@ -14,6 +14,7 @@ import AiChat from './pages/AiChat'
 import Admin from './pages/Admin'
 import Login from './pages/Login'
 import Profile from './pages/Profile'
+import SystemCheck from './pages/SystemCheck'
 import { AuthProvider, useAuth } from './hooks/use-auth'
 
 function ProtectedRoute() {
@@ -33,6 +34,7 @@ const App = () => (
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route element={<ProtectedRoute />}>
+            <Route path="/system-check" element={<SystemCheck />} />
             <Route element={<Layout />}>
               <Route path="/" element={<Index />} />
               <Route path="/dashboard" element={<Dashboard />} />
