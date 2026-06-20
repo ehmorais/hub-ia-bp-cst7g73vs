@@ -46,8 +46,10 @@ export function AppSidebar() {
 
   return (
     <Sidebar className="border-r shadow-sm">
-      <SidebarHeader className="p-4 border-b min-h-[3.5rem] flex items-center justify-center">
-        <span className="font-bold text-lg text-primary">Menu Principal</span>
+      <SidebarHeader className="p-4 border-b min-h-[3.5rem] flex items-center justify-center bg-muted/10">
+        <span className="font-bold text-sm tracking-wider uppercase text-primary/80">
+          Menu Principal
+        </span>
       </SidebarHeader>
 
       <SidebarContent>

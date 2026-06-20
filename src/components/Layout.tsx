@@ -31,14 +31,17 @@ export default function Layout() {
   return (
     <SidebarProvider>
       <AppSidebar />
-      <SidebarInset className="flex flex-col min-h-screen bg-slate-50">
+      <SidebarInset className="flex flex-col min-h-screen bg-muted/30">
         <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-background px-4 md:px-6 shadow-sm">
           <div className="flex items-center gap-3">
             <SidebarTrigger className="shrink-0" />
             <Link
               to="/"
-              className="flex items-center gap-2 transition-opacity hover:opacity-80 shrink-0"
+              className="flex items-center gap-2 transition-opacity hover:opacity-80 shrink-0 text-primary"
             >
+              <div className="flex h-6 w-6 items-center justify-center rounded bg-primary text-primary-foreground">
+                <span className="font-bold text-sm leading-none">+</span>
+              </div>
               <span className="font-bold text-lg">Hub IA BP</span>
             </Link>
           </div>
