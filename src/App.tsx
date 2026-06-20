@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom'
 import { Toaster } from '@/components/ui/toaster'
 import { Toaster as Sonner } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -19,9 +19,15 @@ import { AuthProvider, useAuth } from './hooks/use-auth'
 
 function ProtectedRoute() {
   const { isAuthenticated, loading } = useAuth()
+  const location = useLocation()
+
   if (loading)
     return <div className="min-h-screen flex items-center justify-center">Carregando...</div>
-  if (!isAuthenticated) return <Navigate to="/login" replace />
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" state={{ from: location }} replace />
+  }
+
   return <Outlet />
 }
 
