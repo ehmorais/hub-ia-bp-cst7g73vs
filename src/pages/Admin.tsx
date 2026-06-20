@@ -533,7 +533,7 @@ function AdminContent() {
               const depColorHex = dep.color || 'hsl(var(--primary))'
 
               return (
-                <Card key={dep.id} className="border-slate-200">
+                <Card key={dep.id}>
                   <CardHeader className="pb-2">
                     <CardTitle
                       className="text-lg flex items-center gap-2"
@@ -585,8 +585,8 @@ function AdminContent() {
         <TabsContent value="departments" className="space-y-6">
           <div className={`grid gap-6 ${isAdmin ? 'lg:grid-cols-3' : 'lg:grid-cols-1'}`}>
             {isAdmin && (
-              <Card className="border-slate-200 bg-white lg:col-span-1 h-fit">
-                <CardHeader className="bg-slate-50 border-b">
+              <Card className="lg:col-span-1 h-fit">
+                <CardHeader className="border-b">
                   <CardTitle className="text-lg flex items-center gap-2">
                     <Building2 className="h-5 w-5" />{' '}
                     {editingDep ? 'Editar Departamento' : 'Novo Departamento'}
@@ -687,9 +687,9 @@ function AdminContent() {
               </Card>
             )}
 
-            <Card className={`border-slate-200 ${isAdmin ? 'lg:col-span-2' : ''}`}>
+            <Card className={isAdmin ? 'lg:col-span-2' : ''}>
               <Table>
-                <TableHeader className="bg-slate-50">
+                <TableHeader>
                   <TableRow>
                     <TableHead>Nome</TableHead>
                     <TableHead>Ícone & Cor</TableHead>
@@ -759,7 +759,7 @@ function AdminContent() {
         </TabsContent>
 
         <TabsContent value="audit" className="space-y-4">
-          <div className="flex justify-between items-center bg-white p-4 rounded-lg border shadow-sm mb-4">
+          <div className="flex justify-between items-center bg-card p-4 rounded-lg border shadow-sm mb-4">
             <div className="flex items-center gap-4 w-full max-w-lg">
               <div className="relative flex-1">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -778,9 +778,9 @@ function AdminContent() {
             </div>
           </div>
 
-          <Card className="border-slate-200">
+          <Card>
             <Table>
-              <TableHeader className="bg-slate-50">
+              <TableHeader>
                 <TableRow>
                   <TableHead className="w-[100px]">ID</TableHead>
                   <TableHead>Data/Hora</TableHead>
@@ -837,9 +837,9 @@ function AdminContent() {
               </Button>
             )}
           </div>
-          <Card className="border-slate-200">
+          <Card>
             <Table>
-              <TableHeader className="bg-slate-50">
+              <TableHeader>
                 <TableRow>
                   <TableHead>Nome</TableHead>
                   <TableHead>Email</TableHead>
@@ -883,8 +883,8 @@ function AdminContent() {
         <TabsContent value="ia_tools" className="space-y-6">
           <div className={`grid gap-6 ${isAdmin ? 'lg:grid-cols-2' : 'lg:grid-cols-1'}`}>
             {isAdmin && (
-              <Card className="border-slate-200 bg-white h-fit">
-                <CardHeader className="bg-slate-50 border-b">
+              <Card className="h-fit">
+                <CardHeader className="border-b">
                   <CardTitle className="text-lg flex items-center gap-2">
                     <Settings2 className="h-5 w-5" />{' '}
                     {editingTool ? 'Editar Ferramenta IA' : 'Nova Ferramenta IA'}
@@ -1038,10 +1038,7 @@ function AdminContent() {
               <h3 className="text-lg font-semibold border-b pb-2">Ferramentas Cadastradas</h3>
               <div className="flex flex-col gap-3">
                 {tools.map((tool) => (
-                  <Card
-                    key={tool.id}
-                    className="p-4 flex items-center justify-between border-slate-200 shadow-sm"
-                  >
+                  <Card key={tool.id} className="p-4 flex items-center justify-between shadow-sm">
                     <div className="flex-1 min-w-0 pr-4">
                       <div className="flex items-center gap-2">
                         <p className="font-semibold text-slate-800 truncate">{tool.name}</p>
@@ -1105,8 +1102,8 @@ function AdminContent() {
         <TabsContent value="projects" className="space-y-6">
           <div className={`grid gap-6 ${isAdmin ? 'lg:grid-cols-3' : 'lg:grid-cols-1'}`}>
             {isAdmin && (
-              <Card className="border-slate-200 bg-white lg:col-span-1 h-fit">
-                <CardHeader className="bg-slate-50 border-b">
+              <Card className="lg:col-span-1 h-fit">
+                <CardHeader className="border-b">
                   <CardTitle className="text-lg flex items-center gap-2">
                     <Building2 className="h-5 w-5" />{' '}
                     {editingProj ? 'Editar Projeto' : 'Novo Projeto'}
@@ -1276,9 +1273,9 @@ function AdminContent() {
               </Card>
             )}
 
-            <Card className={`border-slate-200 ${isAdmin ? 'lg:col-span-2' : ''}`}>
+            <Card className={isAdmin ? 'lg:col-span-2' : ''}>
               <Table>
-                <TableHeader className="bg-slate-50">
+                <TableHeader>
                   <TableRow>
                     <TableHead>Nome</TableHead>
                     <TableHead>Departamento</TableHead>

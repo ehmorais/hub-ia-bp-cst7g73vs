@@ -71,7 +71,7 @@ export function EscalasManagement({ departmentId, projectId }: EscalasManagement
         </p>
       </div>
 
-      <Card className="relative overflow-hidden border-slate-200 shadow-sm bg-white">
+      <Card className="relative overflow-hidden shadow-sm">
         <div className="absolute top-0 left-0 w-1 bg-primary h-full" />
         <CardHeader className="pb-2 pt-4 px-4 md:px-6">
           <CardTitle className="text-sm font-semibold text-slate-700 flex items-center gap-2">
@@ -188,7 +188,7 @@ export function EscalasManagement({ departmentId, projectId }: EscalasManagement
           </TabsTrigger>
         </TabsList>
 
-        <div className="flex-1 overflow-y-auto bg-slate-50/50 rounded-lg p-2 md:p-6 border">
+        <div className="flex-1 overflow-y-auto rounded-lg p-2 md:p-6 border bg-card">
           <TabsContent value="ciclos" className="mt-0">
             <ShiftCycles />
           </TabsContent>

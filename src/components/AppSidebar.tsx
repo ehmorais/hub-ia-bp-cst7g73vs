@@ -52,8 +52,8 @@ export function AppSidebar() {
   })
 
   return (
-    <Sidebar className="border-r border-border shadow-sm bg-sidebar">
-      <SidebarHeader className="p-4 min-h-[5rem] flex items-center justify-center border-b border-border/50 bg-white">
+    <Sidebar className="border-r shadow-sm">
+      <SidebarHeader className="p-4 min-h-[5rem] flex items-center justify-center border-b">
         <Link
           to="/"
           className="flex w-full items-center justify-center transition-opacity hover:opacity-80"
