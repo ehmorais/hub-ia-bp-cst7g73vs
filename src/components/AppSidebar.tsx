@@ -53,10 +53,8 @@ export function AppSidebar() {
 
   return (
     <Sidebar className="border-r shadow-sm">
-      <SidebarHeader className="p-4 border-b min-h-[3.5rem] flex items-center justify-center bg-muted/10">
-        <span className="font-bold text-sm tracking-wider uppercase text-primary/80">
-          Menu Principal
-        </span>
+      <SidebarHeader className="p-4 border-b min-h-[4rem] flex items-center justify-center bg-primary text-primary-foreground">
+        <span className="font-bold text-sm tracking-wider uppercase">Menu Principal</span>
       </SidebarHeader>
 
       <SidebarContent>
@@ -71,7 +69,7 @@ export function AppSidebar() {
                   tooltip="Dashboard"
                   className="hover:text-primary hover:bg-primary/5 data-[active=true]:bg-primary/10 data-[active=true]:text-primary font-medium transition-colors"
                 >
-                  <Link to="/">
+                  <Link to="/" className="flex items-center gap-2">
                     <LayoutDashboard className="h-4 w-4" />
                     <span>Visão Geral</span>
                   </Link>
@@ -84,7 +82,7 @@ export function AppSidebar() {
                   tooltip="Administração"
                   className="hover:text-primary hover:bg-primary/5 data-[active=true]:bg-primary/10 data-[active=true]:text-primary font-medium transition-colors"
                 >
-                  <Link to="/admin">
+                  <Link to="/admin" className="flex items-center gap-2">
                     <Settings className="h-4 w-4" />
                     <span>Administração</span>
                   </Link>
@@ -105,8 +103,9 @@ export function AppSidebar() {
                     isActive={location.pathname === `/department/${dept.id}`}
                     className="hover:text-primary hover:bg-primary/5 data-[active=true]:bg-primary/10 data-[active=true]:text-primary font-medium transition-colors"
                   >
-                    <Link to={`/department/${dept.id}`}>
-                      <span>{dept.name}</span>
+                    <Link to={`/department/${dept.id}`} className="flex items-center gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-primary/50 group-data-[active=true]:bg-primary shrink-0" />
+                      <span className="line-clamp-1">{dept.name}</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

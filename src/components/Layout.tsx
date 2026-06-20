@@ -32,17 +32,17 @@ export default function Layout() {
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset className="flex flex-col min-h-screen bg-muted/30">
-        <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-background px-4 md:px-6 shadow-sm">
+        <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4 md:px-6 shadow-sm">
           <div className="flex items-center gap-3">
-            <SidebarTrigger className="shrink-0" />
+            <SidebarTrigger className="shrink-0 text-primary hover:bg-primary/10 hover:text-primary transition-colors" />
             <Link
               to="/"
-              className="flex items-center gap-2 transition-opacity hover:opacity-80 shrink-0 text-primary"
+              className="flex items-center gap-3 transition-opacity hover:opacity-80 shrink-0"
             >
-              <div className="flex h-6 w-6 items-center justify-center rounded bg-primary text-primary-foreground">
-                <span className="font-bold text-sm leading-none">+</span>
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
+                <span className="font-bold text-xl leading-none mb-[2px]">+</span>
               </div>
-              <span className="font-bold text-lg">HUB IA BPSCS</span>
+              <span className="font-bold text-xl tracking-tight text-primary">HUB IA BPSCS</span>
             </Link>
           </div>
           <div className="flex-1"></div>
@@ -86,7 +86,7 @@ export default function Layout() {
           </div>
         </header>
 
-        <main className="flex-1 overflow-auto p-4 md:p-6">
+        <main className="flex-1 overflow-auto p-4 md:p-8">
           <Outlet />
         </main>
       </SidebarInset>
