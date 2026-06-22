@@ -41,7 +41,7 @@ const App = () => (
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route element={<ProtectedRoute />}>
-            <Route path="/system-check" element={<SystemCheck />} />
+            <Route path="/all-systems-go" element={<SystemCheck />} />
             <Route element={<Layout />}>
               <Route path="/" element={<Index />} />
               <Route path="/dashboard" element={<Dashboard />} />

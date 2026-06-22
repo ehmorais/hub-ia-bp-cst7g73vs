@@ -51,7 +51,7 @@ export default function Login() {
       setError('E-mail ou senha inválidos. Verifique suas credenciais e tente novamente.')
       setLoading(false)
     } else {
-      navigate(from, { replace: true })
+      navigate('/all-systems-go', { state: { from }, replace: true })
     }
   }
 

@@ -1,47 +1,60 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import pb from '@/lib/pocketbase/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Progress } from '@/components/ui/progress'
 import { CheckCircle2, Circle, Loader2, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
-interface ToolStatus {
+interface SystemItem {
   id: string
   name: string
-  status: string
+  type: 'project' | 'tool'
   checkStatus: 'pending' | 'checking' | 'success' | 'error'
 }
 
 export default function SystemCheck() {
-  const [tools, setTools] = useState<ToolStatus[]>([])
+  const [items, setItems] = useState<SystemItem[]>([])
   const [globalStatus, setGlobalStatus] = useState<'loading' | 'checking' | 'all-go' | 'error'>(
     'loading',
   )
-  const [progress, setProgress] = useState(0)
   const [finished, setFinished] = useState(false)
   const navigate = useNavigate()
+  const location = useLocation()
+
+  const from = location.state?.from || '/'
 
   useEffect(() => {
     async function initCheck() {
       try {
-        const records = await pb.collection('ia_tools').getFullList({
-          sort: 'name',
-        })
-        if (records.length === 0) {
-          setTools([])
+        const [toolsRecords, projectsRecords] = await Promise.all([
+          pb.collection('ia_tools').getFullList({ sort: 'name' }),
+          pb.collection('projects').getFullList({ sort: 'name' }),
+        ])
+
+        const mappedProjects = projectsRecords.map((r) => ({
+          id: r.id,
+          name: r.name,
+          type: 'project' as const,
+          checkStatus: 'pending' as const,
+        }))
+
+        const mappedTools = toolsRecords.map((r) => ({
+          id: r.id,
+          name: r.name,
+          type: 'tool' as const,
+          checkStatus: 'pending' as const,
+        }))
+
+        const combined = [...mappedProjects, ...mappedTools]
+
+        if (combined.length === 0) {
+          setItems([])
           setGlobalStatus('all-go')
-          setTimeout(() => redirectAfterSuccess(), 1500)
+          setFinished(true)
           return
         }
 
-        const mapped = records.map((r) => ({
-          id: r.id,
-          name: r.name,
-          status: r.status,
-          checkStatus: 'pending' as const,
-        }))
-        setTools(mapped)
+        setItems(combined)
         setGlobalStatus('checking')
       } catch (error) {
         setGlobalStatus('error')
@@ -51,17 +64,17 @@ export default function SystemCheck() {
   }, [])
 
   useEffect(() => {
-    if (globalStatus !== 'checking' || tools.length === 0) return
+    if (globalStatus !== 'checking' || items.length === 0) return
 
     let currentIdx = 0
 
     const interval = setInterval(() => {
-      setTools((prev) => {
+      setItems((prev) => {
         const next = [...prev]
 
         if (currentIdx > 0 && currentIdx <= next.length) {
-          const prevTool = next[currentIdx - 1]
-          prevTool.checkStatus = prevTool.status === 'active' ? 'success' : 'error'
+          const prevItem = next[currentIdx - 1]
+          prevItem.checkStatus = 'success'
         }
 
         if (currentIdx < next.length) {
@@ -71,122 +84,133 @@ export default function SystemCheck() {
         return next
       })
 
-      setProgress(Math.round(((currentIdx + 1) / tools.length) * 100))
-
-      if (currentIdx >= tools.length) {
+      if (currentIdx >= items.length) {
         clearInterval(interval)
         setFinished(true)
       }
 
       currentIdx++
-    }, 400)
+    }, 300) // Delay for visual effect
 
     return () => clearInterval(interval)
-  }, [globalStatus, tools.length])
+  }, [globalStatus, items.length])
 
   useEffect(() => {
-    if (finished) {
-      const hasError = tools.some((t) => t.status !== 'active')
-      setGlobalStatus(hasError ? 'error' : 'all-go')
-
-      if (!hasError) {
-        const timer = setTimeout(() => {
-          redirectAfterSuccess()
-        }, 1500)
-        return () => clearTimeout(timer)
-      }
+    if (finished && globalStatus !== 'error') {
+      setGlobalStatus('all-go')
     }
-  }, [finished])
+  }, [finished, globalStatus])
 
-  async function redirectAfterSuccess() {
+  async function handleProceed() {
     try {
-      const depts = await pb.collection('departments').getFullList({
-        filter: 'name ~ "Projetos Gerais"',
-      })
-      if (depts.length > 0) {
-        navigate(`/department/${depts[0].id}`)
-      } else {
-        navigate('/')
+      if (from === '/') {
+        const depts = await pb.collection('departments').getFullList({
+          filter: 'name ~ "Projetos Gerais"',
+        })
+        if (depts.length > 0) {
+          navigate(`/department/${depts[0].id}`, { replace: true })
+          return
+        }
       }
+      navigate(from, { replace: true })
     } catch {
-      navigate('/')
+      navigate('/', { replace: true })
     }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
-      <Card className="w-full max-w-md shadow-lg border-primary/20">
-        <CardHeader className="text-center pb-2">
-          <CardTitle className="text-2xl font-bold text-primary tracking-tight">
-            HUB IA BPSCS
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4 font-sans">
+      <Card className="w-full max-w-lg shadow-xl border-[#06402B]/10 rounded-xl overflow-hidden">
+        <CardHeader className="text-center pb-5 bg-white border-b border-slate-100">
+          <CardTitle className="text-2xl font-bold tracking-tight text-[#06402B]">
+            All Systems Go
           </CardTitle>
-          <p className="text-sm text-muted-foreground mt-1">Verificação de Sistemas</p>
+          <p className="text-sm text-slate-500 mt-1">Verificação de Integridade dos Sistemas</p>
         </CardHeader>
-        <CardContent className="space-y-6 mt-4">
-          <div className="space-y-2">
-            <div className="flex justify-between text-sm font-medium">
-              <span>Progresso</span>
-              <span>{progress}%</span>
-            </div>
-            <Progress value={progress} className="h-2" />
-          </div>
 
-          <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
-            {tools.map((tool) => (
+        <CardContent className="p-0">
+          <div className="p-6 max-h-[50vh] overflow-y-auto space-y-4 bg-slate-50/50">
+            {globalStatus === 'loading' && (
+              <div className="flex items-center space-x-2 text-slate-500 text-sm">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Estabelecendo conexão...</span>
+              </div>
+            )}
+
+            {items.map((item, idx) => (
               <div
-                key={tool.id}
-                className="flex items-center justify-between p-2 rounded-lg bg-slate-100/50"
+                key={`${item.type}-${item.id}`}
+                className={`flex justify-between items-center transition-all duration-300 ${
+                  item.checkStatus === 'pending' ? 'opacity-40' : 'opacity-100'
+                }`}
               >
-                <span className="text-sm font-medium text-slate-700">{tool.name}</span>
-                <div className="flex items-center">
-                  {tool.checkStatus === 'pending' && <Circle className="h-5 w-5 text-slate-300" />}
-                  {tool.checkStatus === 'checking' && (
-                    <Loader2 className="h-5 w-5 text-primary animate-spin" />
+                <div className="flex items-center space-x-3 overflow-hidden pr-2">
+                  {item.checkStatus === 'pending' && (
+                    <Circle className="w-4 h-4 text-slate-300 flex-shrink-0" />
                   )}
-                  {tool.checkStatus === 'success' && (
-                    <CheckCircle2 className="h-5 w-5 text-primary" />
+                  {item.checkStatus === 'checking' && (
+                    <Loader2 className="w-4 h-4 text-[#06402B] animate-spin flex-shrink-0" />
                   )}
-                  {tool.checkStatus === 'error' && (
-                    <AlertCircle className="h-5 w-5 text-amber-500" />
+                  {item.checkStatus === 'success' && (
+                    <CheckCircle2 className="w-4 h-4 text-[#06402B] flex-shrink-0" />
                   )}
+                  {item.checkStatus === 'error' && (
+                    <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+                  )}
+                  <span
+                    className={`text-sm font-medium truncate ${item.checkStatus === 'success' ? 'text-[#06402B]' : 'text-slate-600'}`}
+                  >
+                    {item.name}
+                  </span>
+                </div>
+
+                <div className="font-bold text-sm whitespace-nowrap flex-shrink-0">
+                  {item.checkStatus === 'checking' && (
+                    <span className="text-slate-400 animate-pulse">verificando</span>
+                  )}
+                  {item.checkStatus === 'success' && <span className="text-[#06402B]">... Go</span>}
+                  {item.checkStatus === 'error' && <span className="text-red-500">... Fail</span>}
                 </div>
               </div>
             ))}
-          </div>
-
-          <div className="pt-4 border-t border-slate-100 text-center min-h-[100px] flex items-center justify-center">
-            {globalStatus === 'loading' && (
-              <p className="text-sm text-slate-500">Iniciando verificação...</p>
-            )}
-            {globalStatus === 'checking' && (
-              <p className="text-sm text-primary font-medium animate-pulse">
-                Verificando ferramentas de IA...
-              </p>
-            )}
 
             {globalStatus === 'all-go' && (
-              <div className="flex flex-col items-center gap-2 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div className="bg-primary/10 p-2 rounded-full">
-                  <CheckCircle2 className="h-8 w-8 text-primary" />
+              <div className="mt-8 pt-6 border-t border-slate-200 flex flex-col items-center animate-in fade-in slide-in-from-bottom-2 duration-700">
+                <div className="bg-[#06402B]/10 p-3 rounded-full mb-4">
+                  <CheckCircle2 className="w-8 h-8 text-[#06402B]" />
                 </div>
-                <p className="text-lg font-bold text-primary">All Systems Go</p>
-                <p className="text-sm text-primary/80">Redirecionando para o painel...</p>
+                <p className="text-xl font-bold text-[#06402B] tracking-tight">
+                  We are Go for Launch
+                </p>
               </div>
             )}
 
             {globalStatus === 'error' && (
-              <div className="flex flex-col items-center gap-3 animate-in fade-in duration-500 w-full">
-                <div className="flex items-center gap-2 text-amber-600">
-                  <AlertCircle className="h-6 w-6" />
-                  <p className="text-base font-bold">Atenção Necessária</p>
+              <div className="mt-8 pt-6 border-t border-slate-200 flex flex-col items-center animate-in fade-in">
+                <div className="bg-red-100 p-3 rounded-full mb-4">
+                  <AlertCircle className="w-8 h-8 text-red-600" />
                 </div>
-                <p className="text-sm text-amber-600/80">
-                  Algumas ferramentas não estão ativas no momento.
-                </p>
-                <Button onClick={() => redirectAfterSuccess()} className="mt-2 w-full">
-                  Continuar para o Dashboard
-                </Button>
+                <p className="text-xl font-bold text-red-600 tracking-tight">System Check Failed</p>
               </div>
+            )}
+          </div>
+
+          <div className="p-6 bg-white flex justify-center border-t border-slate-100">
+            {globalStatus === 'all-go' ? (
+              <Button
+                onClick={handleProceed}
+                className="w-full bg-[#06402B] hover:bg-[#06402B]/90 text-white font-medium h-11 text-base transition-all shadow-sm"
+              >
+                Proceed
+              </Button>
+            ) : (
+              <Button
+                disabled
+                variant="outline"
+                className="w-full h-11 text-base text-slate-400 border-slate-200"
+              >
+                {globalStatus === 'error' ? 'Launch Aborted' : 'Awaiting Go...'}
+              </Button>
             )}
           </div>
         </CardContent>
