@@ -52,8 +52,8 @@ export function AppSidebar() {
   })
 
   return (
-    <Sidebar variant="inset" className="border-r border-sidebar-border shadow-sm">
-      <SidebarHeader className="p-4 min-h-[5rem] flex items-center justify-center border-b border-sidebar-border">
+    <Sidebar variant="inset" className="border-r border-sidebar-border shadow-sm bg-white">
+      <SidebarHeader className="p-4 min-h-[5rem] flex items-center justify-center border-b border-sidebar-border bg-white">
         <Link
           to="/"
           className="flex w-full items-center justify-center transition-opacity hover:opacity-80"
@@ -62,7 +62,7 @@ export function AppSidebar() {
         </Link>
       </SidebarHeader>
 
-      <SidebarContent className="px-3 py-6 gap-8 bg-sidebar">
+      <SidebarContent className="px-3 py-6 gap-8 bg-white">
         <SidebarGroup>
           <SidebarGroupLabel className="text-sidebar-foreground/70 text-xs tracking-wider font-semibold mb-3 px-2">
             Navegação
