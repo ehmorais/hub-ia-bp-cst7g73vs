@@ -14,20 +14,22 @@ export default function Layout() {
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset className="bg-white">
-        <header className="flex h-16 shrink-0 items-center justify-between gap-2 px-4 border-b border-border/40 bg-white z-10 sticky top-0 shadow-sm">
+        <header className="flex h-16 shrink-0 items-center justify-between gap-2 px-4 border-b border-slate-100 bg-white z-10 sticky top-0 shadow-sm">
           <div className="flex items-center gap-2">
-            <SidebarTrigger className="-ml-1 text-primary hover:bg-accent" />
+            <SidebarTrigger className="-ml-1 text-primary hover:bg-slate-100 transition-colors" />
           </div>
           <div className="flex items-center gap-3 mr-2">
             <div className="flex flex-col items-end">
-              <span className="text-sm font-semibold text-slate-800">
+              <span className="text-sm font-semibold text-slate-800 font-interactive">
                 {user?.name || user?.email}
               </span>
-              <span className="text-xs text-muted-foreground">{user?.role || 'Operador'}</span>
+              <span className="text-xs text-slate-500 font-interactive">
+                {user?.role || 'Operador'}
+              </span>
             </div>
             <Avatar className="h-10 w-10 border border-primary/20 shadow-sm">
               <AvatarImage src={avatarUrl} alt={user?.name} className="object-cover" />
-              <AvatarFallback className="bg-primary/10 text-primary font-bold">
+              <AvatarFallback className="bg-primary/10 text-primary font-bold font-heading">
                 {fallback}
               </AvatarFallback>
             </Avatar>

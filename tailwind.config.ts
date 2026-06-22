@@ -27,7 +27,9 @@ export default {
     extend: {
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
-        display: ['Inter', 'system-ui', 'sans-serif'],
+        heading: ['"Instrument Sans"', 'sans-serif'],
+        metrics: ['"Plus Jakarta Sans"', 'sans-serif'],
+        interactive: ['Satoshi', 'sans-serif'],
       },
       colors: {
         border: 'hsl(var(--border))',

@@ -458,17 +458,17 @@ function AdminContent() {
   return (
     <div className="container mx-auto p-4 md:p-8 space-y-8 max-w-[1400px] animate-fade-in">
       <div className="flex flex-col gap-2 mb-2">
-        <h1 className="text-4xl font-bold tracking-tight text-primary flex items-center gap-3">
+        <h1 className="text-4xl font-bold tracking-tight text-primary flex items-center gap-3 font-heading">
           <ShieldCheck className="h-9 w-9 text-primary" />
           Painel de Administração
         </h1>
-        <p className="text-muted-foreground text-lg max-w-3xl">
+        <p className="text-muted-foreground text-lg max-w-3xl font-sans">
           Governança, controle de acessos e auditoria de modelos de IA da BP.
         </p>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="flex flex-wrap w-full justify-start max-w-6xl mb-8 h-auto p-1.5 gap-1 bg-white/60 backdrop-blur-md border border-slate-200/60 shadow-sm rounded-2xl">
+        <TabsList className="flex flex-wrap w-full justify-start max-w-6xl mb-8 h-auto p-1.5 gap-1 bg-white/60 backdrop-blur-md border border-slate-200/60 shadow-sm rounded-2xl font-interactive">
           <TabsTrigger
             value="performance"
             className="rounded-xl px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all hover:bg-accent hover:text-accent-foreground"
@@ -515,10 +515,10 @@ function AdminContent() {
 
         <TabsContent value="performance" className="space-y-6">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-semibold flex items-center gap-2 text-primary">
+            <h2 className="text-xl font-semibold flex items-center gap-2 text-primary font-heading">
               <Activity className="h-5 w-5" /> Performance Dashboard
             </h2>
-            <Button onClick={handleExportCSV} className="gap-2 shadow-sm">
+            <Button onClick={handleExportCSV} className="gap-2 shadow-sm font-interactive">
               <Download className="h-4 w-4" /> Exportar Relatório (CSV)
             </Button>
           </div>
@@ -535,11 +535,11 @@ function AdminContent() {
               return (
                 <Card
                   key={dep.id}
-                  className="shadow-soft border-slate-200/60 transition-all hover:shadow-elevation"
+                  className="shadow-soft border-slate-200/60 transition-all hover:shadow-elevation rounded-lg border-t-[6px] border-t-primary aspect-square flex flex-col justify-between"
                 >
-                  <CardHeader className="pb-2">
+                  <CardHeader className="pb-2 flex-none">
                     <CardTitle
-                      className="text-lg flex items-center gap-3"
+                      className="text-lg flex items-center gap-3 font-heading"
                       style={{ color: dep.color || 'inherit' }}
                     >
                       <div
@@ -554,19 +554,26 @@ function AdminContent() {
                       {dep.name}
                     </CardTitle>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="flex-1 flex flex-col justify-end">
                     <div className="space-y-4 mt-2">
                       <div className="flex items-center justify-between text-sm">
-                        <span className="text-slate-500">Projetos Totais</span>
-                        <span className="font-semibold">{total}</span>
+                        <span className="text-slate-500 font-interactive font-medium">
+                          Projetos Totais
+                        </span>
+                        <span className="font-bold text-xl font-metrics">{total}</span>
                       </div>
                       <div className="flex items-center justify-between text-sm">
-                        <span className="text-slate-500">Projetos Ativos</span>
-                        <span className="font-semibold text-primary">
-                          {active} ({activePercent}%)
+                        <span className="text-slate-500 font-interactive font-medium">
+                          Projetos Ativos
+                        </span>
+                        <span className="font-bold text-xl text-primary font-metrics">
+                          {active}{' '}
+                          <span className="text-sm font-normal text-muted-foreground ml-1">
+                            ({activePercent}%)
+                          </span>
                         </span>
                       </div>
-                      <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                      <div className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden">
                         <div
                           className="h-full transition-all"
                           style={{ width: `${activePercent}%`, backgroundColor: depColorHex }}
@@ -588,14 +595,14 @@ function AdminContent() {
         <TabsContent value="departments" className="space-y-6">
           <div className={`grid gap-6 ${isAdmin ? 'lg:grid-cols-3' : 'lg:grid-cols-1'}`}>
             {isAdmin && (
-              <Card className="lg:col-span-1 h-fit shadow-soft border-slate-200/60">
+              <Card className="lg:col-span-1 h-fit shadow-soft border-slate-200/60 border-t-[6px] border-t-primary rounded-lg">
                 <CardHeader className="border-b">
-                  <CardTitle className="text-lg flex items-center gap-2">
+                  <CardTitle className="text-lg flex items-center gap-2 font-heading">
                     <Building2 className="h-5 w-5" />{' '}
                     {editingDep ? 'Editar Departamento' : 'Novo Departamento'}
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4 pt-6">
+                <CardContent className="space-y-4 pt-6 font-interactive">
                   <div className="space-y-2">
                     <Label>Nome do Departamento</Label>
                     <Input
@@ -693,12 +700,12 @@ function AdminContent() {
             <Card
               className={cn(
                 isAdmin ? 'lg:col-span-2' : '',
-                'shadow-soft border-slate-200/60 overflow-hidden',
+                'shadow-soft border-slate-200/60 overflow-hidden rounded-lg border-t-[6px] border-t-primary',
               )}
             >
               <Table>
                 <TableHeader>
-                  <TableRow>
+                  <TableRow className="font-interactive">
                     <TableHead>Nome</TableHead>
                     <TableHead>Ícone & Cor</TableHead>
                     <TableHead>Ordem</TableHead>
@@ -708,7 +715,7 @@ function AdminContent() {
                 <TableBody>
                   {departments.map((dep) => (
                     <TableRow key={dep.id}>
-                      <TableCell className="font-semibold text-slate-800">
+                      <TableCell className="font-semibold text-slate-800 font-sans">
                         {dep.name}
                         {dep.description && (
                           <p className="text-xs text-slate-500 font-normal mt-0.5">
@@ -727,12 +734,14 @@ function AdminContent() {
                               return <Icon className="h-4 w-4" />
                             })()}
                           </div>
-                          <span className="text-xs text-slate-500 uppercase">
+                          <span className="text-xs text-slate-500 uppercase font-interactive">
                             {dep.color || '#000'}
                           </span>
                         </div>
                       </TableCell>
-                      <TableCell className="text-slate-500">{dep.sort_order || 0}</TableCell>
+                      <TableCell className="text-slate-500 font-metrics">
+                        {dep.sort_order || 0}
+                      </TableCell>
                       {isAdmin && (
                         <TableCell className="text-right space-x-2">
                           <Button variant="ghost" size="sm" onClick={() => handleEditDep(dep)}>
@@ -786,10 +795,10 @@ function AdminContent() {
             </div>
           </div>
 
-          <Card className="shadow-soft border-slate-200/60 overflow-hidden">
+          <Card className="shadow-soft border-slate-200/60 overflow-hidden border-t-[6px] border-t-primary rounded-lg">
             <Table>
               <TableHeader>
-                <TableRow>
+                <TableRow className="font-interactive">
                   <TableHead className="w-[100px]">ID</TableHead>
                   <TableHead>Data/Hora</TableHead>
                   <TableHead>Usuário</TableHead>
@@ -800,24 +809,28 @@ function AdminContent() {
               </TableHeader>
               <TableBody>
                 {logs.map((log) => (
-                  <TableRow key={log.id} className="font-medium text-sm text-slate-600">
-                    <TableCell className="font-mono text-xs">{log.id.slice(0, 8)}</TableCell>
-                    <TableCell>{new Date(log.created).toLocaleString()}</TableCell>
+                  <TableRow key={log.id} className="font-medium text-sm text-slate-600 font-sans">
+                    <TableCell className="font-metrics text-xs text-slate-500">
+                      {log.id.slice(0, 8)}
+                    </TableCell>
+                    <TableCell className="font-metrics text-xs">
+                      {new Date(log.created).toLocaleString()}
+                    </TableCell>
                     <TableCell>
                       <div className="flex flex-col">
-                        <span className="text-slate-900">
+                        <span className="text-slate-900 font-semibold">
                           {log.expand?.user?.name || log.expand?.user?.email || 'Sistema'}
                         </span>
-                        <span className="text-xs text-muted-foreground">
+                        <span className="text-xs text-muted-foreground font-interactive">
                           {log.expand?.user?.role || 'Usuário'}
                         </span>
                       </div>
                     </TableCell>
-                    <TableCell>{log.action}</TableCell>
+                    <TableCell className="font-interactive">{log.action}</TableCell>
                     <TableCell className="max-w-[200px] truncate" title={log.details}>
                       {log.details || '-'}
                     </TableCell>
-                    <TableCell className="text-right font-mono text-primary">
+                    <TableCell className="text-right font-metrics text-primary font-bold">
                       {log.token_usage || 0}
                     </TableCell>
                   </TableRow>
@@ -836,19 +849,19 @@ function AdminContent() {
 
         <TabsContent value="users" className="space-y-4">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-semibold flex items-center gap-2 text-primary">
+            <h2 className="text-xl font-semibold flex items-center gap-2 text-primary font-heading">
               <Users className="h-5 w-5" /> Gestão de Acessos
             </h2>
             {isAdmin && (
-              <Button className="gap-2 shadow-sm">
+              <Button className="gap-2 shadow-sm font-interactive">
                 <Plus className="h-4 w-4" /> Adicionar Usuário
               </Button>
             )}
           </div>
-          <Card className="shadow-soft border-slate-200/60 overflow-hidden">
+          <Card className="shadow-soft border-slate-200/60 overflow-hidden border-t-[6px] border-t-primary rounded-lg">
             <Table>
               <TableHeader>
-                <TableRow>
+                <TableRow className="font-interactive">
                   <TableHead>Nome</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Nível de Acesso</TableHead>
@@ -858,14 +871,15 @@ function AdminContent() {
               <TableBody>
                 {users.map((u) => (
                   <TableRow key={u.id}>
-                    <TableCell className="font-semibold text-slate-800">
+                    <TableCell className="font-semibold text-slate-800 font-sans">
                       {u.name || 'Sem nome'}
                     </TableCell>
-                    <TableCell className="text-slate-500">{u.email}</TableCell>
+                    <TableCell className="text-slate-500 font-sans">{u.email}</TableCell>
                     <TableCell>
                       <Badge
                         variant="outline"
                         className={cn(
+                          'font-interactive',
                           u.role === 'Admin'
                             ? 'border-red-200 text-red-700 bg-red-50'
                             : 'border-slate-200 text-slate-700 bg-slate-50',
@@ -876,7 +890,7 @@ function AdminContent() {
                     </TableCell>
                     {isAdmin && (
                       <TableCell className="text-right">
-                        <Button variant="ghost" size="sm">
+                        <Button variant="ghost" size="sm" className="font-interactive">
                           Editar
                         </Button>
                       </TableCell>
@@ -891,15 +905,17 @@ function AdminContent() {
         <TabsContent value="ia_tools" className="space-y-6">
           <div className={`grid gap-6 ${isAdmin ? 'lg:grid-cols-2' : 'lg:grid-cols-1'}`}>
             {isAdmin && (
-              <Card className="h-fit shadow-soft border-slate-200/60">
+              <Card className="h-fit shadow-soft border-slate-200/60 border-t-[6px] border-t-primary rounded-lg">
                 <CardHeader className="border-b">
-                  <CardTitle className="text-lg flex items-center gap-2">
+                  <CardTitle className="text-lg flex items-center gap-2 font-heading">
                     <Settings2 className="h-5 w-5" />{' '}
                     {editingTool ? 'Editar Ferramenta IA' : 'Nova Ferramenta IA'}
                   </CardTitle>
-                  <CardDescription>Defina os parâmetros e associções do modelo.</CardDescription>
+                  <CardDescription className="font-sans">
+                    Defina os parâmetros e associções do modelo.
+                  </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4 pt-6">
+                <CardContent className="space-y-4 pt-6 font-interactive">
                   <div className="space-y-2">
                     <Label>Nome da Ferramenta</Label>
                     <Input
@@ -1043,16 +1059,20 @@ function AdminContent() {
             )}
 
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold border-b pb-2">Ferramentas Cadastradas</h3>
+              <h3 className="text-lg font-semibold border-b pb-2 font-heading">
+                Ferramentas Cadastradas
+              </h3>
               <div className="flex flex-col gap-3">
                 {tools.map((tool) => (
                   <Card
                     key={tool.id}
-                    className="p-4 flex items-center justify-between shadow-sm border-slate-200/60"
+                    className="p-4 flex items-center justify-between shadow-sm border-slate-200/60 rounded-lg border-l-[6px] border-l-primary"
                   >
                     <div className="flex-1 min-w-0 pr-4">
                       <div className="flex items-center gap-2">
-                        <p className="font-semibold text-slate-800 truncate">{tool.name}</p>
+                        <p className="font-semibold text-slate-800 truncate font-sans">
+                          {tool.name}
+                        </p>
                         <Badge
                           variant="outline"
                           className={cn(
@@ -1113,14 +1133,14 @@ function AdminContent() {
         <TabsContent value="projects" className="space-y-6">
           <div className={`grid gap-6 ${isAdmin ? 'lg:grid-cols-3' : 'lg:grid-cols-1'}`}>
             {isAdmin && (
-              <Card className="lg:col-span-1 h-fit shadow-soft border-slate-200/60">
+              <Card className="lg:col-span-1 h-fit shadow-soft border-slate-200/60 border-t-[6px] border-t-primary rounded-lg">
                 <CardHeader className="border-b">
-                  <CardTitle className="text-lg flex items-center gap-2">
+                  <CardTitle className="text-lg flex items-center gap-2 font-heading">
                     <Building2 className="h-5 w-5" />{' '}
                     {editingProj ? 'Editar Projeto' : 'Novo Projeto'}
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4 pt-6">
+                <CardContent className="space-y-4 pt-6 font-interactive">
                   <div className="space-y-2">
                     <Label>Nome do Projeto</Label>
                     <Input
@@ -1287,12 +1307,12 @@ function AdminContent() {
             <Card
               className={cn(
                 isAdmin ? 'lg:col-span-2' : '',
-                'shadow-soft border-slate-200/60 overflow-hidden',
+                'shadow-soft border-slate-200/60 overflow-hidden border-t-[6px] border-t-primary rounded-lg',
               )}
             >
               <Table>
                 <TableHeader>
-                  <TableRow>
+                  <TableRow className="font-interactive">
                     <TableHead>Nome</TableHead>
                     <TableHead>Departamento</TableHead>
                     <TableHead>Membros</TableHead>
@@ -1303,7 +1323,7 @@ function AdminContent() {
                 <TableBody>
                   {projects.map((proj) => (
                     <TableRow key={proj.id}>
-                      <TableCell className="font-semibold text-slate-800">
+                      <TableCell className="font-semibold text-slate-800 font-sans">
                         {proj.name}
                         {proj.description && (
                           <p className="text-xs text-slate-500 font-normal mt-0.5">

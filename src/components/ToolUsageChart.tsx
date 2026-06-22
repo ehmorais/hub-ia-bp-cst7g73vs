@@ -49,7 +49,7 @@ export function ToolUsageChart({ tool, logs }: { tool: any; logs: any[] }) {
   }, [tool, logs])
 
   return (
-    <div className="h-32 w-full mt-3">
+    <div className="h-full w-full min-h-[100px] mt-2">
       <ChartContainer
         config={{
           count: {
@@ -61,7 +61,13 @@ export function ToolUsageChart({ tool, logs }: { tool: any; logs: any[] }) {
       >
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} margin={{ top: 10, right: 10, bottom: 0, left: 10 }}>
-            <XAxis dataKey="label" fontSize={10} tickLine={false} axisLine={false} />
+            <XAxis
+              dataKey="label"
+              fontSize={10}
+              tickLine={false}
+              axisLine={false}
+              fontFamily="Satoshi, sans-serif"
+            />
             <ChartTooltip content={<ChartTooltipContent />} cursor={{ fill: 'var(--muted)' }} />
             <Bar dataKey="count" fill="var(--color-count)" radius={[4, 4, 0, 0]} />
           </BarChart>

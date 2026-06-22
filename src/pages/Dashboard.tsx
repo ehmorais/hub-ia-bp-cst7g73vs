@@ -68,77 +68,87 @@ export default function Dashboard() {
       <SystemChecklistModal tools={filteredTools} />
 
       <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+        <h1 className="text-3xl font-bold tracking-tight text-slate-900 font-heading">
           Olá, {name}. Bem-vindo(a).
         </h1>
-        <p className="text-muted-foreground text-lg">
+        <p className="text-muted-foreground text-lg font-sans">
           Acompanhamento de uso, módulos e performance dos projetos.
         </p>
       </div>
 
       {/* Global KPIs */}
       <div className="grid gap-4 md:grid-cols-3">
-        <Card className="rounded-lg border-l-4 border-l-primary shadow-sm bg-white hover:bg-slate-50 transition-colors">
+        <Card className="rounded-lg border-l-[6px] border-l-primary shadow-sm bg-white hover:bg-slate-50 transition-colors flex flex-col justify-center min-h-[120px]">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-slate-600">Modelos Ativos</CardTitle>
+            <CardTitle className="text-sm font-interactive font-medium text-slate-600 uppercase tracking-wider">
+              Modelos Ativos
+            </CardTitle>
             <Zap className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-slate-800">
+            <div className="text-4xl font-bold text-slate-800 font-metrics">
               {tools.filter((t) => t.status === 'active').length}
             </div>
           </CardContent>
         </Card>
-        <Card className="rounded-lg border-l-4 border-l-primary shadow-sm bg-white hover:bg-slate-50 transition-colors">
+        <Card className="rounded-lg border-l-[6px] border-l-primary shadow-sm bg-white hover:bg-slate-50 transition-colors flex flex-col justify-center min-h-[120px]">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-slate-600">
+            <CardTitle className="text-sm font-interactive font-medium text-slate-600 uppercase tracking-wider">
               Projetos em Andamento
             </CardTitle>
             <Activity className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-slate-800">
+            <div className="text-4xl font-bold text-slate-800 font-metrics">
               {projects.filter((p) => p.status === 'active').length}
             </div>
           </CardContent>
         </Card>
-        <Card className="rounded-lg border-l-4 border-l-primary shadow-sm bg-white hover:bg-slate-50 transition-colors">
+        <Card className="rounded-lg border-l-[6px] border-l-primary shadow-sm bg-white hover:bg-slate-50 transition-colors flex flex-col justify-center min-h-[120px]">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-slate-600">Departamentos</CardTitle>
+            <CardTitle className="text-sm font-interactive font-medium text-slate-600 uppercase tracking-wider">
+              Departamentos
+            </CardTitle>
             <FolderKanban className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-slate-800">{departments.length}</div>
+            <div className="text-4xl font-bold text-slate-800 font-metrics">
+              {departments.length}
+            </div>
           </CardContent>
         </Card>
       </div>
 
       <div className="space-y-4">
-        <h2 className="text-xl font-semibold tracking-tight text-slate-800">Ferramentas de IA</h2>
+        <h2 className="text-xl font-semibold tracking-tight text-slate-800 font-heading">
+          Ferramentas de IA
+        </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
           {filteredTools.map((tool) => (
             <Card
               key={tool.id}
-              className="rounded-lg border-t-[6px] border-t-primary shadow-sm hover:shadow-md transition-shadow bg-white flex flex-col justify-between"
+              className="rounded-lg border-t-[6px] border-t-primary shadow-sm hover:shadow-md transition-shadow bg-white flex flex-col justify-between aspect-square"
             >
-              <CardHeader className="pb-2">
-                <CardTitle className="text-lg font-bold flex items-center gap-2 text-slate-800">
+              <CardHeader className="pb-2 flex-none">
+                <CardTitle className="text-lg font-bold flex items-center gap-2 text-slate-800 font-heading">
                   <BrainCircuit className="h-5 w-5 text-primary" />
-                  {tool.name}
+                  <span className="truncate">{tool.name}</span>
                 </CardTitle>
-                <div className="text-sm text-slate-500 line-clamp-2 mt-1 min-h-[40px]">
+                <div className="text-sm text-slate-500 line-clamp-2 mt-1 min-h-[40px] font-sans">
                   {tool.description || 'Sem descrição.'}
                 </div>
               </CardHeader>
-              <CardContent>
-                <div className="text-xs font-semibold text-slate-600 mb-1">
+              <CardContent className="flex flex-col flex-1 min-h-0">
+                <div className="text-xs font-interactive font-medium text-slate-600 mb-1 uppercase tracking-wider">
                   Uso nos últimos 5 dias
                 </div>
-                <ToolUsageChart tool={tool} logs={logs} />
-                <div className="mt-4 pt-4 border-t flex justify-end">
+                <div className="flex-1 min-h-0 w-full">
+                  <ToolUsageChart tool={tool} logs={logs} />
+                </div>
+                <div className="mt-4 pt-4 border-t flex justify-end flex-none">
                   <Link
                     to={`/ai/${tool.id}`}
-                    className="text-sm font-medium text-primary hover:text-primary/80 transition-colors"
+                    className="text-sm font-interactive font-medium text-primary hover:text-primary/80 transition-colors"
                   >
                     Acessar Ferramenta &rarr;
                   </Link>
@@ -155,7 +165,7 @@ export default function Dashboard() {
       </div>
 
       <div className="space-y-4">
-        <h2 className="text-xl font-semibold tracking-tight text-slate-800">
+        <h2 className="text-xl font-semibold tracking-tight text-slate-800 font-heading">
           Módulos & Departamentos
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
@@ -169,40 +179,42 @@ export default function Dashboard() {
             return (
               <Card
                 key={dept.id}
-                className="rounded-lg border-l-4 border-l-primary shadow-sm hover:shadow-md transition-shadow bg-white flex flex-col justify-between group"
+                className="rounded-lg border-t-[6px] border-t-primary shadow-sm hover:shadow-md transition-shadow bg-white flex flex-col justify-between group aspect-square"
               >
-                <CardHeader className="pb-3 pt-5 px-5 flex flex-row items-center gap-3 space-y-0 border-b border-slate-100">
-                  <div className="p-2 rounded-md bg-primary/10 text-primary shrink-0 transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
-                    <Icon className="h-5 w-5" />
+                <CardHeader className="pb-3 pt-5 px-5 flex flex-col items-start gap-3 space-y-0 border-b border-slate-100 flex-none">
+                  <div className="p-3 rounded-lg bg-primary/10 text-primary shrink-0 transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
+                    <Icon className="h-6 w-6" />
                   </div>
-                  <CardTitle className="text-base font-bold leading-tight line-clamp-2 text-slate-800">
+                  <CardTitle className="text-lg font-heading font-bold leading-tight line-clamp-2 text-slate-800">
                     {dept.name}
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="px-5 pb-5 pt-4">
+                <CardContent className="px-5 pb-5 pt-4 flex flex-col flex-1 justify-between">
                   <div className="flex flex-col gap-3">
                     <div className="flex items-center justify-between text-sm px-3 py-2 bg-slate-50 rounded-md">
-                      <span className="text-slate-600 flex items-center gap-2 font-medium">
+                      <span className="text-slate-600 flex items-center gap-2 font-interactive font-medium">
                         <Activity className="h-4 w-4 text-primary" /> Projetos
                       </span>
-                      <span className="font-bold text-slate-800 text-base">
+                      <span className="font-bold text-slate-800 text-lg font-metrics">
                         {deptProjects.length}
                       </span>
                     </div>
                     <div className="flex items-center justify-between text-sm px-3 py-2 bg-slate-50 rounded-md">
-                      <span className="text-slate-600 flex items-center gap-2 font-medium">
+                      <span className="text-slate-600 flex items-center gap-2 font-interactive font-medium">
                         <Zap className="h-4 w-4 text-primary" /> Modelos IA
                       </span>
-                      <span className="font-bold text-slate-800 text-base">{deptTools.length}</span>
+                      <span className="font-bold text-slate-800 text-lg font-metrics">
+                        {deptTools.length}
+                      </span>
                     </div>
-                    <div className="mt-2 text-right">
-                      <Link
-                        to={`/department/${dept.id}`}
-                        className="text-xs font-medium text-primary hover:underline"
-                      >
-                        Ver detalhes
-                      </Link>
-                    </div>
+                  </div>
+                  <div className="mt-4 pt-4 border-t text-right">
+                    <Link
+                      to={`/department/${dept.id}`}
+                      className="text-sm font-interactive font-medium text-primary hover:text-primary/80 transition-colors"
+                    >
+                      Ver detalhes &rarr;
+                    </Link>
                   </div>
                 </CardContent>
               </Card>

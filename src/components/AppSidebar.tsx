@@ -52,29 +52,31 @@ export function AppSidebar() {
   })
 
   return (
-    <Sidebar variant="inset" className="border-r border-sidebar-border shadow-sm bg-white">
-      <SidebarHeader className="p-4 min-h-[5rem] flex items-center justify-center border-b border-sidebar-border bg-white">
+    <Sidebar variant="inset" className="border-r border-slate-100 shadow-sm bg-white">
+      <SidebarHeader className="p-4 min-h-[5rem] flex items-center justify-center border-b border-slate-100 bg-white">
         <Link
           to="/"
           className="flex w-full items-center justify-center transition-opacity hover:opacity-80"
         >
-          <span className="font-bold text-xl tracking-tight text-primary">HUB IA BPSCS</span>
+          <span className="font-bold text-2xl tracking-tight text-primary font-heading">
+            HUB IA BPSCS
+          </span>
         </Link>
       </SidebarHeader>
 
       <SidebarContent className="px-3 py-6 gap-8 bg-white">
         <SidebarGroup>
-          <SidebarGroupLabel className="text-sidebar-foreground/70 text-xs tracking-wider font-semibold mb-3 px-2">
+          <SidebarGroupLabel className="text-slate-500 text-xs tracking-widest font-interactive font-semibold mb-3 px-2 uppercase">
             Navegação
           </SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu className="gap-2">
+            <SidebarMenu className="gap-2 font-interactive">
               <SidebarMenuItem>
                 <SidebarMenuButton
                   asChild
                   isActive={location.pathname === '/' || location.pathname === '/dashboard'}
                   tooltip="Dashboard"
-                  className="h-10 transition-all duration-200 rounded-lg px-3 group hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground data-[active=true]:font-medium"
+                  className="h-10 transition-all duration-200 rounded-lg px-3 group hover:bg-slate-50 hover:text-primary data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:font-medium"
                 >
                   <Link to="/" className="flex items-center gap-3">
                     <LayoutDashboard className="h-4 w-4 group-data-[active=true]:text-primary" />
@@ -87,7 +89,7 @@ export function AppSidebar() {
                   asChild
                   isActive={location.pathname === '/admin'}
                   tooltip="Administração"
-                  className="h-10 transition-all duration-200 rounded-lg px-3 group hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground data-[active=true]:font-medium"
+                  className="h-10 transition-all duration-200 rounded-lg px-3 group hover:bg-slate-50 hover:text-primary data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:font-medium"
                 >
                   <Link to="/admin" className="flex items-center gap-3">
                     <Settings className="h-4 w-4 group-data-[active=true]:text-primary" />
@@ -100,20 +102,20 @@ export function AppSidebar() {
         </SidebarGroup>
 
         <SidebarGroup>
-          <SidebarGroupLabel className="text-sidebar-foreground/70 text-xs tracking-wider font-semibold mb-3 px-2">
+          <SidebarGroupLabel className="text-slate-500 text-xs tracking-widest font-interactive font-semibold mb-3 px-2 uppercase">
             Departamentos
           </SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu className="gap-1.5">
+            <SidebarMenu className="gap-1.5 font-interactive">
               {sortedDepartments.map((dept: any) => (
                 <SidebarMenuItem key={dept.id}>
                   <SidebarMenuButton
                     asChild
                     isActive={location.pathname === `/department/${dept.id}`}
-                    className="h-9 transition-all duration-200 rounded-lg px-3 group hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground data-[active=true]:font-medium"
+                    className="h-9 transition-all duration-200 rounded-lg px-3 group hover:bg-slate-50 hover:text-primary data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:font-medium"
                   >
                     <Link to={`/department/${dept.id}`} className="flex items-center gap-3">
-                      <div className="w-1.5 h-1.5 rounded-full bg-sidebar-foreground/30 group-data-[active=true]:bg-primary group-hover:bg-primary shrink-0 transition-colors" />
+                      <div className="w-1.5 h-1.5 rounded-full bg-slate-300 group-data-[active=true]:bg-primary group-hover:bg-primary shrink-0 transition-colors" />
                       <span className="line-clamp-1">{dept.name}</span>
                     </Link>
                   </SidebarMenuButton>
