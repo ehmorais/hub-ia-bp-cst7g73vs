@@ -139,7 +139,7 @@ export function AutoGenerate({
     getShiftCycles().then((c) => {
       setCycles(c)
       if (!selectedCycle && c.length > 0) {
-        const defaultCycle = c.find((x: any) => x.status === 'active' || x.status === 'draft')
+        const defaultCycle = c.find((x: any) => x.status === 'active')
         if (defaultCycle) setSelectedCycle(defaultCycle.id)
       }
     })
@@ -172,6 +172,13 @@ export function AutoGenerate({
   }, [selectedCycle, selectedSector])
 
   useRealtime('shift_cycles', loadData)
+  useRealtime('hospital_sectors', validate)
+  useRealtime('staff_contracts', () => {
+    loadData()
+    validate()
+  })
+  useRealtime('shift_rules', validate)
+  useRealtime('users', validate)
   useRealtime('shifts', () => {
     if (selectedCycle) {
       getShifts(selectedCycle).then((res) => {
@@ -208,7 +215,7 @@ export function AutoGenerate({
       const cycle = cycles.find((c) => c.id === selectedCycle)
       const cycleDetails = []
       let cycleStatus: 'success' | 'error' = 'success'
-      if (cycle && ['active', 'draft'].includes(cycle.status)) {
+      if (cycle && cycle.status === 'active') {
         if (!cycle.start_date || !cycle.end_date) {
           cycleStatus = 'error'
           cycleDetails.push('O ciclo selecionado possui datas de início e/ou fim inválidas.')
@@ -217,7 +224,7 @@ export function AutoGenerate({
         }
       } else {
         cycleStatus = 'error'
-        cycleDetails.push('O ciclo selecionado não está ativo ou em rascunho.')
+        cycleDetails.push('O ciclo selecionado não está ativo. O status deve ser "ativo".')
       }
       checks.push({
         id: 'cycle',
@@ -241,7 +248,7 @@ export function AutoGenerate({
       } else {
         const invalidSectors = sectors.filter((s) => !s.min_staffing || !s.ideal_staffing)
         if (invalidSectors.length > 0) {
-          sectorStatus = 'warning'
+          sectorStatus = 'error'
           invalidSectors.forEach((s) =>
             sectorDetails.push(`Setor "${s.name}" está sem dimensionamento mínimo/ideal.`),
           )
@@ -356,26 +363,45 @@ export function AutoGenerate({
       const rulesDetails = []
       let rulesStatus: 'success' | 'warning' | 'error' = 'success'
 
-      if (rules.length === 0) {
-        rulesStatus = 'warning'
+      const usersWithRules = users.filter((u) => {
+        const hasPersonalRules = u.assigned_rules && u.assigned_rules.length > 0
+        const hasProfileRules =
+          u.expand?.staff_profile?.rules && u.expand.staff_profile.rules.length > 0
+        return hasPersonalRules || hasProfileRules
+      })
+
+      if (rules.length === 0 && usersWithRules.length === 0) {
+        rulesStatus = 'error'
         rulesDetails.push(
-          'Nenhuma regra específica definida para os departamentos. Serão usadas as regras padrão.',
+          'Nenhuma regra de escala definida (nem no departamento, nem nos colaboradores/perfis). É obrigatório ter regras.',
         )
       } else {
         const hasMinRest = rules.some((r) => r.rule_type === 'min_rest_hours')
         const hasMaxHours = rules.some((r) => r.rule_type === 'max_hours')
-        if (!hasMinRest)
+
+        if (!hasMinRest) {
           rulesDetails.push(
-            'Regra de descanso mínimo (min_rest_hours) não está definida. Isso pode gerar escalas exaustivas.',
+            'Aviso: Regra de descanso mínimo (min_rest_hours) não está definida no departamento.',
           )
-        if (!hasMaxHours)
-          rulesDetails.push('Regra de máximo de horas (max_hours) não está definida.')
-        if (!hasMinRest || !hasMaxHours) rulesStatus = 'warning'
-        else
+          rulesStatus = 'warning'
+        }
+        if (!hasMaxHours) {
           rulesDetails.push(
-            `${rules.length} regras ativas, incluindo as obrigatórias (descanso mínimo e limite de horas).`,
+            'Aviso: Regra de máximo de horas (max_hours) não está definida no departamento.',
           )
+          rulesStatus = 'warning'
+        }
+
+        if (rulesStatus === 'success') {
+          rulesDetails.push(`${rules.length} regras ativas no departamento.`)
+        }
+        if (usersWithRules.length > 0) {
+          rulesDetails.push(
+            `${usersWithRules.length} colaboradores possuem regras específicas (pessoais ou do perfil).`,
+          )
+        }
       }
+
       checks.push({
         id: 'rules',
         label: 'Regras de Escala',
@@ -390,7 +416,7 @@ export function AutoGenerate({
       })
 
       setValidations(checks)
-      setIsReady(!checks.some((c) => c.status === 'error'))
+      setIsReady(!checks.some((c) => c.status === 'error' || c.status === 'warning'))
     } catch (err) {
       console.error(err)
       toast({
@@ -425,24 +451,17 @@ export function AutoGenerate({
     try {
       let total = 0
 
-      const depsToGenerate =
-        selectedSector !== 'all'
-          ? [sectors.find((s) => s.id === selectedSector)?.department].filter(Boolean)
-          : projectDeps
+      const rulesPrompt = validations.find((v) => v.id === 'rules')?.details?.join('\n') || ''
 
-      for (const dep of depsToGenerate) {
-        try {
-          const res = await generateShifts(
-            selectedCycle,
-            dep,
-            selectedSector !== 'all' ? selectedSector : undefined,
-          )
-          if (res && res.count) total += res.count
-        } catch (e: any) {
-          const msg = getErrorMessage(e)
-          throw new Error(`Erro no departamento ${dep}: ${msg}`)
-        }
+      const sectorsToGenerate =
+        selectedSector !== 'all' ? [selectedSector] : sectors.map((s) => s.id)
+
+      if (sectorsToGenerate.length === 0) {
+        throw new Error('Nenhum setor disponível para geração.')
       }
+
+      const res = await generateShifts(selectedCycle, sectorsToGenerate, rulesPrompt)
+      if (res && res.count) total += res.count
 
       toast({
         title: 'Geração Concluída',
@@ -456,11 +475,22 @@ export function AutoGenerate({
         }
       })
     } catch (err: any) {
+      const msg = err.response?.error || err.message || 'Falha na geração.'
+      const suggestion = err.response?.suggestion || err.response?.hint
+
       toast({
         title: 'Falha na geração de escala',
-        description: err.message || 'Tente novamente. Verifique se os parâmetros estão corretos.',
+        description: msg,
         variant: 'destructive',
       })
+
+      if (suggestion) {
+        toast({
+          title: 'Análise do Especialista (IA)',
+          description: suggestion,
+          duration: 15000,
+        })
+      }
     } finally {
       setLoading(false)
     }
@@ -564,11 +594,11 @@ export function AutoGenerate({
               )}
             </Button>
 
-            {!isValidating && selectedCycle && hasIssues && (
+            {selectedCycle && hasIssues && (
               <Button
                 variant={!isReady ? 'destructive' : 'secondary'}
                 className={cn(
-                  'gap-2 w-full sm:w-auto',
+                  'gap-2 w-full sm:w-auto transition-colors',
                   isReady && 'bg-amber-100 text-amber-700 hover:bg-amber-200',
                 )}
                 onClick={() => setShowPendencyModal(true)}
@@ -578,7 +608,7 @@ export function AutoGenerate({
               </Button>
             )}
           </div>
-          {!isReady && !isValidating && selectedCycle && (
+          {!isReady && selectedCycle && (
             <p className="text-xs text-red-500 font-medium">
               A geração está desabilitada devido a erros de validação nos parâmetros críticos.
               Clique em Ver Pendências para detalhes.
@@ -624,7 +654,7 @@ export function AutoGenerate({
             </DialogDescription>
           </DialogHeader>
           <div className="flex-1 overflow-y-auto p-6 space-y-6">
-            {isValidating ? (
+            {isValidating && validations.length === 0 ? (
               <div className="flex items-center justify-center py-10 gap-3 text-muted-foreground">
                 <Loader2 className="h-6 w-6 animate-spin" />
                 <span>Atualizando dados...</span>

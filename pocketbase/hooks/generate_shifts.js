@@ -4,33 +4,26 @@ routerAdd(
   (e) => {
     const body = e.requestInfo().body || {}
     const cycleId = body.cycle_id
-    const departmentId = body.department_id
-    const sectorId = body.sector_id
+    const sectorIds = body.sector_ids || []
+    const providedRules = body.rules || ''
 
-    if (!cycleId || !departmentId) {
-      return e.badRequestError('cycle_id and department_id are required')
+    if (!cycleId || !sectorIds.length) {
+      return e.badRequestError('cycle_id and sector_ids are required')
     }
 
     // Gather Data
     const cycle = $app.findRecordById('shift_cycles', cycleId)
-    const rules = $app.findRecordsByFilter(
-      'shift_rules',
-      `department = {:dep}`,
-      '-created',
-      100,
-      0,
-      { dep: departmentId },
+
+    const sectorFilters = sectorIds.map((id) => `id='${id}'`).join(' || ')
+    const sectors = $app.findRecordsByFilter('hospital_sectors', sectorFilters, '-created', 100, 0)
+
+    const departmentIds = [...new Set(sectors.map((s) => s.getString('department')))].filter(
+      Boolean,
     )
-    let sectors = $app.findRecordsByFilter(
-      'hospital_sectors',
-      `department = {:dep}`,
-      '-created',
-      100,
-      0,
-      { dep: departmentId },
-    )
-    if (sectorId) {
-      sectors = sectors.filter((s) => s.id === sectorId)
+    let dbRules = []
+    if (departmentIds.length > 0) {
+      const depFilter = departmentIds.map((id) => `department='${id}'`).join(' || ')
+      dbRules = $app.findRecordsByFilter('shift_rules', depFilter, '-created', 100, 0)
     }
 
     const contracts = $app.findRecordsByFilter('staff_contracts', '', '-created', 1000, 0)
@@ -79,7 +72,7 @@ routerAdd(
         const assignedRulesIds = u.getStringSlice('assigned_rules') || []
         const userRules = assignedRulesIds
           .map((rid) => {
-            let rule = rules.find((r) => r.id === rid)
+            let rule = dbRules.find((r) => r.id === rid)
             if (!rule) {
               try {
                 rule = $app.findRecordById('shift_rules', rid)
@@ -125,7 +118,7 @@ routerAdd(
       is_critical: s.getBool('is_critical'),
     }))
 
-    const ruleData = rules.map((r) => {
+    const ruleData = dbRules.map((r) => {
       const type = r.getString('rule_type')
       return {
         name: r.getString('name'),
@@ -144,7 +137,7 @@ routerAdd(
     // Build the prompt for Skip AI Gateway
     const prompt = `
 You are an expert hospital shift scheduling algorithm.
-Generate an optimal shift schedule for the following cycle and department.
+Generate an optimal shift schedule for the following cycle and sectors.
 
 Cycle Start: ${cycle.getString('start_date')}
 Cycle End: ${cycle.getString('end_date')}
@@ -155,8 +148,11 @@ ${JSON.stringify(sectorData, null, 2)}
 Staff:
 ${JSON.stringify(usersWithContracts, null, 2)}
 
-Rules:
+Database Rules:
 ${JSON.stringify(ruleData, null, 2)}
+
+Context Rules:
+${providedRules}
 
 Timeoff Requests:
 ${JSON.stringify(timeoffData, null, 2)}
@@ -199,9 +195,15 @@ Only output the JSON array, no markdown or text.
 
       const generatedShifts = JSON.parse(content)
 
+      if (!Array.isArray(generatedShifts) || generatedShifts.length === 0) {
+        throw new Error(
+          'Nenhum plantão foi gerado. Possível conflito de regras e cobertura mínima insuperável.',
+        )
+      }
+
       // Process existing shifts
       // Delete existing shifts ONLY for the sectors being generated in this run
-      const sectorIds = sectors.map((s) => s.id)
+      const validSectorIds = sectors.map((s) => s.id)
       const existingShifts = $app.findRecordsByFilter(
         'shifts',
         `cycle = {:cyc}`,
@@ -211,7 +213,7 @@ Only output the JSON array, no markdown or text.
         { cyc: cycleId },
       )
       existingShifts.forEach((s) => {
-        if (sectorIds.includes(s.getString('sector'))) {
+        if (validSectorIds.includes(s.getString('sector'))) {
           $app.delete(s)
         }
       })
@@ -233,9 +235,15 @@ Only output the JSON array, no markdown or text.
 
       return e.json(200, { success: true, count: generatedShifts.length })
     } catch (err) {
-      if (err.name === 'SyntaxError') {
-        return e.json(500, { error: 'AI failed to generate a valid schedule structure.' })
-      }
+      // Use escala-expert to provide hints about the failure
+      try {
+        const helper = $ai.agent('escala-expert').chat({
+          user_id: e.auth?.id || 'system',
+          message: `A geração de escala falhou. Erro detectado: ${err.message}. Analise a situação e sugira, de forma concisa, por que os contratos e regras de descanso podem ter entrado em conflito com o dimensionamento mínimo.`,
+        })
+        return e.json(500, { error: err.message, suggestion: helper.content })
+      } catch (_) {}
+
       return e.json(500, { error: err.message || 'Failed to generate shifts.' })
     }
   },
