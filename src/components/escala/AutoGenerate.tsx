@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, Component, ReactNode } from 'react'
 import {
   Card,
   CardContent,
@@ -38,8 +38,46 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog'
 import pb from '@/lib/pocketbase/client'
-import { getErrorMessage } from '@/lib/pocketbase/errors'
 import { cn } from '@/lib/utils'
+import { ShiftCalendar } from './ShiftCalendar'
+
+const formatDateSafely = (dateStr: string, fmt: string) => {
+  try {
+    if (!dateStr) return 'Sem data'
+    const date = new Date(dateStr)
+    if (isNaN(date.getTime())) return 'Data inválida'
+    return format(date, fmt, { locale: ptBR })
+  } catch (e) {
+    return 'Data inválida'
+  }
+}
+
+class ErrorBoundary extends Component<
+  { children: ReactNode; fallback: (error: Error, reset: () => void) => ReactNode },
+  { hasError: boolean; error: Error | null }
+> {
+  constructor(props: any) {
+    super(props)
+    this.state = { hasError: false, error: null }
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error }
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('ErrorBoundary caught an error', error, errorInfo)
+  }
+
+  render() {
+    if (this.state.hasError && this.state.error) {
+      return this.props.fallback(this.state.error, () =>
+        this.setState({ hasError: false, error: null }),
+      )
+    }
+    return this.props.children
+  }
+}
 
 type ValidationCheck = {
   id: string
@@ -109,9 +147,7 @@ function CheckItem({ check }: { check: ValidationCheck }) {
   )
 }
 
-import { ShiftCalendar } from './ShiftCalendar'
-
-export function AutoGenerate({
+function AutoGenerateInner({
   departmentId,
   projectId,
 }: {
@@ -136,14 +172,18 @@ export function AutoGenerate({
   const { toast } = useToast()
 
   const loadData = async () => {
-    getShiftCycles().then((c) => {
+    try {
+      const c = await getShiftCycles()
       setCycles(c)
       if (!selectedCycle && c.length > 0) {
         const defaultCycle = c.find((x: any) => x.status === 'active')
         if (defaultCycle) setSelectedCycle(defaultCycle.id)
       }
-    })
-    getStaffContracts().then(setContracts)
+      const conts = await getStaffContracts()
+      setContracts(conts)
+    } catch (err) {
+      console.error('Failed to load cycles or contracts:', err)
+    }
   }
 
   useEffect(() => {
@@ -156,18 +196,21 @@ export function AutoGenerate({
       pb.collection('hospital_sectors')
         .getFullList({ filter: sectorFilter, sort: 'name' })
         .then(setSectors)
+        .catch(console.error)
     }
   }, [projectDeps])
 
   useEffect(() => {
     if (selectedCycle) {
-      getShifts(selectedCycle).then((res) => {
-        if (selectedSector && selectedSector !== 'all') {
-          setShifts(res.filter((s) => s.sector === selectedSector))
-        } else {
-          setShifts(res)
-        }
-      })
+      getShifts(selectedCycle)
+        .then((res) => {
+          if (selectedSector && selectedSector !== 'all') {
+            setShifts(res.filter((s) => s.sector === selectedSector))
+          } else {
+            setShifts(res)
+          }
+        })
+        .catch(console.error)
     }
   }, [selectedCycle, selectedSector])
 
@@ -181,13 +224,15 @@ export function AutoGenerate({
   useRealtime('users', validate)
   useRealtime('shifts', () => {
     if (selectedCycle) {
-      getShifts(selectedCycle).then((res) => {
-        if (selectedSector && selectedSector !== 'all') {
-          setShifts(res.filter((s) => s.sector === selectedSector))
-        } else {
-          setShifts(res)
-        }
-      })
+      getShifts(selectedCycle)
+        .then((res) => {
+          if (selectedSector && selectedSector !== 'all') {
+            setShifts(res.filter((s) => s.sector === selectedSector))
+          } else {
+            setShifts(res)
+          }
+        })
+        .catch(console.error)
     }
   })
 
@@ -236,24 +281,24 @@ export function AutoGenerate({
 
       // Sectors
       let sectorFilter = projectDeps.map((d) => `department="${d}"`).join(' || ')
-      const sectors = sectorFilter
+      const sectorsList = sectorFilter
         ? await pb.collection('hospital_sectors').getFullList({ filter: sectorFilter })
         : []
 
       const sectorDetails = []
       let sectorStatus: 'success' | 'warning' | 'error' = 'success'
-      if (sectors.length === 0) {
+      if (sectorsList.length === 0) {
         sectorStatus = 'error'
         sectorDetails.push('Nenhum setor encontrado para os departamentos do projeto.')
       } else {
-        const invalidSectors = sectors.filter((s) => !s.min_staffing || !s.ideal_staffing)
+        const invalidSectors = sectorsList.filter((s) => !s.min_staffing || !s.ideal_staffing)
         if (invalidSectors.length > 0) {
           sectorStatus = 'error'
           invalidSectors.forEach((s) =>
             sectorDetails.push(`Setor "${s.name}" está sem dimensionamento mínimo/ideal.`),
           )
         } else {
-          sectorDetails.push(`${sectors.length} setores configurados corretamente.`)
+          sectorDetails.push(`${sectorsList.length} setores configurados corretamente.`)
         }
       }
       checks.push({
@@ -271,20 +316,18 @@ export function AutoGenerate({
 
       // Staff
       const sfParts = []
-      if (sectors.length > 0)
-        sfParts.push(`(${sectors.map((s) => `default_sector="${s.id}"`).join(' || ')})`)
+      if (sectorsList.length > 0)
+        sfParts.push(`(${sectorsList.map((s) => `default_sector="${s.id}"`).join(' || ')})`)
       if (projectMembers.length > 0)
         sfParts.push(`(${projectMembers.map((m) => `id="${m}"`).join(' || ')})`)
       const staffFilter = sfParts.join(' || ')
 
       let users: any[] = []
       if (staffFilter) {
-        users = await pb
-          .collection('users')
-          .getFullList({
-            filter: `(${staffFilter}) && role!="Admin"`,
-            expand: 'staff_role,staff_profile',
-          })
+        users = await pb.collection('users').getFullList({
+          filter: `(${staffFilter}) && role!="Admin"`,
+          expand: 'staff_role,staff_profile',
+        })
       }
 
       const staffDetails = []
@@ -324,11 +367,15 @@ export function AutoGenerate({
       let contractStatus: 'success' | 'warning' | 'error' = 'success'
       if (users.length > 0) {
         const userIds = users.map((u) => u.id)
-        const contracts = await pb.collection('staff_contracts').getFullList({
+        const contractsList = await pb.collection('staff_contracts').getFullList({
           filter: userIds.map((id) => `user="${id}"`).join(' || '),
         })
-        const usersWithoutContract = users.filter((u) => !contracts.some((c) => c.user === u.id))
-        const invalidContracts = contracts.filter((c) => !c.contract_type || !c.monthly_hour_limit)
+        const usersWithoutContract = users.filter(
+          (u) => !contractsList.some((c) => c.user === u.id),
+        )
+        const invalidContracts = contractsList.filter(
+          (c) => !c.contract_type || !c.monthly_hour_limit,
+        )
 
         if (usersWithoutContract.length > 0 || invalidContracts.length > 0) {
           contractStatus = 'error'
@@ -485,27 +532,32 @@ export function AutoGenerate({
         title: 'Geração Concluída',
         description: `Escala gerada com sucesso! (${total} plantões totais)`,
       })
-      getShifts(selectedCycle).then((res) => {
-        if (selectedSector && selectedSector !== 'all') {
-          setShifts(res.filter((s) => s.sector === selectedSector))
-        } else {
-          setShifts(res)
-        }
-      })
+      const resShifts = await getShifts(selectedCycle)
+      if (selectedSector && selectedSector !== 'all') {
+        setShifts(resShifts.filter((s) => s.sector === selectedSector))
+      } else {
+        setShifts(resShifts)
+      }
     } catch (err: any) {
-      const msg = err.response?.error || err.message || 'Falha na geração.'
-      const suggestion = err.response?.suggestion || err.response?.hint
+      console.error('Error during AI generation:', err)
+      const isPBError = err && typeof err === 'object' && 'response' in err
+      const respData = isPBError ? err.response : null
+
+      const msg =
+        respData?.error || respData?.message || err.message || 'Falha na geração da escala.'
+      const suggestion =
+        respData?.suggestion || respData?.hint || (respData?.data && respData.data.suggestion)
 
       toast({
         title: 'Falha na geração de escala',
-        description: msg,
+        description: typeof msg === 'string' ? msg : JSON.stringify(msg),
         variant: 'destructive',
       })
 
       if (suggestion) {
         toast({
           title: 'Análise do Especialista (IA)',
-          description: suggestion,
+          description: typeof suggestion === 'string' ? suggestion : JSON.stringify(suggestion),
           duration: 15000,
         })
       }
@@ -515,13 +567,15 @@ export function AutoGenerate({
   }
 
   const hasIssues = validations.some((v) => v.status === 'error' || v.status === 'warning')
+  const cycleObj = cycles.find((c) => c.id === selectedCycle)
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <Card className="border-primary/20 bg-gradient-to-b from-white to-primary/5 shadow-sm">
-        <CardHeader className="pb-4">
+      <Card className="relative overflow-hidden border-primary/20 bg-gradient-to-b from-white to-primary/5 shadow-sm">
+        <div className="absolute top-0 left-0 right-0 h-1 bg-green-700 z-10" />
+        <CardHeader className="pb-4 pt-6">
           <div className="flex items-center gap-2">
-            <Wand2 className="h-5 w-5 text-primary" />
+            <Wand2 className="h-5 w-5 text-green-700" />
             <CardTitle>Geração Inteligente de Escalas</CardTitle>
           </div>
           <CardDescription>
@@ -540,8 +594,8 @@ export function AutoGenerate({
                 <SelectContent>
                   {cycles.map((c) => (
                     <SelectItem key={c.id} value={c.id}>
-                      {c.name} ({format(new Date(c.start_date), 'dd/MM', { locale: ptBR })} -{' '}
-                      {format(new Date(c.end_date), 'dd/MM', { locale: ptBR })})
+                      {c.name} ({formatDateSafely(c.start_date, 'dd/MM')} -{' '}
+                      {formatDateSafely(c.end_date, 'dd/MM')})
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -596,13 +650,13 @@ export function AutoGenerate({
               disabled={loading || !selectedCycle || isValidating || !isReady}
               className={cn(
                 'w-full sm:w-auto gap-2 transition-all',
-                isReady && 'bg-green-600 hover:bg-green-700 text-white',
+                isReady && 'bg-green-700 hover:bg-green-800 text-white',
               )}
             >
               {loading ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Processando regras com IA...
+                  Processando com IA...
                 </>
               ) : (
                 <>
@@ -635,12 +689,13 @@ export function AutoGenerate({
         </CardFooter>
       </Card>
 
-      {shifts.length > 0 && (
-        <Card className="shadow-md overflow-hidden border-primary/10">
-          <CardHeader className="bg-slate-50 border-b pb-4">
+      {shifts.length > 0 && cycleObj && (
+        <Card className="relative overflow-hidden shadow-md border-primary/10">
+          <div className="absolute top-0 left-0 right-0 h-1 bg-green-700 z-10" />
+          <CardHeader className="bg-slate-50 border-b pb-4 pt-6">
             <div className="flex items-center justify-between">
               <CardTitle className="text-lg flex items-center gap-2">
-                <CalendarIcon className="h-5 w-5 text-primary" />
+                <CalendarIcon className="h-5 w-5 text-green-700" />
                 Calendário de Escala Gerada
               </CardTitle>
               <Button
@@ -653,11 +708,7 @@ export function AutoGenerate({
             </div>
           </CardHeader>
           <CardContent className="p-0">
-            <ShiftCalendar
-              shifts={shifts}
-              cycle={cycles.find((c) => c.id === selectedCycle)}
-              contracts={contracts}
-            />
+            <ShiftCalendar shifts={shifts} cycle={cycleObj} contracts={contracts} />
           </CardContent>
         </Card>
       )}
@@ -717,5 +768,35 @@ export function AutoGenerate({
         </DialogContent>
       </Dialog>
     </div>
+  )
+}
+
+export function AutoGenerate(props: { departmentId?: string; projectId?: string }) {
+  return (
+    <ErrorBoundary
+      fallback={(error, reset) => (
+        <div className="p-6 bg-red-50 border border-red-200 rounded-lg space-y-4 max-w-2xl mx-auto mt-6">
+          <div className="flex items-center gap-3 text-red-700">
+            <XCircle className="h-6 w-6" />
+            <h3 className="font-semibold text-lg">Erro Inesperado</h3>
+          </div>
+          <p className="text-red-600 text-sm">
+            Um problema ocorreu ao carregar a interface de geração de escalas com IA.
+          </p>
+          <div className="bg-white p-3 rounded border border-red-100 text-xs text-red-800 overflow-auto">
+            {error.message}
+          </div>
+          <Button
+            variant="outline"
+            onClick={reset}
+            className="border-red-200 text-red-700 hover:bg-red-100"
+          >
+            Tentar Novamente
+          </Button>
+        </div>
+      )}
+    >
+      <AutoGenerateInner {...props} />
+    </ErrorBoundary>
   )
 }
