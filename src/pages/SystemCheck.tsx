@@ -174,17 +174,6 @@ export default function SystemCheck() {
               </div>
             ))}
 
-            {globalStatus === 'all-go' && (
-              <div className="mt-8 pt-6 border-t border-slate-200 flex flex-col items-center animate-in fade-in slide-in-from-bottom-2 duration-700">
-                <div className="bg-[#06402B]/10 p-3 rounded-full mb-4">
-                  <CheckCircle2 className="w-8 h-8 text-[#06402B]" />
-                </div>
-                <p className="text-xl font-bold text-[#06402B] tracking-tight">
-                  We are Go for Launch
-                </p>
-              </div>
-            )}
-
             {globalStatus === 'error' && (
               <div className="mt-8 pt-6 border-t border-slate-200 flex flex-col items-center animate-in fade-in">
                 <div className="bg-red-100 p-3 rounded-full mb-4">
@@ -195,14 +184,22 @@ export default function SystemCheck() {
             )}
           </div>
 
-          <div className="p-6 bg-white flex justify-center border-t border-slate-100">
+          <div className="p-6 bg-white flex flex-col items-center justify-center border-t border-slate-100 space-y-4">
             {globalStatus === 'all-go' ? (
-              <Button
-                onClick={handleProceed}
-                className="w-full bg-[#06402B] hover:bg-[#06402B]/90 text-white font-medium h-11 text-base transition-all shadow-sm"
-              >
-                Proceed
-              </Button>
+              <div className="flex flex-col items-center w-full animate-in fade-in slide-in-from-bottom-2 duration-700">
+                <div className="bg-[#06402B]/10 p-3 rounded-full mb-4">
+                  <CheckCircle2 className="w-8 h-8 text-[#06402B]" />
+                </div>
+                <p className="text-xl font-bold text-[#06402B] tracking-tight mb-4 text-center">
+                  We are Go for Launch
+                </p>
+                <Button
+                  onClick={handleProceed}
+                  className="w-full bg-[#06402B] hover:bg-[#06402B]/90 text-white font-medium h-11 text-base transition-all shadow-sm"
+                >
+                  Proceed
+                </Button>
+              </div>
             ) : (
               <Button
                 disabled
