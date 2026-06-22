@@ -209,7 +209,12 @@ export function AutoGenerate({
       const cycleDetails = []
       let cycleStatus: 'success' | 'error' = 'success'
       if (cycle && ['active', 'draft'].includes(cycle.status)) {
-        cycleDetails.push(`O ciclo ${cycle.name} é válido para geração.`)
+        if (!cycle.start_date || !cycle.end_date) {
+          cycleStatus = 'error'
+          cycleDetails.push('O ciclo selecionado possui datas de início e/ou fim inválidas.')
+        } else {
+          cycleDetails.push(`O ciclo ${cycle.name} é válido para geração.`)
+        }
       } else {
         cycleStatus = 'error'
         cycleDetails.push('O ciclo selecionado não está ativo ou em rascunho.')
@@ -539,18 +544,11 @@ export function AutoGenerate({
         <CardFooter className="bg-white/50 border-t py-4 flex flex-col items-start gap-4">
           <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
             <Button
-              onClick={(e) => {
-                if (!isReady) {
-                  e.preventDefault()
-                  setShowPendencyModal(true)
-                } else {
-                  handleGenerate()
-                }
-              }}
-              disabled={loading || !selectedCycle || isValidating}
+              onClick={handleGenerate}
+              disabled={loading || !selectedCycle || isValidating || !isReady}
               className={cn(
                 'w-full sm:w-auto gap-2 transition-all',
-                !isReady && selectedCycle && !isValidating && 'opacity-70 hover:opacity-80',
+                isReady && 'bg-green-600 hover:bg-green-700 text-white',
               )}
             >
               {loading ? (
@@ -568,11 +566,14 @@ export function AutoGenerate({
 
             {!isValidating && selectedCycle && hasIssues && (
               <Button
-                variant="ghost"
-                className="gap-2 text-amber-600 hover:text-amber-700 hover:bg-amber-50 w-full sm:w-auto"
+                variant={!isReady ? 'destructive' : 'secondary'}
+                className={cn(
+                  'gap-2 w-full sm:w-auto',
+                  isReady && 'bg-amber-100 text-amber-700 hover:bg-amber-200',
+                )}
                 onClick={() => setShowPendencyModal(true)}
               >
-                <Info className="h-4 w-4" />
+                {!isReady ? <AlertCircle className="h-4 w-4" /> : <Info className="h-4 w-4" />}
                 Ver Pendências
               </Button>
             )}
