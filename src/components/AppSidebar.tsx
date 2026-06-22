@@ -72,7 +72,12 @@ export function AppSidebar() {
     try {
       const depRecords = await pb.collection('departments').getFullList({ sort: 'sort_order,name' })
       setDepartments(
-        depRecords.filter((d) => d.name !== 'Projetos Gerais' && d.name !== 'Gestão de Escalas'),
+        depRecords.filter(
+          (d) =>
+            d.name !== 'Projetos Gerais' &&
+            d.name !== 'Gestão de Escalas' &&
+            d.name !== 'Projetos Gerais HBPSCS',
+        ),
       )
 
       const projRecords = await pb.collection('projects').getFullList({
@@ -192,10 +197,10 @@ export function AppSidebar() {
             <SidebarMenuItem key={escalasProject.id}>
               <SidebarMenuButton
                 asChild
-                isActive={location.pathname === '/admin'}
+                isActive={location.pathname === `/project/${escalasProject.id}`}
                 className="h-10 transition-all duration-200 rounded-lg px-3 text-[14px] group hover:bg-[#06402B]/10 hover:text-[#06402B] data-[active=true]:bg-[#06402B] data-[active=true]:text-white data-[active=true]:font-bold"
               >
-                <Link to="/admin">
+                <Link to={`/project/${escalasProject.id}`}>
                   <div className="w-1.5 h-1.5 rounded-sm bg-current shrink-0 transition-colors opacity-70 group-data-[active=true]:opacity-100 mr-2" />
                   <span className="line-clamp-1">{escalasProject.name}</span>
                 </Link>

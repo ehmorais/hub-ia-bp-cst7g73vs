@@ -4,6 +4,7 @@ import { useParams, Link, Navigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft, Blocks } from 'lucide-react'
 import { useRealtime } from '@/hooks/use-realtime'
+import { EscalasManagement } from '@/components/EscalasManagement'
 
 export default function Project() {
   const { id } = useParams()
@@ -29,10 +30,6 @@ export default function Project() {
 
   if (!project) return null
 
-  if (project.name === 'Gestão de Escalas') {
-    return <Navigate to="/admin" replace />
-  }
-
   return (
     <div className="container mx-auto p-4 md:p-8 space-y-8 max-w-7xl animate-fade-in-up">
       {/* Header */}
@@ -53,13 +50,17 @@ export default function Project() {
         </div>
       </div>
 
-      <div className="p-8 text-center border rounded-lg bg-white shadow-sm flex flex-col items-center justify-center min-h-[300px]">
-        <Blocks className="h-12 w-12 text-slate-300 mb-4" />
-        <h2 className="text-xl font-semibold mb-2">Detalhes do Projeto</h2>
-        <p className="text-muted-foreground max-w-md">
-          O conteúdo específico deste projeto será disponibilizado em breve.
-        </p>
-      </div>
+      {project.name === 'Gestão de Escalas' ? (
+        <EscalasManagement />
+      ) : (
+        <div className="p-8 text-center border rounded-lg bg-white shadow-sm flex flex-col items-center justify-center min-h-[300px]">
+          <Blocks className="h-12 w-12 text-slate-300 mb-4" />
+          <h2 className="text-xl font-semibold mb-2">Detalhes do Projeto</h2>
+          <p className="text-muted-foreground max-w-md">
+            O conteúdo específico deste projeto será disponibilizado em breve.
+          </p>
+        </div>
+      )}
     </div>
   )
 }
