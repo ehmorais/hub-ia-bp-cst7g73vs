@@ -10,7 +10,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from '@/components/ui/sidebar'
-import { LayoutDashboard, Settings } from 'lucide-react'
+import { LayoutDashboard, Settings, ShieldCheck } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import pb from '@/lib/pocketbase/client'
 import { useRealtime } from '@/hooks/use-realtime'
@@ -78,7 +78,7 @@ export function AppSidebar() {
 
       <SidebarContent className="px-3 py-6 gap-8 bg-white">
         <SidebarGroup>
-          <SidebarGroupLabel className="text-slate-500 text-sm tracking-widest font-semibold mb-3 px-2 uppercase">
+          <SidebarGroupLabel className="text-slate-500 text-[15px] tracking-widest font-semibold mb-3 px-2 uppercase">
             Navegação
           </SidebarGroupLabel>
           <SidebarGroupContent>
@@ -88,10 +88,10 @@ export function AppSidebar() {
                   asChild
                   isActive={location.pathname === '/' || location.pathname === '/dashboard'}
                   tooltip="Dashboard"
-                  className="h-10 transition-all duration-200 rounded-lg px-3 text-base group hover:bg-slate-50 hover:text-primary data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:font-medium"
+                  className="h-10 transition-all duration-200 rounded-lg px-3 text-[17px] group hover:bg-slate-50 hover:text-primary data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:font-medium"
                 >
                   <Link to="/" className="flex items-center gap-3">
-                    <LayoutDashboard className="h-4 w-4 group-data-[active=true]:text-primary" />
+                    <LayoutDashboard className="h-5 w-5 group-data-[active=true]:text-primary" />
                     <span>Visão Geral do Hub</span>
                   </Link>
                 </SidebarMenuButton>
@@ -101,11 +101,24 @@ export function AppSidebar() {
                   asChild
                   isActive={location.pathname === '/admin' && location.hash !== '#escalas'}
                   tooltip="Administração"
-                  className="h-10 transition-all duration-200 rounded-lg px-3 text-base group hover:bg-slate-50 hover:text-primary data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:font-medium"
+                  className="h-10 transition-all duration-200 rounded-lg px-3 text-[17px] group hover:bg-slate-50 hover:text-primary data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:font-medium"
                 >
                   <Link to="/admin" className="flex items-center gap-3">
-                    <Settings className="h-4 w-4 group-data-[active=true]:text-primary" />
+                    <ShieldCheck className="h-5 w-5 group-data-[active=true]:text-primary" />
                     <span>Administração</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={location.pathname === '/settings'}
+                  tooltip="Configurações"
+                  className="h-10 transition-all duration-200 rounded-lg px-3 text-[17px] group hover:bg-slate-50 hover:text-primary data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:font-medium"
+                >
+                  <Link to="/settings" className="flex items-center gap-3">
+                    <Settings className="h-5 w-5 group-data-[active=true]:text-primary" />
+                    <span>Configurações</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -115,7 +128,7 @@ export function AppSidebar() {
 
         {generalDept && (
           <SidebarGroup>
-            <SidebarGroupLabel className="text-[#06402B] text-sm tracking-widest font-bold mb-3 px-2 uppercase flex items-center gap-2 font-sans">
+            <SidebarGroupLabel className="text-[#06402B] text-[15px] tracking-widest font-bold mb-3 px-2 uppercase flex items-center gap-2 font-sans">
               {generalDept.name}
             </SidebarGroupLabel>
             <SidebarGroupContent>
@@ -132,7 +145,7 @@ export function AppSidebar() {
                       <SidebarMenuButton
                         asChild
                         isActive={isActive}
-                        className="h-9 transition-all duration-200 rounded-md px-3 text-base group hover:bg-slate-50 hover:text-[#06402B] data-[active=true]:bg-[#06402B]/10 data-[active=true]:text-[#06402B] data-[active=true]:font-medium"
+                        className="h-9 transition-all duration-200 rounded-md px-3 text-[17px] group hover:bg-slate-50 hover:text-[#06402B] data-[active=true]:bg-[#06402B]/10 data-[active=true]:text-[#06402B] data-[active=true]:font-medium"
                       >
                         <Link to={linkTo} className="flex items-center gap-3 font-sans">
                           <div className="w-1.5 h-1.5 rounded-sm bg-slate-300 group-data-[active=true]:bg-[#06402B] group-hover:bg-[#06402B] shrink-0 transition-colors" />
@@ -148,7 +161,7 @@ export function AppSidebar() {
         )}
 
         <SidebarGroup>
-          <SidebarGroupLabel className="text-slate-500 text-sm tracking-widest font-semibold mb-3 px-2 uppercase">
+          <SidebarGroupLabel className="text-slate-500 text-[15px] tracking-widest font-semibold mb-3 px-2 uppercase">
             Departamentos
           </SidebarGroupLabel>
           <SidebarGroupContent>
@@ -158,7 +171,7 @@ export function AppSidebar() {
                   <SidebarMenuButton
                     asChild
                     isActive={location.pathname === `/department/${dept.id}`}
-                    className="h-9 transition-all duration-200 rounded-md px-3 text-base group hover:bg-slate-50 hover:text-primary data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:font-medium"
+                    className="h-9 transition-all duration-200 rounded-md px-3 text-[17px] group hover:bg-slate-50 hover:text-primary data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:font-medium"
                   >
                     <Link
                       to={`/department/${dept.id}`}

@@ -12,6 +12,7 @@ import Department from './pages/Department'
 import Project from './pages/Project'
 import AiChat from './pages/AiChat'
 import Admin from './pages/Admin'
+import Settings from './pages/Settings'
 import Login from './pages/Login'
 import Profile from './pages/Profile'
 import SystemCheck from './pages/SystemCheck'
@@ -48,6 +49,7 @@ const App = () => (
               <Route path="/project/:id" element={<Project />} />
               <Route path="/ai/:id" element={<AiChat />} />
               <Route path="/admin" element={<Admin />} />
+              <Route path="/settings" element={<Settings />} />
               <Route path="/profile" element={<Profile />} />
             </Route>
           </Route>
