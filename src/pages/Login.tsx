@@ -59,6 +59,13 @@ export default function Login() {
     <div className="flex min-h-screen items-center justify-center bg-white p-4">
       <Card className="w-full max-w-sm shadow-[0_4px_24px_-4px_rgba(0,0,0,0.04)] border border-gray-100 rounded-xl">
         <CardHeader className="text-center pb-6">
+          <div className="flex justify-center mb-6">
+            <img
+              src="https://storage.googleapis.com/wombo-assets/images/61a7a0b3-f667-4bd9-8fde-4863bf46cd8a/image.jpeg"
+              alt="Hospital Beneficência Portuguesa de São Caetano do Sul"
+              className="w-full max-w-[240px] h-auto object-contain mix-blend-multiply"
+            />
+          </div>
           <CardTitle className="text-3xl font-bold text-emerald-700 tracking-tight">
             HUB IA BPSCS
           </CardTitle>
