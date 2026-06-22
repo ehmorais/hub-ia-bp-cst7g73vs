@@ -69,6 +69,7 @@ import { cn } from '@/lib/utils'
 import { getIcon } from '@/lib/icons'
 import { EscalasManagement } from '@/components/EscalasManagement'
 import { useLocation } from 'react-router-dom'
+import { ToolUsageChart } from '@/components/ToolUsageChart'
 
 const ICONS_LIST = [
   'Building2',
@@ -107,7 +108,7 @@ export default function Admin() {
       <div className="fixed bottom-6 right-6 z-50">
         <Button
           onClick={() => (window.location.hash = '#users')}
-          className="shadow-lg rounded-full px-6 h-12"
+          className="shadow-lg rounded-lg px-6 h-12"
         >
           <Users className="w-5 h-5 mr-2" />
           Gerenciar Usuários
@@ -468,46 +469,46 @@ function AdminContent() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="flex flex-wrap w-full justify-start max-w-6xl mb-8 h-auto p-1.5 gap-1 bg-white/60 backdrop-blur-md border border-slate-200/60 shadow-sm rounded-2xl font-interactive">
+        <TabsList className="flex flex-wrap w-full justify-start max-w-6xl mb-8 h-auto p-1.5 gap-1 bg-white/60 backdrop-blur-md border border-slate-200/60 shadow-sm rounded-lg font-interactive">
           <TabsTrigger
             value="performance"
-            className="rounded-xl px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all hover:bg-accent hover:text-accent-foreground"
+            className="rounded-md px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all hover:bg-accent hover:text-accent-foreground"
           >
             Performance
           </TabsTrigger>
           <TabsTrigger
             value="audit"
-            className="rounded-xl px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all hover:bg-accent hover:text-accent-foreground"
+            className="rounded-md px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all hover:bg-accent hover:text-accent-foreground"
           >
             Auditoria
           </TabsTrigger>
           <TabsTrigger
             value="users"
-            className="rounded-xl px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all hover:bg-accent hover:text-accent-foreground"
+            className="rounded-md px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all hover:bg-accent hover:text-accent-foreground"
           >
             Usuários
           </TabsTrigger>
           <TabsTrigger
             value="ia_tools"
-            className="rounded-xl px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all hover:bg-accent hover:text-accent-foreground"
+            className="rounded-md px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all hover:bg-accent hover:text-accent-foreground"
           >
             Ferramentas IA
           </TabsTrigger>
           <TabsTrigger
             value="departments"
-            className="rounded-xl px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all hover:bg-accent hover:text-accent-foreground"
+            className="rounded-md px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all hover:bg-accent hover:text-accent-foreground"
           >
             Departamentos
           </TabsTrigger>
           <TabsTrigger
             value="projects"
-            className="rounded-xl px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all hover:bg-accent hover:text-accent-foreground"
+            className="rounded-md px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all hover:bg-accent hover:text-accent-foreground"
           >
             Projetos
           </TabsTrigger>
           <TabsTrigger
             value="escalas"
-            className="rounded-xl px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all hover:bg-accent hover:text-accent-foreground"
+            className="rounded-md px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all hover:bg-accent hover:text-accent-foreground"
           >
             Gestão de Escalas
           </TabsTrigger>
@@ -543,7 +544,7 @@ function AdminContent() {
                       style={{ color: dep.color || 'inherit' }}
                     >
                       <div
-                        className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 shadow-sm flex items-center justify-center"
+                        className="p-2.5 rounded-lg bg-slate-50 border border-slate-100 shadow-sm flex items-center justify-center"
                         style={{ color: dep.color || 'inherit' }}
                       >
                         {(() => {
@@ -776,7 +777,7 @@ function AdminContent() {
         </TabsContent>
 
         <TabsContent value="audit" className="space-y-4">
-          <div className="flex justify-between items-center bg-card p-4 rounded-xl border border-slate-200/60 shadow-soft mb-4">
+          <div className="flex justify-between items-center bg-card p-4 rounded-lg border border-slate-200/60 shadow-soft mb-4">
             <div className="flex items-center gap-4 w-full max-w-lg">
               <div className="relative flex-1">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -988,7 +989,7 @@ function AdminContent() {
                             <div
                               role="button"
                               tabIndex={0}
-                              className="ml-1 rounded-full hover:bg-muted p-0.5 cursor-pointer"
+                              className="ml-1 rounded-sm hover:bg-muted p-0.5 cursor-pointer"
                               onClick={() => setToolDeps(toolDeps.filter((x) => x !== d.id))}
                             >
                               <X className="h-3 w-3" />
@@ -1066,58 +1067,72 @@ function AdminContent() {
                 {tools.map((tool) => (
                   <Card
                     key={tool.id}
-                    className="p-4 flex items-center justify-between shadow-sm border-slate-200/60 rounded-lg border-l-[6px] border-l-primary"
+                    className="p-4 flex flex-col shadow-sm border-slate-200/60 rounded-lg border-l-[6px] border-l-primary"
                   >
-                    <div className="flex-1 min-w-0 pr-4">
-                      <div className="flex items-center gap-2">
-                        <p className="font-semibold text-slate-800 truncate font-sans">
-                          {tool.name}
+                    <div className="flex items-start justify-between w-full">
+                      <div className="flex-1 min-w-0 pr-4">
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold text-slate-800 truncate font-sans">
+                            {tool.name}
+                          </p>
+                          <Badge
+                            variant="outline"
+                            className={cn(
+                              'text-[10px] uppercase h-5 px-1.5',
+                              tool.status === 'active'
+                                ? 'text-primary border-primary/20 bg-primary/10'
+                                : 'text-amber-600 border-amber-200 bg-amber-50',
+                            )}
+                          >
+                            {tool.status}
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground font-mono mt-1 mb-2">
+                          Modelo: {tool.model_alias} | Versão: {tool.version || 'N/A'}
                         </p>
-                        <Badge
-                          variant="outline"
-                          className={cn(
-                            'text-[10px] uppercase h-5 px-1.5',
-                            tool.status === 'active'
-                              ? 'text-primary border-primary/20 bg-primary/10'
-                              : 'text-amber-600 border-amber-200 bg-amber-50',
+                        <div className="flex flex-wrap gap-1">
+                          {tool.associated_departments?.length > 0 ? (
+                            tool.associated_departments.map((depId: string) => {
+                              const d = departments.find((x) => x.id === depId)
+                              return d ? (
+                                <Badge
+                                  key={depId}
+                                  variant="secondary"
+                                  className="text-[10px] px-1.5"
+                                >
+                                  {d.name}
+                                </Badge>
+                              ) : null
+                            })
+                          ) : (
+                            <span className="text-xs text-slate-400">Sem departamentos</span>
                           )}
-                        >
-                          {tool.status}
-                        </Badge>
+                        </div>
                       </div>
-                      <p className="text-xs text-muted-foreground font-mono mt-1 mb-2">
-                        Modelo: {tool.model_alias} | Versão: {tool.version || 'N/A'}
+                      {isAdmin && (
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Button variant="ghost" size="icon" onClick={() => handleEditTool(tool)}>
+                            <Settings2 className="h-4 w-4 text-slate-600" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDeleteTool(tool.id)}
+                            className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                    <div className="mt-4 pt-4 border-t border-slate-100/80">
+                      <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                        Uso nos últimos 5 dias
                       </p>
-                      <div className="flex flex-wrap gap-1">
-                        {tool.associated_departments?.length > 0 ? (
-                          tool.associated_departments.map((depId: string) => {
-                            const d = departments.find((x) => x.id === depId)
-                            return d ? (
-                              <Badge key={depId} variant="secondary" className="text-[10px] px-1.5">
-                                {d.name}
-                              </Badge>
-                            ) : null
-                          })
-                        ) : (
-                          <span className="text-xs text-slate-400">Sem departamentos</span>
-                        )}
+                      <div className="h-[140px] w-full">
+                        <ToolUsageChart tool={tool} logs={logs} />
                       </div>
                     </div>
-                    {isAdmin && (
-                      <div className="flex items-center gap-1 shrink-0">
-                        <Button variant="ghost" size="icon" onClick={() => handleEditTool(tool)}>
-                          <Settings2 className="h-4 w-4 text-slate-600" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDeleteTool(tool.id)}
-                          className="text-red-500 hover:text-red-700 hover:bg-red-50"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    )}
                   </Card>
                 ))}
                 {tools.length === 0 && (
@@ -1219,7 +1234,7 @@ function AdminContent() {
                             <div
                               role="button"
                               tabIndex={0}
-                              className="ml-1 rounded-full hover:bg-muted p-0.5 cursor-pointer"
+                              className="ml-1 rounded-sm hover:bg-muted p-0.5 cursor-pointer"
                               onClick={() => setProjDeps(projDeps.filter((x) => x !== d.id))}
                             >
                               <X className="h-3 w-3" />

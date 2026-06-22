@@ -26,10 +26,10 @@ export default {
     },
     extend: {
       fontFamily: {
-        sans: ['Manrope', 'system-ui', 'sans-serif'],
-        heading: ['Manrope', 'system-ui', 'sans-serif'],
-        metrics: ['Manrope', 'system-ui', 'sans-serif'],
-        interactive: ['Manrope', 'system-ui', 'sans-serif'],
+        sans: ['Outfit', 'system-ui', 'sans-serif'],
+        heading: ['Outfit', 'system-ui', 'sans-serif'],
+        metrics: ['Outfit', 'system-ui', 'sans-serif'],
+        interactive: ['Outfit', 'system-ui', 'sans-serif'],
       },
       colors: {
         'primary-hover': 'hsl(var(--primary-hover))',
