@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   Command,
   CommandEmpty,
@@ -161,6 +162,29 @@ function AdminContent() {
   const [activeTab, setActiveTab] = useState(
     location.hash === '#escalas' ? 'escalas' : 'performance',
   )
+
+  const [dbStatus, setDbStatus] = useState<'connected' | 'disconnected' | 'loading'>('loading')
+  const [githubStatus, setGithubStatus] = useState<'connected' | 'disconnected' | 'loading'>(
+    'loading',
+  )
+
+  useEffect(() => {
+    async function checkHealth() {
+      try {
+        await pb.health.check()
+        setDbStatus('connected')
+      } catch (e) {
+        setDbStatus('disconnected')
+      }
+
+      // Premium feature check (default to disconnected if not configured)
+      setGithubStatus('disconnected')
+    }
+
+    checkHealth()
+    const interval = setInterval(checkHealth, 30000)
+    return () => clearInterval(interval)
+  }, [])
 
   useEffect(() => {
     if (location.hash === '#escalas') {
@@ -458,14 +482,82 @@ function AdminContent() {
 
   return (
     <div className="container mx-auto p-4 md:p-8 space-y-8 max-w-[1400px] animate-fade-in">
-      <div className="flex flex-col gap-2 mb-2">
-        <h1 className="text-4xl font-bold tracking-tight text-primary flex items-center gap-3 font-heading">
-          <ShieldCheck className="h-9 w-9 text-primary" />
-          Painel de Administração
-        </h1>
-        <p className="text-muted-foreground text-lg max-w-3xl font-sans">
-          Governança, controle de acessos e auditoria de modelos de IA da BP.
-        </p>
+      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-2">
+        <div className="flex flex-col gap-2">
+          <h1 className="text-4xl font-bold tracking-tight text-primary flex items-center gap-3 font-heading">
+            <ShieldCheck className="h-9 w-9 text-primary" />
+            Painel de Administração
+          </h1>
+          <p className="text-muted-foreground text-lg max-w-3xl font-sans">
+            Governança, controle de acessos e auditoria de modelos de IA da BP.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-6 bg-white/60 backdrop-blur-md p-3 rounded-lg border border-slate-200/60 shadow-sm shrink-0">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="flex items-center gap-2 cursor-help">
+                <div className="relative flex h-3 w-3">
+                  {dbStatus === 'connected' && (
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                  )}
+                  <span
+                    className={cn(
+                      'relative inline-flex rounded-full h-3 w-3',
+                      dbStatus === 'connected'
+                        ? 'bg-green-500'
+                        : dbStatus === 'loading'
+                          ? 'bg-slate-300'
+                          : 'bg-red-500',
+                    )}
+                  ></span>
+                </div>
+                <span className="text-sm font-medium text-slate-700">Banco de Dados</span>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>
+                {dbStatus === 'connected'
+                  ? 'Conectado ao Banco de Dados'
+                  : dbStatus === 'loading'
+                    ? 'Verificando conexão...'
+                    : 'Falha na conexão com o Banco de Dados'}
+              </p>
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="flex items-center gap-2 cursor-help">
+                <div className="relative flex h-3 w-3">
+                  {githubStatus === 'connected' && (
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                  )}
+                  <span
+                    className={cn(
+                      'relative inline-flex rounded-full h-3 w-3',
+                      githubStatus === 'connected'
+                        ? 'bg-green-500'
+                        : githubStatus === 'loading'
+                          ? 'bg-slate-300'
+                          : 'bg-red-500',
+                    )}
+                  ></span>
+                </div>
+                <span className="text-sm font-medium text-slate-700">GitHub</span>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>
+                {githubStatus === 'connected'
+                  ? 'Conectado ao GitHub'
+                  : githubStatus === 'loading'
+                    ? 'Verificando conexão...'
+                    : 'GitHub não conectado'}
+              </p>
+            </TooltipContent>
+          </Tooltip>
+        </div>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
