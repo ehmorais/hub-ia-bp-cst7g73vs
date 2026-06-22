@@ -2,21 +2,68 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
 } from '@/components/ui/sidebar'
-import { LayoutDashboard, Settings, ShieldCheck, LogOut } from 'lucide-react'
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
+import {
+  LayoutDashboard,
+  MessageSquare,
+  LogOut,
+  Briefcase,
+  Building2,
+  ShieldCheck,
+  Settings,
+  Menu,
+} from 'lucide-react'
 import { useState, useEffect } from 'react'
 import pb from '@/lib/pocketbase/client'
 import { useRealtime } from '@/hooks/use-realtime'
 import { useAuth } from '@/hooks/use-auth'
 import { toast } from 'sonner'
+import { cn } from '@/lib/utils'
+
+function HoverSection({
+  title,
+  icon: Icon,
+  children,
+  isActive = false,
+}: {
+  title: string
+  icon?: any
+  children: React.ReactNode
+  isActive?: boolean
+}) {
+  return (
+    <HoverCard openDelay={50} closeDelay={150}>
+      <HoverCardTrigger asChild>
+        <div
+          className={cn(
+            'flex items-center gap-3 px-5 py-4 cursor-pointer transition-all duration-300 rounded-xl mx-4 mb-4 border border-transparent',
+            isActive
+              ? 'bg-[#06402B] text-white shadow-lg shadow-[#06402B]/20'
+              : 'text-[#06402B] bg-white shadow-sm hover:bg-[#06402B]/5 hover:border-[#06402B]/10',
+          )}
+        >
+          {Icon && <Icon className="w-5 h-5" />}
+          <span className="font-bold text-[13px] tracking-widest uppercase">{title}</span>
+        </div>
+      </HoverCardTrigger>
+      <HoverCardContent
+        side="right"
+        align="start"
+        sideOffset={16}
+        className="w-72 p-2 bg-white/95 backdrop-blur-xl border border-[#06402B]/10 shadow-2xl rounded-2xl z-[100]"
+      >
+        <SidebarMenu className="gap-1 max-h-[75vh] overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-slate-200 [&::-webkit-scrollbar-thumb]:rounded-full pr-1">
+          {children}
+        </SidebarMenu>
+      </HoverCardContent>
+    </HoverCard>
+  )
+}
 
 export function AppSidebar() {
   const location = useLocation()
@@ -29,7 +76,11 @@ export function AppSidebar() {
     try {
       const depRecords = await pb.collection('departments').getFullList({ sort: 'sort_order,name' })
       setDepartments(depRecords)
-      const projRecords = await pb.collection('projects').getFullList({ sort: 'sort_order,name' })
+
+      const projRecords = await pb.collection('projects').getFullList({
+        filter: "status = 'active'",
+        sort: 'sort_order,name',
+      })
       setProjects(projRecords)
     } catch (e) {
       console.error(e)
@@ -55,144 +106,83 @@ export function AppSidebar() {
     isAuthenticated,
   )
 
-  const sortedDepartments = [...departments].sort((a, b) => {
-    if (a.sort_order !== b.sort_order) return a.sort_order - b.sort_order
-    return a.name.localeCompare(b.name)
-  })
+  const isNavActive =
+    location.pathname === '/' ||
+    location.pathname === '/dashboard' ||
+    location.pathname.startsWith('/ai/') ||
+    location.pathname === '/admin' ||
+    location.pathname === '/settings' ||
+    location.pathname === '/profile'
 
-  const generalDept = departments.find((d) => d.name.includes('Projetos Gerais'))
-  const otherDepts = sortedDepartments.filter((d) => d.id !== generalDept?.id)
-  const generalProjects = projects.filter(
-    (p) =>
-      (p.department === generalDept?.id || p.associated_departments?.includes(generalDept?.id)) &&
-      p.name !== 'Visão Geral do Hub',
-  )
+  const isProjectsActive = location.pathname.startsWith('/project/')
+  const isDeptsActive = location.pathname.startsWith('/department/')
 
   return (
-    <Sidebar variant="inset" className="border-r border-slate-100 shadow-sm bg-white">
-      <SidebarHeader className="p-4 min-h-[5rem] flex items-center justify-center border-b border-slate-100 bg-white">
+    <Sidebar variant="inset" className="border-r border-[#06402B]/10 shadow-sm !bg-slate-50/50">
+      <SidebarHeader className="p-6 min-h-[5rem] flex items-center justify-center border-b border-[#06402B]/10 bg-transparent mb-6">
         <Link
           to="/"
           className="flex w-full items-center justify-center transition-opacity hover:opacity-80"
         >
-          <span className="font-bold text-2xl tracking-tight text-primary">HUB IA BPSCS</span>
+          <span className="font-extrabold text-2xl tracking-tighter text-[#06402B]">
+            HUB IA BPSCS
+          </span>
         </Link>
       </SidebarHeader>
 
-      <SidebarContent className="px-3 py-6 gap-8 bg-white">
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-slate-500 text-[13px] tracking-widest font-semibold mb-2 px-2 uppercase">
-            Navegação
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu className="gap-1.5">
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  asChild
-                  isActive={location.pathname === '/' || location.pathname === '/dashboard'}
-                  tooltip="Dashboard"
-                  className="h-9 transition-all duration-200 rounded-lg px-2.5 text-[15px] group hover:bg-slate-50 hover:text-primary data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:font-medium"
-                >
-                  <Link to="/" className="flex items-center gap-2.5">
-                    <LayoutDashboard className="h-[18px] w-[18px] group-data-[active=true]:text-primary" />
-                    <span>Visão Geral do Hub</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  asChild
-                  isActive={location.pathname === '/admin' && location.hash !== '#escalas'}
-                  tooltip="Administração"
-                  className="h-9 transition-all duration-200 rounded-lg px-2.5 text-[15px] group hover:bg-slate-50 hover:text-primary data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:font-medium"
-                >
-                  <Link to="/admin" className="flex items-center gap-2.5">
-                    <ShieldCheck className="h-[18px] w-[18px] group-data-[active=true]:text-primary" />
-                    <span>Administração</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  asChild
-                  isActive={location.pathname === '/settings'}
-                  tooltip="Configurações"
-                  className="h-9 transition-all duration-200 rounded-lg px-2.5 text-[15px] group hover:bg-slate-50 hover:text-primary data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:font-medium"
-                >
-                  <Link to="/settings" className="flex items-center gap-2.5">
-                    <Settings className="h-[18px] w-[18px] group-data-[active=true]:text-primary" />
-                    <span>Configurações</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+      <SidebarContent className="px-0 py-2 gap-2 bg-transparent overflow-visible">
+        <HoverSection title="Navegação" icon={Menu} isActive={isNavActive}>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              asChild
+              isActive={location.pathname === '/' || location.pathname === '/dashboard'}
+              className="h-10 transition-all duration-200 rounded-lg px-3 text-[14px] group hover:bg-[#06402B]/10 hover:text-[#06402B] data-[active=true]:bg-[#06402B] data-[active=true]:text-white data-[active=true]:font-bold"
+            >
+              <Link to="/">
+                <LayoutDashboard className="h-[18px] w-[18px] mr-2" />
+                Dashboard / Home
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              asChild
+              isActive={location.pathname.startsWith('/ai/')}
+              className="h-10 transition-all duration-200 rounded-lg px-3 text-[14px] group hover:bg-[#06402B]/10 hover:text-[#06402B] data-[active=true]:bg-[#06402B] data-[active=true]:text-white data-[active=true]:font-bold"
+            >
+              <Link to="/ai/chat">
+                <MessageSquare className="h-[18px] w-[18px] mr-2" />
+                AI Chat
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              asChild
+              isActive={location.pathname === '/admin'}
+              className="h-10 transition-all duration-200 rounded-lg px-3 text-[14px] group hover:bg-[#06402B]/10 hover:text-[#06402B] data-[active=true]:bg-[#06402B] data-[active=true]:text-white data-[active=true]:font-bold"
+            >
+              <Link to="/admin">
+                <ShieldCheck className="h-[18px] w-[18px] mr-2" />
+                Administração
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              asChild
+              isActive={location.pathname === '/settings'}
+              className="h-10 transition-all duration-200 rounded-lg px-3 text-[14px] group hover:bg-[#06402B]/10 hover:text-[#06402B] data-[active=true]:bg-[#06402B] data-[active=true]:text-white data-[active=true]:font-bold"
+            >
+              <Link to="/settings">
+                <Settings className="h-[18px] w-[18px] mr-2" />
+                Configurações
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
 
-        {generalDept && (
-          <SidebarGroup>
-            <SidebarGroupLabel className="text-[#06402B] text-[13px] tracking-widest font-bold mb-2 px-2 uppercase flex items-center gap-2 font-sans">
-              {generalDept.name}
-            </SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu className="gap-1">
-                {generalProjects.map((proj: any) => {
-                  const isEscalas = proj.name === 'Gestão de Escalas'
-                  const linkTo = isEscalas ? '/admin#escalas' : `/project/${proj.id}`
-                  const isActive = isEscalas
-                    ? location.pathname === '/admin' && location.hash === '#escalas'
-                    : location.pathname === `/project/${proj.id}`
+          <div className="h-px bg-[#06402B]/10 my-2 mx-2" />
 
-                  return (
-                    <SidebarMenuItem key={proj.id}>
-                      <SidebarMenuButton
-                        asChild
-                        isActive={isActive}
-                        className="h-8 transition-all duration-200 rounded-md px-2.5 text-[14px] group hover:bg-slate-50 hover:text-[#06402B] data-[active=true]:bg-[#06402B]/10 data-[active=true]:text-[#06402B] data-[active=true]:font-medium"
-                      >
-                        <Link to={linkTo} className="flex items-center gap-2.5 font-sans">
-                          <div className="w-1.5 h-1.5 rounded-sm bg-slate-300 group-data-[active=true]:bg-[#06402B] group-hover:bg-[#06402B] shrink-0 transition-colors" />
-                          <span className="line-clamp-1">{proj.name}</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  )
-                })}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
-
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-slate-500 text-[13px] tracking-widest font-semibold mb-2 px-2 uppercase">
-            Departamentos
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu className="gap-1">
-              {otherDepts.map((dept: any) => (
-                <SidebarMenuItem key={dept.id}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={location.pathname === `/department/${dept.id}`}
-                    className="h-8 transition-all duration-200 rounded-md px-2.5 text-[14px] group hover:bg-slate-50 hover:text-primary data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:font-medium"
-                  >
-                    <Link
-                      to={`/department/${dept.id}`}
-                      className="flex items-center gap-2.5 font-sans"
-                    >
-                      <div className="w-1.5 h-1.5 rounded-full bg-slate-300 group-data-[active=true]:bg-primary group-hover:bg-primary shrink-0 transition-colors" />
-                      <span className="line-clamp-1">{dept.name}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-      </SidebarContent>
-
-      <SidebarFooter className="p-3 bg-white border-t border-slate-100">
-        <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton
               onClick={() => {
@@ -200,14 +190,58 @@ export function AppSidebar() {
                 toast.success('Sessão encerrada com sucesso.')
                 navigate('/login')
               }}
-              className="h-9 transition-all duration-200 rounded-lg px-2.5 text-[15px] group hover:bg-[#06402B]/10 hover:text-[#06402B] text-slate-600"
+              className="h-10 transition-all duration-200 rounded-lg px-3 text-[14px] group hover:bg-red-50 hover:text-red-600 text-slate-600 mt-1 border border-transparent hover:border-red-100"
             >
-              <LogOut className="h-[18px] w-[18px] group-hover:text-[#06402B]" />
-              <span className="font-medium">Sair do Sistema</span>
+              <LogOut className="h-[18px] w-[18px] mr-2" />
+              <span className="font-bold">Sair do Sistema</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
-        </SidebarMenu>
-      </SidebarFooter>
+        </HoverSection>
+
+        <HoverSection title="Projetos Gerais HBPSCSC" icon={Briefcase} isActive={isProjectsActive}>
+          {projects.map((proj) => (
+            <SidebarMenuItem key={proj.id}>
+              <SidebarMenuButton
+                asChild
+                isActive={location.pathname === `/project/${proj.id}`}
+                className="h-10 transition-all duration-200 rounded-lg px-3 text-[14px] group hover:bg-[#06402B]/10 hover:text-[#06402B] data-[active=true]:bg-[#06402B] data-[active=true]:text-white data-[active=true]:font-bold"
+              >
+                <Link to={`/project/${proj.id}`}>
+                  <div className="w-1.5 h-1.5 rounded-sm bg-current shrink-0 transition-colors opacity-70 group-data-[active=true]:opacity-100 mr-2" />
+                  <span className="line-clamp-1">{proj.name}</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ))}
+          {projects.length === 0 && (
+            <div className="px-3 py-4 text-sm text-slate-400 text-center font-medium">
+              Nenhum projeto ativo
+            </div>
+          )}
+        </HoverSection>
+
+        <HoverSection title="Departamentos" icon={Building2} isActive={isDeptsActive}>
+          {departments.map((dept) => (
+            <SidebarMenuItem key={dept.id}>
+              <SidebarMenuButton
+                asChild
+                isActive={location.pathname === `/department/${dept.id}`}
+                className="h-10 transition-all duration-200 rounded-lg px-3 text-[14px] group hover:bg-[#06402B]/10 hover:text-[#06402B] data-[active=true]:bg-[#06402B] data-[active=true]:text-white data-[active=true]:font-bold"
+              >
+                <Link to={`/department/${dept.id}`}>
+                  <div className="w-1.5 h-1.5 rounded-full bg-current shrink-0 transition-colors opacity-70 group-data-[active=true]:opacity-100 mr-2" />
+                  <span className="line-clamp-1">{dept.name}</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ))}
+          {departments.length === 0 && (
+            <div className="px-3 py-4 text-sm text-slate-400 text-center font-medium">
+              Nenhum departamento
+            </div>
+          )}
+        </HoverSection>
+      </SidebarContent>
     </Sidebar>
   )
 }
