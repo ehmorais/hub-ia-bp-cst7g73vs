@@ -1,11 +1,96 @@
+import { useState, useEffect } from 'react'
 import { useAuth } from '@/hooks/use-auth'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
-import { Github, Settings as SettingsIcon, Link as LinkIcon, ShieldCheck } from 'lucide-react'
+import {
+  Github,
+  Settings as SettingsIcon,
+  Link as LinkIcon,
+  ShieldCheck,
+  Server,
+} from 'lucide-react'
+import { useToast } from '@/hooks/use-toast'
+import pb from '@/lib/pocketbase/client'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { cn } from '@/lib/utils'
+
+function StatusLed({
+  status,
+  label,
+  tooltip,
+}: {
+  status: 'green' | 'red' | 'gray' | 'loading'
+  label: string
+  tooltip: string
+}) {
+  const isGreen = status === 'green'
+  const isRed = status === 'red'
+  const isGray = status === 'gray'
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg border border-slate-100 w-full sm:w-auto">
+          <div className="relative flex h-3 w-3 shrink-0">
+            {isGreen && (
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75 duration-1000"></span>
+            )}
+            <span
+              className={cn(
+                'relative inline-flex rounded-full h-3 w-3',
+                isGreen
+                  ? 'bg-green-500'
+                  : isRed
+                    ? 'bg-red-500'
+                    : isGray
+                      ? 'bg-slate-400'
+                      : 'bg-blue-400 animate-pulse',
+              )}
+            ></span>
+          </div>
+          <span className="text-sm font-semibold text-slate-700">{label}</span>
+        </div>
+      </TooltipTrigger>
+      <TooltipContent>
+        <p>{tooltip}</p>
+      </TooltipContent>
+    </Tooltip>
+  )
+}
 
 export default function Settings() {
   const { user } = useAuth()
+  const { toast } = useToast()
+
+  const [dbStatus, setDbStatus] = useState<'loading' | 'connected' | 'error'>('loading')
+  const [githubStatus, setGithubStatus] = useState<'disconnected' | 'loading' | 'connected'>(
+    'disconnected',
+  )
+
+  useEffect(() => {
+    async function checkDb() {
+      try {
+        await pb.collection('users').getList(1, 1)
+        setDbStatus('connected')
+      } catch (e) {
+        setDbStatus('error')
+      }
+    }
+    checkDb()
+  }, [])
+
+  const handleConnectGithub = () => {
+    setGithubStatus('loading')
+    // Mock integration flow
+    setTimeout(() => {
+      setGithubStatus('connected')
+      toast({
+        title: 'Integração Concluída',
+        description: 'Repositório GitHub conectado e sincronizado com sucesso.',
+      })
+    }, 1500)
+  }
 
   if (user?.role !== 'Admin') {
     return (
@@ -44,13 +129,47 @@ export default function Settings() {
         <TabsContent value="general" className="space-y-6">
           <Card className="shadow-soft border-slate-200/60 rounded-lg">
             <CardHeader>
-              <CardTitle>Configurações Gerais</CardTitle>
-              <CardDescription>Configurações do sistema e da plataforma Hub IA.</CardDescription>
+              <CardTitle className="flex items-center gap-2">
+                <Server className="w-5 h-5 text-[#06402B]" />
+                Status da Infraestrutura
+              </CardTitle>
+              <CardDescription>
+                Monitoramento em tempo real dos serviços conectados.
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              <p className="text-muted-foreground text-sm">
-                Nenhuma configuração disponível no momento.
-              </p>
+              <div className="flex flex-col sm:flex-row gap-4">
+                <StatusLed
+                  status={
+                    dbStatus === 'connected' ? 'green' : dbStatus === 'error' ? 'red' : 'loading'
+                  }
+                  label="Conexão com Banco de Dados"
+                  tooltip={
+                    dbStatus === 'connected'
+                      ? 'Banco de dados operacional'
+                      : dbStatus === 'error'
+                        ? 'Falha na conexão com o banco de dados'
+                        : 'Verificando conexão...'
+                  }
+                />
+                <StatusLed
+                  status={
+                    githubStatus === 'connected'
+                      ? 'green'
+                      : githubStatus === 'disconnected'
+                        ? 'gray'
+                        : 'loading'
+                  }
+                  label="Conexão com GitHub"
+                  tooltip={
+                    githubStatus === 'connected'
+                      ? 'GitHub sincronizado'
+                      : githubStatus === 'disconnected'
+                        ? 'GitHub não configurado'
+                        : 'Conectando...'
+                  }
+                />
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -64,8 +183,17 @@ export default function Settings() {
                     <Github className="h-6 w-6 text-[#06402B]" />
                   </div>
                   <div className="px-3 py-1 bg-slate-100 text-slate-600 text-xs font-semibold rounded-full flex items-center gap-1.5">
-                    <div className="w-1.5 h-1.5 rounded-full bg-slate-400" />
-                    Não Configurado
+                    <div
+                      className={cn(
+                        'w-1.5 h-1.5 rounded-full',
+                        githubStatus === 'connected' ? 'bg-green-500' : 'bg-slate-400',
+                      )}
+                    />
+                    {githubStatus === 'connected'
+                      ? 'Conectado'
+                      : githubStatus === 'loading'
+                        ? 'Conectando...'
+                        : 'Não Configurado'}
                   </div>
                 </div>
                 <CardTitle className="text-xl text-slate-800">Integração com GitHub</CardTitle>
@@ -98,9 +226,15 @@ export default function Settings() {
                   <Button
                     className="w-full bg-[#06402B] hover:bg-[#06402B]/90 text-white font-medium shadow-sm transition-all"
                     size="lg"
+                    onClick={handleConnectGithub}
+                    disabled={githubStatus === 'loading' || githubStatus === 'connected'}
                   >
                     <LinkIcon className="w-4 h-4 mr-2" />
-                    Conectar Repositório
+                    {githubStatus === 'connected'
+                      ? 'Repositório Conectado'
+                      : githubStatus === 'loading'
+                        ? 'Conectando...'
+                        : 'Conectar Repositório'}
                   </Button>
                 </div>
               </CardContent>
