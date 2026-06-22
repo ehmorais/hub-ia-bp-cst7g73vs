@@ -4,7 +4,7 @@
 
 @layer base {
   :root {
-    --background: 154 20% 98.5%;
+    --background: 0 0% 100%;
     --foreground: 154 50% 10%;
 
     --card: 0 0% 100%;
@@ -35,15 +35,15 @@
 
     --radius: 0.75rem;
 
-    /* Corporate Green Sidebar */
-    --sidebar-background: 154 100% 13%;
-    --sidebar-foreground: 0 0% 100%;
-    --sidebar-primary: 154 30% 90%;
-    --sidebar-primary-foreground: 154 100% 13%;
-    --sidebar-accent: 154 100% 18%;
-    --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 154 100% 18%;
-    --sidebar-ring: 154 30% 90%;
+    /* White Sidebar */
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 154 30% 20%;
+    --sidebar-primary: 154 100% 13%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 154 15% 96%;
+    --sidebar-accent-foreground: 154 100% 13%;
+    --sidebar-border: 154 15% 90%;
+    --sidebar-ring: 154 100% 13%;
   }
 
   .dark {

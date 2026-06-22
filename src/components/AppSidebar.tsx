@@ -56,9 +56,9 @@ export function AppSidebar() {
       <SidebarHeader className="p-4 min-h-[5rem] flex items-center justify-center border-b border-sidebar-border">
         <Link
           to="/"
-          className="flex w-full items-center justify-center transition-opacity hover:opacity-80 text-sidebar-foreground"
+          className="flex w-full items-center justify-center transition-opacity hover:opacity-80"
         >
-          <span className="font-bold text-lg tracking-tight">HUB IA BPSCS</span>
+          <span className="font-bold text-xl tracking-tight text-primary">HUB IA BPSCS</span>
         </Link>
       </SidebarHeader>
 
@@ -74,11 +74,11 @@ export function AppSidebar() {
                   asChild
                   isActive={location.pathname === '/' || location.pathname === '/dashboard'}
                   tooltip="Dashboard"
-                  className="h-10 transition-all duration-200 rounded-lg px-3"
+                  className="h-10 transition-all duration-200 rounded-lg px-3 group data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground data-[active=true]:font-medium"
                 >
                   <Link to="/" className="flex items-center gap-3">
-                    <LayoutDashboard className="h-4 w-4" />
-                    <span className="font-medium">Visão Geral</span>
+                    <LayoutDashboard className="h-4 w-4 group-data-[active=true]:text-primary" />
+                    <span>Visão Geral</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -87,11 +87,11 @@ export function AppSidebar() {
                   asChild
                   isActive={location.pathname === '/admin'}
                   tooltip="Administração"
-                  className="h-10 transition-all duration-200 rounded-lg px-3"
+                  className="h-10 transition-all duration-200 rounded-lg px-3 group data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground data-[active=true]:font-medium"
                 >
                   <Link to="/admin" className="flex items-center gap-3">
-                    <Settings className="h-4 w-4" />
-                    <span className="font-medium">Administração</span>
+                    <Settings className="h-4 w-4 group-data-[active=true]:text-primary" />
+                    <span>Administração</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -110,10 +110,10 @@ export function AppSidebar() {
                   <SidebarMenuButton
                     asChild
                     isActive={location.pathname === `/department/${dept.id}`}
-                    className="h-9 transition-all duration-200 rounded-lg px-3 group"
+                    className="h-9 transition-all duration-200 rounded-lg px-3 group data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground data-[active=true]:font-medium"
                   >
                     <Link to={`/department/${dept.id}`} className="flex items-center gap-3">
-                      <div className="w-1.5 h-1.5 rounded-full bg-sidebar-foreground/30 group-data-[active=true]:bg-sidebar-primary group-hover:bg-sidebar-primary shrink-0 transition-colors" />
+                      <div className="w-1.5 h-1.5 rounded-full bg-sidebar-foreground/30 group-data-[active=true]:bg-primary group-hover:bg-primary shrink-0 transition-colors" />
                       <span className="line-clamp-1">{dept.name}</span>
                     </Link>
                   </SidebarMenuButton>
