@@ -20,16 +20,14 @@ export default function Layout() {
           </div>
           <div className="flex items-center gap-3 mr-2">
             <div className="flex flex-col items-end">
-              <span className="text-sm font-semibold text-slate-800 font-interactive">
+              <span className="text-sm font-semibold text-slate-800">
                 {user?.name || user?.email}
               </span>
-              <span className="text-xs text-slate-500 font-interactive">
-                {user?.role || 'Operador'}
-              </span>
+              <span className="text-xs text-slate-500">{user?.role || 'Operador'}</span>
             </div>
             <Avatar className="h-10 w-10 border border-primary/20 shadow-sm">
               <AvatarImage src={avatarUrl} alt={user?.name} className="object-cover" />
-              <AvatarFallback className="bg-primary/10 text-primary font-bold font-heading">
+              <AvatarFallback className="bg-primary/10 text-primary font-bold">
                 {fallback}
               </AvatarFallback>
             </Avatar>

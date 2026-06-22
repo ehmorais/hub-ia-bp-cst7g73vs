@@ -26,12 +26,13 @@ export default {
     },
     extend: {
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
-        heading: ['"Instrument Sans"', 'sans-serif'],
-        metrics: ['"Plus Jakarta Sans"', 'sans-serif'],
-        interactive: ['Satoshi', 'sans-serif'],
+        sans: ['Manrope', 'system-ui', 'sans-serif'],
+        heading: ['Manrope', 'system-ui', 'sans-serif'],
+        metrics: ['Manrope', 'system-ui', 'sans-serif'],
+        interactive: ['Manrope', 'system-ui', 'sans-serif'],
       },
       colors: {
+        'primary-hover': 'hsl(var(--primary-hover))',
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',
         ring: 'hsl(var(--ring))',

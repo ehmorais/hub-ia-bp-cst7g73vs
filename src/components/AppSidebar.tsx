@@ -58,19 +58,17 @@ export function AppSidebar() {
           to="/"
           className="flex w-full items-center justify-center transition-opacity hover:opacity-80"
         >
-          <span className="font-bold text-2xl tracking-tight text-primary font-heading">
-            HUB IA BPSCS
-          </span>
+          <span className="font-bold text-2xl tracking-tight text-primary">HUB IA BPSCS</span>
         </Link>
       </SidebarHeader>
 
       <SidebarContent className="px-3 py-6 gap-8 bg-white">
         <SidebarGroup>
-          <SidebarGroupLabel className="text-slate-500 text-xs tracking-widest font-interactive font-semibold mb-3 px-2 uppercase">
+          <SidebarGroupLabel className="text-slate-500 text-xs tracking-widest font-semibold mb-3 px-2 uppercase">
             Navegação
           </SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu className="gap-2 font-interactive">
+            <SidebarMenu className="gap-2">
               <SidebarMenuItem>
                 <SidebarMenuButton
                   asChild
@@ -102,11 +100,11 @@ export function AppSidebar() {
         </SidebarGroup>
 
         <SidebarGroup>
-          <SidebarGroupLabel className="text-slate-500 text-xs tracking-widest font-interactive font-semibold mb-3 px-2 uppercase">
+          <SidebarGroupLabel className="text-slate-500 text-xs tracking-widest font-semibold mb-3 px-2 uppercase">
             Departamentos
           </SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu className="gap-1.5 font-interactive">
+            <SidebarMenu className="gap-1.5">
               {sortedDepartments.map((dept: any) => (
                 <SidebarMenuItem key={dept.id}>
                   <SidebarMenuButton

@@ -66,7 +66,7 @@ export function ToolUsageChart({ tool, logs }: { tool: any; logs: any[] }) {
               fontSize={10}
               tickLine={false}
               axisLine={false}
-              fontFamily="Satoshi, sans-serif"
+              fontFamily="Manrope, sans-serif"
             />
             <ChartTooltip content={<ChartTooltipContent />} cursor={{ fill: 'var(--muted)' }} />
             <Bar dataKey="count" fill="var(--color-count)" radius={[4, 4, 0, 0]} />

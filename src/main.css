@@ -16,6 +16,7 @@
     /* Primary #06402B */
     --primary: 158 83% 14%;
     --primary-foreground: 210 40% 98%;
+    --primary-hover: 158 60% 22%;
 
     /* Lighter green for hover states */
     --secondary: 158 20% 96%;
@@ -59,6 +60,7 @@
 
     --primary: 158 83% 14%;
     --primary-foreground: 210 40% 98%;
+    --primary-hover: 158 60% 22%;
 
     --secondary: 158 20% 12%;
     --secondary-foreground: 210 40% 98%;
@@ -100,13 +102,6 @@
   h4,
   h5,
   h6 {
-    @apply font-heading;
-  }
-  button,
-  input,
-  textarea,
-  select,
-  label {
-    @apply font-interactive;
+    @apply tracking-tight;
   }
 }

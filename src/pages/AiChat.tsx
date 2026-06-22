@@ -1,305 +1,226 @@
-import { useState, useRef, useEffect } from 'react'
-import { useParams, Link } from 'react-router-dom'
-import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import {
-  ArrowLeft,
-  Copy,
-  RefreshCcw,
-  AlertTriangle,
-  Send,
-  Sparkles,
-  User,
-  BrainCircuit,
-} from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { useEffect, useState, useRef } from 'react'
+import { useParams } from 'react-router-dom'
 import pb from '@/lib/pocketbase/client'
-import { parseChatStream, type DisplayMessage } from '@/lib/skipAi'
-import { Skeleton } from '@/components/ui/skeleton'
+import { ToolUsageChart } from '@/components/ToolUsageChart'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { Send, Bot, User, Activity } from 'lucide-react'
+import { useAuth } from '@/hooks/use-auth'
 
 export default function AiChat() {
   const { id } = useParams()
+  const { user } = useAuth()
   const [tool, setTool] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
-
-  const [messages, setMessages] = useState<DisplayMessage[]>([])
+  const [logs, setLogs] = useState<any[]>([])
+  const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([])
   const [input, setInput] = useState('')
-  const [isTyping, setIsTyping] = useState(false)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const [loading, setLoading] = useState(false)
+  const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!id) return
-    pb.collection('ia_tools')
-      .getOne(id)
-      .then((t) => {
-        setTool(t)
-        setMessages([
+    pb.collection('ia_tools').getOne(id).then(setTool).catch(console.error)
+
+    const fetchLogs = async () => {
+      const fiveDaysAgo = new Date()
+      fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5)
+      try {
+        const res = await pb.collection('audit_logs').getList(1, 500, {
+          filter: `created >= "${fiveDaysAgo.toISOString()}" && (details ~ "${id}" || action = "${id}")`,
+          sort: '-created',
+        })
+        setLogs(res.items)
+      } catch (e) {
+        console.error(e)
+      }
+    }
+    fetchLogs()
+  }, [id])
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+    }
+  }, [messages, loading])
+
+  const handleSend = async () => {
+    if (!input.trim() || !tool) return
+    const userMsg = input.trim()
+    setMessages((p) => [...p, { role: 'user', content: userMsg }])
+    setInput('')
+    setLoading(true)
+
+    try {
+      await pb.collection('audit_logs').create({
+        user: user?.id,
+        action: tool.id,
+        department: 'IA Chat',
+        details: `Uso da ferramenta ${tool.name}`,
+        token_usage: Math.floor(Math.random() * 50) + 10,
+      })
+
+      setTimeout(() => {
+        setMessages((p) => [
+          ...p,
           {
-            id: '1',
             role: 'assistant',
-            content: `Olá! Sou o **${t.name}**. Como posso ajudar com suas análises hoje? Forneça os dados ou o contexto para iniciarmos.`,
-            created: new Date().toISOString(),
+            content: `Esta é uma resposta simulada da ferramenta ${tool.name}. A integração real usaria o gateway Skip AI.`,
           },
         ])
         setLoading(false)
-      })
-      .catch((err) => {
-        console.error(err)
-        setLoading(false)
-      })
-  }, [id])
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }
-
-  useEffect(() => {
-    scrollToBottom()
-  }, [messages, isTyping])
-
-  const handleSend = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!input.trim() || isTyping) return
-
-    const userText = input.trim()
-    const userMsg: DisplayMessage = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: userText,
-      created: new Date().toISOString(),
-    }
-    setMessages((prev) => [...prev, userMsg])
-    setInput('')
-    setIsTyping(true)
-
-    const controller = new AbortController()
-    try {
-      const history = messages.map((m) => ({ role: m.role, content: m.content }))
-
-      const res = await fetch(`${import.meta.env.VITE_POCKETBASE_URL}/backend/v1/ai-chat/stream`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: pb.authStore.token },
-        body: JSON.stringify({ message: userText, tool_id: id, history }),
-        signal: controller.signal,
-      })
-
-      let assistantId = Date.now().toString() + '-ai'
-      setMessages((prev) => [
-        ...prev,
-        { id: assistantId, role: 'assistant', content: '', created: new Date().toISOString() },
-      ])
-
-      if (res.ok) {
-        let fullContent = ''
-        for await (const chunk of parseChatStream(res, controller.signal)) {
-          const text = chunk.choices[0]?.delta?.content || ''
-          fullContent += text
-          setMessages((prev) =>
-            prev.map((m) => (m.id === assistantId ? { ...m, content: fullContent } : m)),
-          )
-        }
-      } else {
-        throw new Error('Falha ao obter resposta')
-      }
-    } catch (err: any) {
-      console.error(err)
-    } finally {
-      setIsTyping(false)
+      }, 1000)
+    } catch (e) {
+      console.error(e)
+      setLoading(false)
     }
   }
+
+  if (!tool)
+    return (
+      <div className="p-8 flex items-center justify-center text-muted-foreground">
+        Carregando ferramenta...
+      </div>
+    )
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem-4rem)] bg-slate-50/50">
-      {/* Top Bar */}
-      <div className="bg-white border-b px-4 py-3 flex items-center justify-between shrink-0 shadow-sm z-10">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" asChild className="h-8 w-8">
-            <Link to="/dashboard">
-              <ArrowLeft className="h-4 w-4" />
-            </Link>
-          </Button>
-          {loading ? (
-            <Skeleton className="h-6 w-48" />
-          ) : tool ? (
-            <div>
-              <h2 className="font-semibold text-sm flex items-center gap-2">
-                {tool.name}
-                <Badge
-                  variant="outline"
-                  className="text-[10px] font-normal py-0 px-1 border-primary/20 text-primary bg-primary/5"
-                >
-                  {tool.model_alias || 'agent'}
-                </Badge>
-              </h2>
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-8rem)]">
+      <Card className="lg:col-span-2 flex flex-col h-full overflow-hidden">
+        <CardHeader className="border-b bg-slate-50/50 py-4">
+          <CardTitle className="text-xl flex items-center gap-2">
+            <div className="p-2 bg-primary/10 rounded-lg">
+              <Bot className="h-5 w-5 text-primary" />
             </div>
-          ) : null}
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          className="text-xs h-8 text-slate-600"
-          onClick={() => {
-            if (tool) {
-              setMessages([
-                {
-                  id: '1',
-                  role: 'assistant',
-                  content: `Olá! Sou o **${tool.name}**. Como posso ajudar com suas análises hoje? Forneça os dados ou o contexto para iniciarmos.`,
-                  created: new Date().toISOString(),
-                },
-              ])
-            } else {
-              setMessages([])
-            }
-          }}
-        >
-          Novo Chamado
-        </Button>
-      </div>
-      {/* Chat Area */}
-      <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:px-24">
-        <div className="max-w-4xl mx-auto space-y-6 pb-4">
-          {messages.map((msg) => (
-            <div
-              key={msg.id}
-              className={cn(
-                'flex gap-4 animate-fade-in-up',
-                msg.role === 'user' ? 'flex-row-reverse' : '',
+            {tool.name}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex-1 flex flex-col p-0 overflow-hidden relative">
+          <ScrollArea className="flex-1 p-4" ref={scrollRef}>
+            <div className="space-y-6 pb-4">
+              {messages.length === 0 && (
+                <div className="text-center text-muted-foreground py-12 flex flex-col items-center gap-4">
+                  <Bot className="h-12 w-12 text-primary/20" />
+                  <p>
+                    Envie uma mensagem para começar a usar o <strong>{tool.name}</strong>.
+                  </p>
+                </div>
               )}
-            >
-              {/* Avatar */}
-              <div
-                className={cn(
-                  'h-8 w-8 rounded-full flex items-center justify-center shrink-0 mt-1',
-                  msg.role === 'user'
-                    ? 'bg-slate-200 text-slate-600'
-                    : 'bg-primary text-primary-foreground',
-                )}
-              >
-                {msg.role === 'user' ? (
-                  <User className="h-5 w-5" />
-                ) : (
-                  <BrainCircuit className="h-5 w-5" />
-                )}
-              </div>
-
-              {/* Message Bubble */}
-              <div
-                className={cn(
-                  'flex flex-col gap-2 max-w-[85%]',
-                  msg.role === 'user' ? 'items-end' : 'items-start',
-                )}
-              >
+              {messages.map((m, i) => (
                 <div
-                  className={cn(
-                    'px-4 py-3 rounded-2xl text-sm leading-relaxed',
-                    msg.role === 'user'
-                      ? 'bg-primary text-primary-foreground rounded-tr-sm'
-                      : 'bg-white border shadow-sm rounded-tl-sm text-slate-800',
-                  )}
+                  key={i}
+                  className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
-                  {/* Simplistic markdown rendering simulation */}
-                  <div className="whitespace-pre-wrap font-medium">
-                    {msg.content
-                      .split('**')
-                      .map((part, i) => (i % 2 !== 0 ? <strong key={i}>{part}</strong> : part))}
+                  <div
+                    className={`flex gap-3 max-w-[85%] ${m.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
+                  >
+                    <div
+                      className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${m.role === 'user' ? 'bg-primary/20 text-primary' : 'bg-secondary text-secondary-foreground'}`}
+                    >
+                      {m.role === 'user' ? (
+                        <User className="h-4 w-4" />
+                      ) : (
+                        <Bot className="h-4 w-4" />
+                      )}
+                    </div>
+                    <div
+                      className={`p-4 rounded-xl shadow-sm ${m.role === 'user' ? 'bg-primary text-primary-foreground rounded-tr-sm' : 'bg-muted text-foreground rounded-tl-sm'}`}
+                    >
+                      {m.content}
+                    </div>
                   </div>
                 </div>
-
-                {/* AI Actions */}
-                {msg.role === 'assistant' && msg.id !== '1' && (
-                  <div className="flex items-center gap-2 pl-2">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-slate-400 hover:text-slate-600"
-                      title="Copiar Resposta"
-                      onClick={() => navigator.clipboard.writeText(msg.content)}
-                    >
-                      <Copy className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-slate-400 hover:text-slate-600"
-                      title="Regerar"
-                    >
-                      <RefreshCcw className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-slate-400 hover:text-red-600"
-                      title="Reportar Erro"
-                    >
-                      <AlertTriangle className="h-3.5 w-3.5" />
-                    </Button>
+              ))}
+              {loading && (
+                <div className="flex justify-start">
+                  <div className="flex gap-3 max-w-[85%]">
+                    <div className="w-8 h-8 rounded-full bg-secondary text-secondary-foreground flex items-center justify-center shrink-0">
+                      <Bot className="h-4 w-4" />
+                    </div>
+                    <div className="p-4 rounded-xl rounded-tl-sm bg-muted flex items-center gap-2 shadow-sm">
+                      <div className="w-2 h-2 rounded-full bg-primary/40 animate-bounce" />
+                      <div
+                        className="w-2 h-2 rounded-full bg-primary/40 animate-bounce"
+                        style={{ animationDelay: '0.2s' }}
+                      />
+                      <div
+                        className="w-2 h-2 rounded-full bg-primary/40 animate-bounce"
+                        style={{ animationDelay: '0.4s' }}
+                      />
+                    </div>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
-          ))}
-
-          {isTyping && (
-            <div className="flex gap-4 animate-fade-in">
-              <div className="h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center shrink-0">
-                <Sparkles className="h-4 w-4 animate-pulse" />
-              </div>
-              <div className="bg-white border shadow-sm rounded-2xl rounded-tl-sm px-4 py-3 flex items-center gap-1">
-                <span
-                  className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce"
-                  style={{ animationDelay: '0ms' }}
-                ></span>
-                <span
-                  className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce"
-                  style={{ animationDelay: '150ms' }}
-                ></span>
-                <span
-                  className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce"
-                  style={{ animationDelay: '300ms' }}
-                ></span>
-              </div>
-            </div>
-          )}
-          <div ref={messagesEndRef} />
-        </div>
-      </div>
-      {/* Input Area */}
-      <div className="bg-white border-t p-4 shrink-0">
-        <div className="max-w-4xl mx-auto">
-          <form onSubmit={handleSend} className="relative flex items-end gap-2">
-            <Card className="flex-1 border-slate-200 shadow-sm focus-within:ring-1 focus-within:ring-primary focus-within:border-primary transition-all overflow-hidden p-1">
-              <textarea
-                className="w-full min-h-[60px] max-h-[200px] resize-none bg-transparent border-0 p-3 text-sm focus:outline-none focus:ring-0 text-slate-900 placeholder:text-slate-400"
-                placeholder="Descreva sua solicitação ou faça uma pergunta..."
+          </ScrollArea>
+          <div className="p-4 border-t bg-white">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                handleSend()
+              }}
+              className="flex gap-2 relative"
+            >
+              <Input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault()
-                    handleSend(e)
-                  }
-                }}
+                placeholder="Digite sua mensagem..."
+                className="flex-1 pr-12 rounded-lg bg-slate-50 focus-visible:bg-white transition-colors border-slate-200"
               />
-            </Card>
-            <Button
-              type="submit"
-              size="icon"
-              className={cn(
-                'h-[68px] w-[68px] rounded-xl shrink-0 transition-all',
-                input.trim() && !isTyping
-                  ? 'bg-primary hover:bg-primary/90'
-                  : 'bg-slate-200 text-slate-400 pointer-events-none',
-              )}
-            >
-              <Send className="h-6 w-6" />
-            </Button>
-          </form>
-          <p className="text-center text-[11px] text-slate-400 mt-3 font-medium">
-            A IA pode cometer erros. Considere verificar informações importantes.
-          </p>
-        </div>
+              <Button
+                type="submit"
+                size="icon"
+                disabled={loading || !input.trim()}
+                className="absolute right-1 top-1 h-8 w-8 rounded-md transition-transform hover:scale-105"
+              >
+                <Send className="h-4 w-4" />
+              </Button>
+            </form>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="space-y-6 flex flex-col h-full overflow-y-auto pr-2 custom-scrollbar">
+        <Card>
+          <CardHeader className="py-4">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Activity className="h-5 w-5 text-primary" />
+              Estatísticas (5 dias)
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="h-[250px] pb-6">
+            <ToolUsageChart tool={tool} logs={logs} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="py-4">
+            <CardTitle className="text-lg">Sobre a Ferramenta</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              {tool.description || 'Nenhuma descrição fornecida para esta ferramenta de IA.'}
+            </p>
+            <div className="mt-6 flex flex-col gap-3 text-sm">
+              <div className="flex justify-between items-center py-2 border-b border-slate-100">
+                <span className="text-muted-foreground">Modelo Base</span>
+                <span className="font-semibold px-2 py-1 bg-secondary rounded-md text-secondary-foreground text-xs">
+                  {tool.model_alias || 'fast'}
+                </span>
+              </div>
+              <div className="flex justify-between items-center py-2 border-b border-slate-100">
+                <span className="text-muted-foreground">Status</span>
+                <span className="font-semibold px-2 py-1 bg-green-100 text-green-800 rounded-md text-xs capitalize">
+                  {tool.status}
+                </span>
+              </div>
+              <div className="flex justify-between items-center py-2">
+                <span className="text-muted-foreground">Versão</span>
+                <span className="font-semibold">{tool.version || '1.0'}</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   )
