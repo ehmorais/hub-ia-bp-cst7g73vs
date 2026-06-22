@@ -78,20 +78,20 @@ export function AppSidebar() {
 
       <SidebarContent className="px-3 py-6 gap-8 bg-white">
         <SidebarGroup>
-          <SidebarGroupLabel className="text-slate-500 text-[15px] tracking-widest font-semibold mb-3 px-2 uppercase">
+          <SidebarGroupLabel className="text-slate-500 text-[13px] tracking-widest font-semibold mb-2 px-2 uppercase">
             Navegação
           </SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu className="gap-2">
+            <SidebarMenu className="gap-1.5">
               <SidebarMenuItem>
                 <SidebarMenuButton
                   asChild
                   isActive={location.pathname === '/' || location.pathname === '/dashboard'}
                   tooltip="Dashboard"
-                  className="h-10 transition-all duration-200 rounded-lg px-3 text-[17px] group hover:bg-slate-50 hover:text-primary data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:font-medium"
+                  className="h-9 transition-all duration-200 rounded-lg px-2.5 text-[15px] group hover:bg-slate-50 hover:text-primary data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:font-medium"
                 >
-                  <Link to="/" className="flex items-center gap-3">
-                    <LayoutDashboard className="h-5 w-5 group-data-[active=true]:text-primary" />
+                  <Link to="/" className="flex items-center gap-2.5">
+                    <LayoutDashboard className="h-[18px] w-[18px] group-data-[active=true]:text-primary" />
                     <span>Visão Geral do Hub</span>
                   </Link>
                 </SidebarMenuButton>
@@ -101,10 +101,10 @@ export function AppSidebar() {
                   asChild
                   isActive={location.pathname === '/admin' && location.hash !== '#escalas'}
                   tooltip="Administração"
-                  className="h-10 transition-all duration-200 rounded-lg px-3 text-[17px] group hover:bg-slate-50 hover:text-primary data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:font-medium"
+                  className="h-9 transition-all duration-200 rounded-lg px-2.5 text-[15px] group hover:bg-slate-50 hover:text-primary data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:font-medium"
                 >
-                  <Link to="/admin" className="flex items-center gap-3">
-                    <ShieldCheck className="h-5 w-5 group-data-[active=true]:text-primary" />
+                  <Link to="/admin" className="flex items-center gap-2.5">
+                    <ShieldCheck className="h-[18px] w-[18px] group-data-[active=true]:text-primary" />
                     <span>Administração</span>
                   </Link>
                 </SidebarMenuButton>
@@ -114,10 +114,10 @@ export function AppSidebar() {
                   asChild
                   isActive={location.pathname === '/settings'}
                   tooltip="Configurações"
-                  className="h-10 transition-all duration-200 rounded-lg px-3 text-[17px] group hover:bg-slate-50 hover:text-primary data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:font-medium"
+                  className="h-9 transition-all duration-200 rounded-lg px-2.5 text-[15px] group hover:bg-slate-50 hover:text-primary data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:font-medium"
                 >
-                  <Link to="/settings" className="flex items-center gap-3">
-                    <Settings className="h-5 w-5 group-data-[active=true]:text-primary" />
+                  <Link to="/settings" className="flex items-center gap-2.5">
+                    <Settings className="h-[18px] w-[18px] group-data-[active=true]:text-primary" />
                     <span>Configurações</span>
                   </Link>
                 </SidebarMenuButton>
@@ -128,11 +128,11 @@ export function AppSidebar() {
 
         {generalDept && (
           <SidebarGroup>
-            <SidebarGroupLabel className="text-[#06402B] text-[15px] tracking-widest font-bold mb-3 px-2 uppercase flex items-center gap-2 font-sans">
+            <SidebarGroupLabel className="text-[#06402B] text-[13px] tracking-widest font-bold mb-2 px-2 uppercase flex items-center gap-2 font-sans">
               {generalDept.name}
             </SidebarGroupLabel>
             <SidebarGroupContent>
-              <SidebarMenu className="gap-1.5">
+              <SidebarMenu className="gap-1">
                 {generalProjects.map((proj: any) => {
                   const isEscalas = proj.name === 'Gestão de Escalas'
                   const linkTo = isEscalas ? '/admin#escalas' : `/project/${proj.id}`
@@ -145,9 +145,9 @@ export function AppSidebar() {
                       <SidebarMenuButton
                         asChild
                         isActive={isActive}
-                        className="h-9 transition-all duration-200 rounded-md px-3 text-[17px] group hover:bg-slate-50 hover:text-[#06402B] data-[active=true]:bg-[#06402B]/10 data-[active=true]:text-[#06402B] data-[active=true]:font-medium"
+                        className="h-8 transition-all duration-200 rounded-md px-2.5 text-[14px] group hover:bg-slate-50 hover:text-[#06402B] data-[active=true]:bg-[#06402B]/10 data-[active=true]:text-[#06402B] data-[active=true]:font-medium"
                       >
-                        <Link to={linkTo} className="flex items-center gap-3 font-sans">
+                        <Link to={linkTo} className="flex items-center gap-2.5 font-sans">
                           <div className="w-1.5 h-1.5 rounded-sm bg-slate-300 group-data-[active=true]:bg-[#06402B] group-hover:bg-[#06402B] shrink-0 transition-colors" />
                           <span className="line-clamp-1">{proj.name}</span>
                         </Link>
@@ -161,21 +161,21 @@ export function AppSidebar() {
         )}
 
         <SidebarGroup>
-          <SidebarGroupLabel className="text-slate-500 text-[15px] tracking-widest font-semibold mb-3 px-2 uppercase">
+          <SidebarGroupLabel className="text-slate-500 text-[13px] tracking-widest font-semibold mb-2 px-2 uppercase">
             Departamentos
           </SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu className="gap-1.5">
+            <SidebarMenu className="gap-1">
               {otherDepts.map((dept: any) => (
                 <SidebarMenuItem key={dept.id}>
                   <SidebarMenuButton
                     asChild
                     isActive={location.pathname === `/department/${dept.id}`}
-                    className="h-9 transition-all duration-200 rounded-md px-3 text-[17px] group hover:bg-slate-50 hover:text-primary data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:font-medium"
+                    className="h-8 transition-all duration-200 rounded-md px-2.5 text-[14px] group hover:bg-slate-50 hover:text-primary data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:font-medium"
                   >
                     <Link
                       to={`/department/${dept.id}`}
-                      className="flex items-center gap-3 font-sans"
+                      className="flex items-center gap-2.5 font-sans"
                     >
                       <div className="w-1.5 h-1.5 rounded-full bg-slate-300 group-data-[active=true]:bg-primary group-hover:bg-primary shrink-0 transition-colors" />
                       <span className="line-clamp-1">{dept.name}</span>
