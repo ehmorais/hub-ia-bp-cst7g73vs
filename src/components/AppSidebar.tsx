@@ -60,7 +60,9 @@ export function AppSidebar() {
   const generalDept = departments.find((d) => d.name.includes('Projetos Gerais'))
   const otherDepts = sortedDepartments.filter((d) => d.id !== generalDept?.id)
   const generalProjects = projects.filter(
-    (p) => p.department === generalDept?.id || p.associated_departments?.includes(generalDept?.id),
+    (p) =>
+      (p.department === generalDept?.id || p.associated_departments?.includes(generalDept?.id)) &&
+      p.name !== 'Visão Geral do Hub',
   )
 
   return (
@@ -90,7 +92,7 @@ export function AppSidebar() {
                 >
                   <Link to="/" className="flex items-center gap-3">
                     <LayoutDashboard className="h-4 w-4 group-data-[active=true]:text-primary" />
-                    <span>Visão Geral</span>
+                    <span>Visão Geral do Hub</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -118,21 +120,6 @@ export function AppSidebar() {
             </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu className="gap-1.5">
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={location.pathname === `/department/${generalDept.id}`}
-                    className="h-9 transition-all duration-200 rounded-md px-3 group hover:bg-slate-50 hover:text-[#06402B] data-[active=true]:bg-[#06402B]/10 data-[active=true]:text-[#06402B] data-[active=true]:font-medium"
-                  >
-                    <Link
-                      to={`/department/${generalDept.id}`}
-                      className="flex items-center gap-3 font-sans"
-                    >
-                      <div className="w-1.5 h-1.5 rounded-sm bg-slate-300 group-data-[active=true]:bg-[#06402B] group-hover:bg-[#06402B] shrink-0 transition-colors" />
-                      <span className="line-clamp-1">Visão Geral do Hub</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
                 {generalProjects.map((proj: any) => {
                   const isEscalas = proj.name === 'Gestão de Escalas'
                   const linkTo = isEscalas ? '/admin#escalas' : `/project/${proj.id}`
