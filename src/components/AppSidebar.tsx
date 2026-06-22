@@ -10,7 +10,6 @@ import {
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import {
   LayoutDashboard,
-  MessageSquare,
   LogOut,
   Briefcase,
   Building2,
@@ -72,7 +71,9 @@ export function AppSidebar() {
   const loadData = async () => {
     try {
       const depRecords = await pb.collection('departments').getFullList({ sort: 'sort_order,name' })
-      setDepartments(depRecords.filter((d) => d.name !== 'Projetos Gerais'))
+      setDepartments(
+        depRecords.filter((d) => d.name !== 'Projetos Gerais' && d.name !== 'Gestão de Escalas'),
+      )
 
       const projRecords = await pb.collection('projects').getFullList({
         filter: "status = 'active'",
@@ -141,18 +142,6 @@ export function AppSidebar() {
               <Link to="/">
                 <LayoutDashboard className="h-[18px] w-[18px] mr-2" />
                 Dashboard / Home
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              asChild
-              isActive={location.pathname.startsWith('/ai/')}
-              className="h-10 transition-all duration-200 rounded-lg px-3 text-[14px] group hover:bg-[#06402B]/10 hover:text-[#06402B] data-[active=true]:bg-[#06402B] data-[active=true]:text-white data-[active=true]:font-bold"
-            >
-              <Link to="/ai/chat">
-                <MessageSquare className="h-[18px] w-[18px] mr-2" />
-                AI Chat
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
