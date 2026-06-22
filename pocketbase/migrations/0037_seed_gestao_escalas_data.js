@@ -146,7 +146,7 @@ migrate(
     const rulePrompt = findOrCreate('shift_rules', 'name', 'Regras Médicas UTI', (r) => {
       r.set('name', 'Regras Médicas UTI')
       r.set('rule_type', 'custom_prompt')
-      r.set('value', 0)
+      r.set('value', 1)
       r.set(
         'prompt',
         'Nunca coloque um médico recém-formado no plantão noturno da UTI sem um senior.',
