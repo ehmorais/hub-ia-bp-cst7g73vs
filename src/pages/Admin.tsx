@@ -468,47 +468,26 @@ function AdminContent() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-7 max-w-6xl mb-8 overflow-x-auto h-auto py-2">
-          <TabsTrigger
-            value="performance"
-            className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-          >
+        <TabsList className="flex flex-wrap w-full justify-start max-w-6xl mb-8 h-auto p-1 gap-1 bg-muted/50 rounded-lg">
+          <TabsTrigger value="performance" className="rounded-md">
             Performance
           </TabsTrigger>
-          <TabsTrigger
-            value="audit"
-            className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-          >
+          <TabsTrigger value="audit" className="rounded-md">
             Auditoria
           </TabsTrigger>
-          <TabsTrigger
-            value="users"
-            className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-          >
+          <TabsTrigger value="users" className="rounded-md">
             Usuários
           </TabsTrigger>
-          <TabsTrigger
-            value="ia_tools"
-            className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-          >
+          <TabsTrigger value="ia_tools" className="rounded-md">
             Ferramentas IA
           </TabsTrigger>
-          <TabsTrigger
-            value="departments"
-            className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-          >
+          <TabsTrigger value="departments" className="rounded-md">
             Departamentos
           </TabsTrigger>
-          <TabsTrigger
-            value="projects"
-            className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-          >
+          <TabsTrigger value="projects" className="rounded-md">
             Projetos
           </TabsTrigger>
-          <TabsTrigger
-            value="escalas"
-            className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-          >
+          <TabsTrigger value="escalas" className="rounded-md">
             Gestão de Escalas
           </TabsTrigger>
         </TabsList>

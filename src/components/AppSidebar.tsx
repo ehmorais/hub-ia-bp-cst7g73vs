@@ -52,19 +52,19 @@ export function AppSidebar() {
   })
 
   return (
-    <Sidebar className="border-r shadow-sm">
-      <SidebarHeader className="p-4 min-h-[5rem] flex items-center justify-center border-b">
+    <Sidebar variant="inset" className="border-r border-sidebar-border shadow-sm">
+      <SidebarHeader className="p-4 min-h-[5rem] flex items-center justify-center border-b border-sidebar-border">
         <Link
           to="/"
-          className="flex w-full items-center justify-center transition-opacity hover:opacity-80"
+          className="flex w-full items-center justify-center transition-opacity hover:opacity-80 text-sidebar-foreground"
         >
           <span className="font-bold text-lg tracking-tight">HUB IA BPSCS</span>
         </Link>
       </SidebarHeader>
 
-      <SidebarContent className="px-3 py-6 gap-8">
+      <SidebarContent className="px-3 py-6 gap-8 bg-sidebar">
         <SidebarGroup>
-          <SidebarGroupLabel className="text-muted-foreground text-xs tracking-wider font-semibold mb-3 px-2">
+          <SidebarGroupLabel className="text-sidebar-foreground/70 text-xs tracking-wider font-semibold mb-3 px-2">
             Navegação
           </SidebarGroupLabel>
           <SidebarGroupContent>
@@ -74,11 +74,11 @@ export function AppSidebar() {
                   asChild
                   isActive={location.pathname === '/' || location.pathname === '/dashboard'}
                   tooltip="Dashboard"
-                  className="h-10 transition-colors duration-200 data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:font-medium text-muted-foreground hover:text-primary hover:bg-primary/10 data-[active=true]:hover:bg-primary/15 rounded-lg px-3"
+                  className="h-10 transition-all duration-200 rounded-lg px-3"
                 >
                   <Link to="/" className="flex items-center gap-3">
                     <LayoutDashboard className="h-4 w-4" />
-                    <span>Visão Geral</span>
+                    <span className="font-medium">Visão Geral</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -87,11 +87,11 @@ export function AppSidebar() {
                   asChild
                   isActive={location.pathname === '/admin'}
                   tooltip="Administração"
-                  className="h-10 transition-colors duration-200 data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:font-medium text-muted-foreground hover:text-primary hover:bg-primary/10 data-[active=true]:hover:bg-primary/15 rounded-lg px-3"
+                  className="h-10 transition-all duration-200 rounded-lg px-3"
                 >
                   <Link to="/admin" className="flex items-center gap-3">
                     <Settings className="h-4 w-4" />
-                    <span>Administração</span>
+                    <span className="font-medium">Administração</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -100,7 +100,7 @@ export function AppSidebar() {
         </SidebarGroup>
 
         <SidebarGroup>
-          <SidebarGroupLabel className="text-muted-foreground text-xs tracking-wider font-semibold mb-3 px-2">
+          <SidebarGroupLabel className="text-sidebar-foreground/70 text-xs tracking-wider font-semibold mb-3 px-2">
             Departamentos
           </SidebarGroupLabel>
           <SidebarGroupContent>
@@ -110,10 +110,10 @@ export function AppSidebar() {
                   <SidebarMenuButton
                     asChild
                     isActive={location.pathname === `/department/${dept.id}`}
-                    className="h-9 transition-colors duration-200 data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:font-medium text-muted-foreground hover:text-primary hover:bg-primary/10 data-[active=true]:hover:bg-primary/15 rounded-lg px-3 group"
+                    className="h-9 transition-all duration-200 rounded-lg px-3 group"
                   >
                     <Link to={`/department/${dept.id}`} className="flex items-center gap-3">
-                      <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/30 group-data-[active=true]:bg-primary group-hover:bg-primary shrink-0 transition-colors" />
+                      <div className="w-1.5 h-1.5 rounded-full bg-sidebar-foreground/30 group-data-[active=true]:bg-sidebar-primary group-hover:bg-sidebar-primary shrink-0 transition-colors" />
                       <span className="line-clamp-1">{dept.name}</span>
                     </Link>
                   </SidebarMenuButton>
