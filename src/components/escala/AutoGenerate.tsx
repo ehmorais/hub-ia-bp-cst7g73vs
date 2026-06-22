@@ -18,6 +18,7 @@ import {
   AlertCircle,
   XCircle,
   Loader2,
+  Info,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -29,25 +30,56 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog'
 import pb from '@/lib/pocketbase/client'
 import { getErrorMessage } from '@/lib/pocketbase/errors'
+import { cn } from '@/lib/utils'
 
 type ValidationCheck = {
   id: string
   label: string
   status: 'loading' | 'success' | 'warning' | 'error'
   message: string
+  details?: string[]
+}
+
+function CheckItemIcon({ status }: { status: ValidationCheck['status'] }) {
+  const Icon =
+    status === 'success'
+      ? CheckCircle2
+      : status === 'warning'
+        ? AlertCircle
+        : status === 'error'
+          ? XCircle
+          : Loader2
+
+  const color =
+    status === 'success'
+      ? 'text-green-600'
+      : status === 'warning'
+        ? 'text-amber-600'
+        : status === 'error'
+          ? 'text-red-600'
+          : 'text-slate-500'
+
+  return <Icon className={`h-5 w-5 ${color}`} />
 }
 
 function CheckItem({ check }: { check: ValidationCheck }) {
-  const Icon =
+  const bgColor =
     check.status === 'success'
-      ? CheckCircle2
+      ? 'bg-green-50'
       : check.status === 'warning'
-        ? AlertCircle
+        ? 'bg-amber-50'
         : check.status === 'error'
-          ? XCircle
-          : Loader2
+          ? 'bg-red-50'
+          : 'bg-slate-50'
 
   const color =
     check.status === 'success'
@@ -58,22 +90,19 @@ function CheckItem({ check }: { check: ValidationCheck }) {
           ? 'text-red-600'
           : 'text-slate-500'
 
-  const bgColor =
-    check.status === 'success'
-      ? 'bg-green-50'
-      : check.status === 'warning'
-        ? 'bg-amber-50'
-        : check.status === 'error'
-          ? 'bg-red-50'
-          : 'bg-slate-50'
-
   return (
     <div
-      className={`flex items-start gap-3 p-3 rounded-md border ${bgColor} ${check.status === 'error' ? 'border-red-200' : 'border-transparent'} transition-colors`}
+      className={cn(
+        'flex items-start gap-3 p-3 rounded-md border transition-colors',
+        bgColor,
+        check.status === 'error' ? 'border-red-200' : 'border-transparent',
+      )}
     >
-      <Icon className={`h-5 w-5 mt-0.5 shrink-0 ${color}`} />
+      <div className="mt-0.5 shrink-0">
+        <CheckItemIcon status={check.status} />
+      </div>
       <div>
-        <p className={`text-sm font-medium ${color}`}>{check.label}</p>
+        <p className={cn('text-sm font-medium', color)}>{check.label}</p>
         <p className="text-xs text-slate-600 mt-0.5">{check.message}</p>
       </div>
     </div>
@@ -97,6 +126,7 @@ export function AutoGenerate({
   const [validations, setValidations] = useState<ValidationCheck[]>([])
   const [isReady, setIsReady] = useState(false)
   const [isValidating, setIsValidating] = useState(false)
+  const [showPendencyModal, setShowPendencyModal] = useState(false)
 
   const { toast } = useToast()
 
@@ -146,56 +176,58 @@ export function AutoGenerate({
 
     try {
       const cycle = cycles.find((c) => c.id === selectedCycle)
+      const cycleDetails = []
+      let cycleStatus: 'success' | 'error' = 'success'
       if (cycle && ['active', 'draft'].includes(cycle.status)) {
-        checks.push({
-          id: 'cycle',
-          label: 'Ciclo Vigente',
-          status: 'success',
-          message: 'Ciclo selecionado é válido para geração.',
-        })
+        cycleDetails.push(`O ciclo ${cycle.name} é válido para geração.`)
       } else {
-        checks.push({
-          id: 'cycle',
-          label: 'Ciclo Vigente',
-          status: 'error',
-          message: 'O ciclo selecionado não está ativo ou em rascunho.',
-        })
+        cycleStatus = 'error'
+        cycleDetails.push('O ciclo selecionado não está ativo ou em rascunho.')
       }
+      checks.push({
+        id: 'cycle',
+        label: 'Ciclos',
+        status: cycleStatus,
+        message: cycleStatus === 'error' ? 'Ciclo inválido' : 'Ciclo configurado',
+        details: cycleDetails,
+      })
 
-      let sectorFilter = ''
-      if (projectDeps.length > 0) {
-        sectorFilter = projectDeps.map((d) => `department="${d}"`).join(' || ')
-      }
+      // Sectors
+      let sectorFilter = projectDeps.map((d) => `department="${d}"`).join(' || ')
       const sectors = sectorFilter
         ? await pb.collection('hospital_sectors').getFullList({ filter: sectorFilter })
         : []
 
+      const sectorDetails = []
+      let sectorStatus: 'success' | 'warning' | 'error' = 'success'
       if (sectors.length === 0) {
-        checks.push({
-          id: 'sectors',
-          label: 'Setores',
-          status: 'error',
-          message: 'Nenhum setor encontrado para os departamentos do projeto.',
-        })
+        sectorStatus = 'error'
+        sectorDetails.push('Nenhum setor encontrado para os departamentos do projeto.')
       } else {
         const invalidSectors = sectors.filter((s) => !s.min_staffing || !s.ideal_staffing)
         if (invalidSectors.length > 0) {
-          checks.push({
-            id: 'sectors',
-            label: 'Setores',
-            status: 'warning',
-            message: `${invalidSectors.length} setor(es) sem dimensionamento mínimo/ideal.`,
-          })
+          sectorStatus = 'warning'
+          invalidSectors.forEach((s) =>
+            sectorDetails.push(`Setor "${s.name}" está sem dimensionamento mínimo/ideal.`),
+          )
         } else {
-          checks.push({
-            id: 'sectors',
-            label: 'Setores',
-            status: 'success',
-            message: `${sectors.length} setores configurados corretamente.`,
-          })
+          sectorDetails.push(`${sectors.length} setores configurados corretamente.`)
         }
       }
+      checks.push({
+        id: 'sectors',
+        label: 'Setores',
+        status: sectorStatus,
+        message:
+          sectorStatus === 'error'
+            ? 'Setores ausentes'
+            : sectorStatus === 'warning'
+              ? 'Configuração incompleta'
+              : 'Configurados',
+        details: sectorDetails,
+      })
 
+      // Staff
       const sfParts = []
       if (sectors.length > 0)
         sfParts.push(`(${sectors.map((s) => `default_sector="${s.id}"`).join(' || ')})`)
@@ -205,17 +237,47 @@ export function AutoGenerate({
 
       let users: any[] = []
       if (staffFilter) {
-        users = await pb.collection('users').getFullList({ filter: staffFilter })
+        users = await pb
+          .collection('users')
+          .getFullList({ filter: staffFilter, expand: 'staff_role,staff_profile' })
       }
 
+      const staffDetails = []
+      let staffStatus: 'success' | 'warning' | 'error' = 'success'
+
       if (users.length === 0) {
-        checks.push({
-          id: 'staff',
-          label: 'Colaboradores e Contratos',
-          status: 'error',
-          message: 'Nenhum colaborador associado aos setores ou ao projeto.',
-        })
+        staffStatus = 'error'
+        staffDetails.push('Nenhum colaborador associado aos setores ou ao projeto.')
       } else {
+        const usersWithoutProfile = users.filter((u) => !u.staff_profile)
+        const usersWithoutRole = users.filter((u) => !u.staff_role)
+
+        if (usersWithoutProfile.length > 0 || usersWithoutRole.length > 0) {
+          staffStatus = 'error'
+          usersWithoutProfile.forEach((u) =>
+            staffDetails.push(
+              `Colaborador(a) ${u.name || u.email} está sem perfil de escala (staff_profile).`,
+            ),
+          )
+          usersWithoutRole.forEach((u) =>
+            staffDetails.push(`Colaborador(a) ${u.name || u.email} está sem cargo (staff_role).`),
+          )
+        } else {
+          staffDetails.push(`Todos os ${users.length} colaboradores possuem cargo e perfil.`)
+        }
+      }
+      checks.push({
+        id: 'staff',
+        label: 'Colaboradores',
+        status: staffStatus,
+        message: staffStatus === 'error' ? 'Dados incompletos ou ausentes' : 'Configurados',
+        details: staffDetails,
+      })
+
+      // Contracts
+      const contractDetails = []
+      let contractStatus: 'success' | 'warning' | 'error' = 'success'
+      if (users.length > 0) {
         const userIds = users.map((u) => u.id)
         const contracts = await pb.collection('staff_contracts').getFullList({
           filter: userIds.map((id) => `user="${id}"`).join(' || '),
@@ -223,101 +285,74 @@ export function AutoGenerate({
         const usersWithoutContract = users.filter((u) => !contracts.some((c) => c.user === u.id))
         const invalidContracts = contracts.filter((c) => !c.contract_type || !c.monthly_hour_limit)
 
-        if (usersWithoutContract.length > 0) {
-          checks.push({
-            id: 'staff',
-            label: 'Colaboradores e Contratos',
-            status: 'error',
-            message: `${usersWithoutContract.length} colaborador(es) sem contrato cadastrado.`,
-          })
-        } else if (invalidContracts.length > 0) {
-          checks.push({
-            id: 'staff',
-            label: 'Colaboradores e Contratos',
-            status: 'warning',
-            message: `${invalidContracts.length} contrato(s) com dados incompletos.`,
+        if (usersWithoutContract.length > 0 || invalidContracts.length > 0) {
+          contractStatus = 'error'
+          usersWithoutContract.forEach((u) =>
+            contractDetails.push(
+              `Colaborador(a) ${u.name || u.email} não possui contrato cadastrado.`,
+            ),
+          )
+          invalidContracts.forEach((c) => {
+            const u = users.find((x) => x.id === c.user)
+            contractDetails.push(
+              `Contrato de ${u?.name || u?.email || 'Desconhecido'} possui dados incompletos (tipo ou carga horária).`,
+            )
           })
         } else {
-          checks.push({
-            id: 'staff',
-            label: 'Colaboradores e Contratos',
-            status: 'success',
-            message: `Todos os ${users.length} colaboradores possuem contratos válidos.`,
-          })
+          contractDetails.push(`Todos os ${users.length} colaboradores possuem contratos válidos.`)
         }
-      }
-
-      const shiftTypes = await pb.collection('shift_types').getFullList()
-      if (shiftTypes.length === 0) {
-        checks.push({
-          id: 'types',
-          label: 'Tipos de Plantão',
-          status: 'error',
-          message: 'Nenhum tipo de plantão configurado no sistema.',
-        })
       } else {
-        const invalidTypes = shiftTypes.filter((t) => !t.work_hours || !t.rest_hours)
-        if (invalidTypes.length > 0) {
-          checks.push({
-            id: 'types',
-            label: 'Tipos de Plantão',
-            status: 'warning',
-            message: `${invalidTypes.length} tipo(s) com horas de trabalho/descanso não definidas.`,
-          })
-        } else {
-          checks.push({
-            id: 'types',
-            label: 'Tipos de Plantão',
-            status: 'success',
-            message: `${shiftTypes.length} tipos de plantão configurados corretamente.`,
-          })
-        }
+        contractStatus = 'error'
+        contractDetails.push('Sem colaboradores para validar contratos.')
       }
+      checks.push({
+        id: 'contracts',
+        label: 'Contratos',
+        status: contractStatus,
+        message: contractStatus === 'error' ? 'Contratos pendentes' : 'Configurados',
+        details: contractDetails,
+      })
 
-      let rulesFilter = ''
-      if (projectDeps.length > 0) {
-        rulesFilter = projectDeps.map((d) => `department="${d}"`).join(' || ')
-      }
+      // Rules
+      let rulesFilter = projectDeps.map((d) => `department="${d}"`).join(' || ')
       const rules = rulesFilter
         ? await pb.collection('shift_rules').getFullList({ filter: rulesFilter })
         : []
+      const rulesDetails = []
+      let rulesStatus: 'success' | 'warning' | 'error' = 'success'
 
       if (rules.length === 0) {
-        checks.push({
-          id: 'rules',
-          label: 'Regras de Escala',
-          status: 'warning',
-          message:
-            'Nenhuma regra específica definida para os departamentos. Serão usadas as regras padrão.',
-        })
+        rulesStatus = 'warning'
+        rulesDetails.push(
+          'Nenhuma regra específica definida para os departamentos. Serão usadas as regras padrão.',
+        )
       } else {
-        checks.push({
-          id: 'rules',
-          label: 'Regras de Escala',
-          status: 'success',
-          message: `${rules.length} regras ativas e aplicáveis.`,
-        })
+        const hasMinRest = rules.some((r) => r.rule_type === 'min_rest_hours')
+        const hasMaxHours = rules.some((r) => r.rule_type === 'max_hours')
+        if (!hasMinRest)
+          rulesDetails.push(
+            'Regra de descanso mínimo (min_rest_hours) não está definida. Isso pode gerar escalas exaustivas.',
+          )
+        if (!hasMaxHours)
+          rulesDetails.push('Regra de máximo de horas (max_hours) não está definida.')
+        if (!hasMinRest || !hasMaxHours) rulesStatus = 'warning'
+        else
+          rulesDetails.push(
+            `${rules.length} regras ativas, incluindo as obrigatórias (descanso mínimo e limite de horas).`,
+          )
       }
-
-      const timeoffs = await pb.collection('timeoff_requests').getFullList({
-        filter: `cycle="${selectedCycle}"`,
+      checks.push({
+        id: 'rules',
+        label: 'Regras de Escala',
+        status: rulesStatus,
+        message:
+          rulesStatus === 'error'
+            ? 'Regras Ausentes'
+            : rulesStatus === 'warning'
+              ? 'Atenção às regras'
+              : 'Configuradas',
+        details: rulesDetails,
       })
-      const pendingTimeoffs = timeoffs.filter((t) => t.status === 'pending')
-      if (pendingTimeoffs.length > 0) {
-        checks.push({
-          id: 'timeoff',
-          label: 'Solicitações de Folga',
-          status: 'warning',
-          message: `${pendingTimeoffs.length} solicitação(ões) pendente(s) no ciclo.`,
-        })
-      } else {
-        checks.push({
-          id: 'timeoff',
-          label: 'Solicitações de Folga',
-          status: 'success',
-          message: `Nenhuma solicitação pendente (${timeoffs.length} processadas).`,
-        })
-      }
 
       setValidations(checks)
       setIsReady(!checks.some((c) => c.status === 'error'))
@@ -336,6 +371,12 @@ export function AutoGenerate({
   useEffect(() => {
     validate()
   }, [validate])
+
+  useEffect(() => {
+    if (showPendencyModal) {
+      validate()
+    }
+  }, [showPendencyModal, validate])
 
   const handleGenerate = async () => {
     if (!selectedCycle || projectDeps.length === 0) return
@@ -373,6 +414,8 @@ export function AutoGenerate({
       setLoading(false)
     }
   }
+
+  const hasIssues = validations.some((v) => v.status === 'error' || v.status === 'warning')
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -428,27 +471,51 @@ export function AutoGenerate({
             )}
           </div>
         </CardContent>
-        <CardFooter className="bg-white/50 border-t py-4">
-          <Button
-            onClick={handleGenerate}
-            disabled={loading || !selectedCycle || !isReady || isValidating}
-            className="w-full sm:w-auto gap-2"
-          >
-            {loading ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Processando regras com IA...
-              </>
-            ) : (
-              <>
-                <Wand2 className="h-4 w-4" />
-                Gerar Escala Automática
-              </>
+        <CardFooter className="bg-white/50 border-t py-4 flex flex-col items-start gap-4">
+          <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
+            <Button
+              onClick={(e) => {
+                if (!isReady) {
+                  e.preventDefault()
+                  setShowPendencyModal(true)
+                } else {
+                  handleGenerate()
+                }
+              }}
+              disabled={loading || !selectedCycle || isValidating}
+              className={cn(
+                'w-full sm:w-auto gap-2 transition-all',
+                !isReady && selectedCycle && !isValidating && 'opacity-70 hover:opacity-80',
+              )}
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Processando regras com IA...
+                </>
+              ) : (
+                <>
+                  <Wand2 className="h-4 w-4" />
+                  Gerar Escala Automática
+                </>
+              )}
+            </Button>
+
+            {!isValidating && selectedCycle && hasIssues && (
+              <Button
+                variant="ghost"
+                className="gap-2 text-amber-600 hover:text-amber-700 hover:bg-amber-50 w-full sm:w-auto"
+                onClick={() => setShowPendencyModal(true)}
+              >
+                <Info className="h-4 w-4" />
+                Ver Pendências
+              </Button>
             )}
-          </Button>
+          </div>
           {!isReady && !isValidating && selectedCycle && (
-            <p className="text-xs text-red-500 ml-4 font-medium">
+            <p className="text-xs text-red-500 font-medium">
               A geração está desabilitada devido a erros de validação nos parâmetros críticos.
+              Clique em Ver Pendências para detalhes.
             </p>
           )}
         </CardFooter>
@@ -496,6 +563,46 @@ export function AutoGenerate({
           </CardContent>
         </Card>
       )}
+
+      <Dialog open={showPendencyModal} onOpenChange={setShowPendencyModal}>
+        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col gap-0 p-0">
+          <DialogHeader className="p-6 pb-4 border-b">
+            <DialogTitle className="text-xl">Pendências para Geração de Escala</DialogTitle>
+            <DialogDescription className="mt-2">
+              Verifique os itens abaixo para permitir a geração automática. Resolva as pendências
+              listadas antes de prosseguir.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            {isValidating ? (
+              <div className="flex items-center justify-center py-10 gap-3 text-muted-foreground">
+                <Loader2 className="h-6 w-6 animate-spin" />
+                <span>Atualizando dados...</span>
+              </div>
+            ) : (
+              validations.map((v) => (
+                <div key={v.id} className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <CheckItemIcon status={v.status} />
+                    <h4 className="font-semibold text-base text-slate-800">{v.label}</h4>
+                  </div>
+                  {v.details && v.details.length > 0 ? (
+                    <ul className="space-y-1.5 ml-8 border-l-2 border-slate-100 pl-4">
+                      {v.details.map((detail, idx) => (
+                        <li key={idx} className="text-sm text-slate-600">
+                          {detail}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-sm text-slate-500 ml-8 italic">Sem detalhes adicionais.</p>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
