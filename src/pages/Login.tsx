@@ -61,9 +61,9 @@ export default function Login() {
         <CardHeader className="text-center pb-6">
           <div className="flex justify-center mb-6">
             <img
-              src="https://storage.googleapis.com/wombo-assets/images/61a7a0b3-f667-4bd9-8fde-4863bf46cd8a/image.jpeg"
+              src="https://img.usecurling.com/i?q=medical&shape=fill&color=green"
               alt="Hospital Beneficência Portuguesa de São Caetano do Sul"
-              className="w-full max-w-[240px] h-auto object-contain mix-blend-multiply"
+              className="w-full max-w-[120px] h-auto object-contain"
             />
           </div>
           <CardTitle className="text-3xl font-bold text-emerald-700 tracking-tight">
