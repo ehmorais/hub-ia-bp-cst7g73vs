@@ -281,7 +281,10 @@ export function AutoGenerate({
       if (staffFilter) {
         users = await pb
           .collection('users')
-          .getFullList({ filter: staffFilter, expand: 'staff_role,staff_profile' })
+          .getFullList({
+            filter: `(${staffFilter}) && role!="Admin"`,
+            expand: 'staff_role,staff_profile',
+          })
       }
 
       const staffDetails = []
@@ -416,7 +419,7 @@ export function AutoGenerate({
       })
 
       setValidations(checks)
-      setIsReady(!checks.some((c) => c.status === 'error' || c.status === 'warning'))
+      setIsReady(!checks.some((c) => c.status === 'error'))
     } catch (err) {
       console.error(err)
       toast({
@@ -458,6 +461,21 @@ export function AutoGenerate({
 
       if (sectorsToGenerate.length === 0) {
         throw new Error('Nenhum setor disponível para geração.')
+      }
+
+      const warnings = validations.filter((v) => v.status === 'warning')
+      if (warnings.length > 0) {
+        try {
+          await pb.collection('audit_logs').create({
+            user: pb.authStore.record?.id,
+            action: 'Generate Shifts (with warnings)',
+            department: projectDeps[0] || 'Gestão de Escalas',
+            details: `Geração iniciada com os seguintes avisos: ${warnings.map((w) => w.label).join(', ')}`,
+            token_usage: 0,
+          })
+        } catch {
+          /* intentionally ignored */
+        }
       }
 
       const res = await generateShifts(selectedCycle, sectorsToGenerate, rulesPrompt)
@@ -664,7 +682,22 @@ export function AutoGenerate({
                 <div key={v.id} className="space-y-3">
                   <div className="flex items-center gap-2">
                     <CheckItemIcon status={v.status} />
-                    <h4 className="font-semibold text-base text-slate-800">{v.label}</h4>
+                    <h4 className="font-semibold text-base text-slate-800 flex items-center gap-2">
+                      {v.label}
+                      {v.status === 'error' && (
+                        <Badge variant="destructive" className="text-[10px] h-5">
+                          Erro Crítico
+                        </Badge>
+                      )}
+                      {v.status === 'warning' && (
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] h-5 bg-amber-50 text-amber-700 border-amber-200"
+                        >
+                          Aviso
+                        </Badge>
+                      )}
+                    </h4>
                   </div>
                   {v.details && v.details.length > 0 ? (
                     <ul className="space-y-1.5 ml-8 border-l-2 border-slate-100 pl-4">

@@ -7,8 +7,15 @@ routerAdd(
     const sectorIds = body.sector_ids || []
     const providedRules = body.rules || ''
 
-    if (!cycleId || !sectorIds.length) {
-      return e.badRequestError('cycle_id and sector_ids are required')
+    if (!cycleId) {
+      return e.badRequestError(
+        'Falha na validação: O ID do ciclo (cycle_id) é obrigatório para a geração.',
+      )
+    }
+    if (!sectorIds || !sectorIds.length) {
+      return e.badRequestError(
+        'Falha na validação: Pelo menos um setor deve ser selecionado (sector_ids).',
+      )
     }
 
     // Gather Data
@@ -42,6 +49,8 @@ routerAdd(
     contracts.forEach((c) => {
       try {
         const u = $app.findRecordById('users', c.getString('user'))
+        if (u.getString('role') === 'Admin') return // Ignore Admin users
+
         const rId = u.getString('staff_role')
         let rName = 'N/A'
         let rRank = 0
@@ -55,9 +64,9 @@ routerAdd(
           }
         }
 
-        let sTypeName = null
-        let sTypeHours = null
-        let sTypeRest = null
+        let sTypeName = 'Padrão'
+        let sTypeHours = 12
+        let sTypeRest = 36
         const sTypeId = c.getString('shift_type')
         if (sTypeId) {
           const st = shiftTypes.find((x) => x.id === sTypeId)
@@ -94,15 +103,15 @@ routerAdd(
         usersWithContracts.push({
           id: u.id,
           name: u.getString('name'),
-          contract_type: c.getString('contract_type'),
-          hour_limit: c.getInt('monthly_hour_limit'),
+          contract_type: c.getString('contract_type') || 'Não definido',
+          hour_limit: c.getInt('monthly_hour_limit') || 0,
           role: rName,
           role_id: rId,
           rank: rRank,
           requires_supervision: rSup,
           shift_type: sTypeName,
-          shift_work_hours: sTypeHours || 12,
-          shift_rest_hours: sTypeRest || 36,
+          shift_work_hours: sTypeHours,
+          shift_rest_hours: sTypeRest,
           assigned_rules: userRules.length > 0 ? userRules : undefined,
         })
       } catch (_) {}
@@ -193,11 +202,25 @@ Only output the JSON array, no markdown or text.
         content = content.replace(/^\`\`\`[a-z]*\n/, '').replace(/\n\`\`\`$/, '')
       }
 
-      const generatedShifts = JSON.parse(content)
-
-      if (!Array.isArray(generatedShifts) || generatedShifts.length === 0) {
+      let generatedShifts
+      try {
+        generatedShifts = JSON.parse(content)
+      } catch (parseErr) {
         throw new Error(
-          'Nenhum plantão foi gerado. Possível conflito de regras e cobertura mínima insuperável.',
+          'Falha crítica: A IA retornou um formato de dados inválido (não-JSON). Isso pode ocorrer devido a restrições impossíveis de conciliar.',
+        )
+      }
+
+      if (!Array.isArray(generatedShifts)) {
+        if (generatedShifts && generatedShifts.error) {
+          throw new Error('A IA reportou uma falha de restrição: ' + generatedShifts.error)
+        }
+        throw new Error('Falha crítica: O formato retornado não é uma lista de plantões válida.')
+      }
+
+      if (generatedShifts.length === 0) {
+        throw new Error(
+          'Nenhum plantão foi gerado. Conflito detectado: As regras de descanso, carga horária e/ou número de colaboradores disponíveis impedem o preenchimento mínimo dos setores.',
         )
       }
 
@@ -244,7 +267,9 @@ Only output the JSON array, no markdown or text.
         return e.json(500, { error: err.message, suggestion: helper.content })
       } catch (_) {}
 
-      return e.json(500, { error: err.message || 'Failed to generate shifts.' })
+      return e.json(500, {
+        error: err.message || 'Falha desconhecida durante a geração de escalas.',
+      })
     }
   },
   $apis.requireAuth(),
