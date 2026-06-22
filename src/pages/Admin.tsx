@@ -471,43 +471,43 @@ function AdminContent() {
         <TabsList className="flex flex-wrap w-full justify-start max-w-6xl mb-8 h-auto p-1.5 gap-1 bg-white/60 backdrop-blur-md border border-slate-200/60 shadow-sm rounded-2xl">
           <TabsTrigger
             value="performance"
-            className="rounded-xl px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all"
+            className="rounded-xl px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all hover:bg-accent hover:text-accent-foreground"
           >
             Performance
           </TabsTrigger>
           <TabsTrigger
             value="audit"
-            className="rounded-xl px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all"
+            className="rounded-xl px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all hover:bg-accent hover:text-accent-foreground"
           >
             Auditoria
           </TabsTrigger>
           <TabsTrigger
             value="users"
-            className="rounded-xl px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all"
+            className="rounded-xl px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all hover:bg-accent hover:text-accent-foreground"
           >
             Usuários
           </TabsTrigger>
           <TabsTrigger
             value="ia_tools"
-            className="rounded-xl px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all"
+            className="rounded-xl px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all hover:bg-accent hover:text-accent-foreground"
           >
             Ferramentas IA
           </TabsTrigger>
           <TabsTrigger
             value="departments"
-            className="rounded-xl px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all"
+            className="rounded-xl px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all hover:bg-accent hover:text-accent-foreground"
           >
             Departamentos
           </TabsTrigger>
           <TabsTrigger
             value="projects"
-            className="rounded-xl px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all"
+            className="rounded-xl px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all hover:bg-accent hover:text-accent-foreground"
           >
             Projetos
           </TabsTrigger>
           <TabsTrigger
             value="escalas"
-            className="rounded-xl px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all"
+            className="rounded-xl px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all hover:bg-accent hover:text-accent-foreground"
           >
             Gestão de Escalas
           </TabsTrigger>
