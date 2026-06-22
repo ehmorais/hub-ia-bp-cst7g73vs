@@ -457,37 +457,58 @@ function AdminContent() {
 
   return (
     <div className="container mx-auto p-4 md:p-8 space-y-8 max-w-[1400px] animate-fade-in">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-bold tracking-tight text-primary flex items-center gap-3">
-          <ShieldCheck className="h-8 w-8 text-primary" />
+      <div className="flex flex-col gap-2 mb-2">
+        <h1 className="text-4xl font-bold tracking-tight text-primary flex items-center gap-3">
+          <ShieldCheck className="h-9 w-9 text-primary" />
           Painel de Administração
         </h1>
-        <p className="text-muted-foreground text-lg">
+        <p className="text-muted-foreground text-lg max-w-3xl">
           Governança, controle de acessos e auditoria de modelos de IA da BP.
         </p>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="flex flex-wrap w-full justify-start max-w-6xl mb-8 h-auto p-1 gap-1 bg-muted/50 rounded-lg">
-          <TabsTrigger value="performance" className="rounded-md">
+        <TabsList className="flex flex-wrap w-full justify-start max-w-6xl mb-8 h-auto p-1.5 gap-1 bg-white/60 backdrop-blur-md border border-slate-200/60 shadow-sm rounded-2xl">
+          <TabsTrigger
+            value="performance"
+            className="rounded-xl px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all"
+          >
             Performance
           </TabsTrigger>
-          <TabsTrigger value="audit" className="rounded-md">
+          <TabsTrigger
+            value="audit"
+            className="rounded-xl px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all"
+          >
             Auditoria
           </TabsTrigger>
-          <TabsTrigger value="users" className="rounded-md">
+          <TabsTrigger
+            value="users"
+            className="rounded-xl px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all"
+          >
             Usuários
           </TabsTrigger>
-          <TabsTrigger value="ia_tools" className="rounded-md">
+          <TabsTrigger
+            value="ia_tools"
+            className="rounded-xl px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all"
+          >
             Ferramentas IA
           </TabsTrigger>
-          <TabsTrigger value="departments" className="rounded-md">
+          <TabsTrigger
+            value="departments"
+            className="rounded-xl px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all"
+          >
             Departamentos
           </TabsTrigger>
-          <TabsTrigger value="projects" className="rounded-md">
+          <TabsTrigger
+            value="projects"
+            className="rounded-xl px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all"
+          >
             Projetos
           </TabsTrigger>
-          <TabsTrigger value="escalas" className="rounded-md">
+          <TabsTrigger
+            value="escalas"
+            className="rounded-xl px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all"
+          >
             Gestão de Escalas
           </TabsTrigger>
         </TabsList>
@@ -497,7 +518,7 @@ function AdminContent() {
             <h2 className="text-xl font-semibold flex items-center gap-2 text-primary">
               <Activity className="h-5 w-5" /> Performance Dashboard
             </h2>
-            <Button onClick={handleExportCSV} className="gap-2">
+            <Button onClick={handleExportCSV} className="gap-2 shadow-sm">
               <Download className="h-4 w-4" /> Exportar Relatório (CSV)
             </Button>
           </div>
@@ -512,14 +533,17 @@ function AdminContent() {
               const depColorHex = dep.color || 'hsl(var(--primary))'
 
               return (
-                <Card key={dep.id}>
+                <Card
+                  key={dep.id}
+                  className="shadow-soft border-slate-200/60 transition-all hover:shadow-elevation"
+                >
                   <CardHeader className="pb-2">
                     <CardTitle
-                      className="text-lg flex items-center gap-2"
+                      className="text-lg flex items-center gap-3"
                       style={{ color: dep.color || 'inherit' }}
                     >
                       <div
-                        className="p-2 rounded-lg bg-slate-100 flex items-center justify-center"
+                        className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 shadow-sm flex items-center justify-center"
                         style={{ color: dep.color || 'inherit' }}
                       >
                         {(() => {
@@ -564,7 +588,7 @@ function AdminContent() {
         <TabsContent value="departments" className="space-y-6">
           <div className={`grid gap-6 ${isAdmin ? 'lg:grid-cols-3' : 'lg:grid-cols-1'}`}>
             {isAdmin && (
-              <Card className="lg:col-span-1 h-fit">
+              <Card className="lg:col-span-1 h-fit shadow-soft border-slate-200/60">
                 <CardHeader className="border-b">
                   <CardTitle className="text-lg flex items-center gap-2">
                     <Building2 className="h-5 w-5" />{' '}
@@ -666,7 +690,12 @@ function AdminContent() {
               </Card>
             )}
 
-            <Card className={isAdmin ? 'lg:col-span-2' : ''}>
+            <Card
+              className={cn(
+                isAdmin ? 'lg:col-span-2' : '',
+                'shadow-soft border-slate-200/60 overflow-hidden',
+              )}
+            >
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -738,7 +767,7 @@ function AdminContent() {
         </TabsContent>
 
         <TabsContent value="audit" className="space-y-4">
-          <div className="flex justify-between items-center bg-card p-4 rounded-lg border shadow-sm mb-4">
+          <div className="flex justify-between items-center bg-card p-4 rounded-xl border border-slate-200/60 shadow-soft mb-4">
             <div className="flex items-center gap-4 w-full max-w-lg">
               <div className="relative flex-1">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -757,7 +786,7 @@ function AdminContent() {
             </div>
           </div>
 
-          <Card>
+          <Card className="shadow-soft border-slate-200/60 overflow-hidden">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -811,12 +840,12 @@ function AdminContent() {
               <Users className="h-5 w-5" /> Gestão de Acessos
             </h2>
             {isAdmin && (
-              <Button className="gap-2">
+              <Button className="gap-2 shadow-sm">
                 <Plus className="h-4 w-4" /> Adicionar Usuário
               </Button>
             )}
           </div>
-          <Card>
+          <Card className="shadow-soft border-slate-200/60 overflow-hidden">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -862,7 +891,7 @@ function AdminContent() {
         <TabsContent value="ia_tools" className="space-y-6">
           <div className={`grid gap-6 ${isAdmin ? 'lg:grid-cols-2' : 'lg:grid-cols-1'}`}>
             {isAdmin && (
-              <Card className="h-fit">
+              <Card className="h-fit shadow-soft border-slate-200/60">
                 <CardHeader className="border-b">
                   <CardTitle className="text-lg flex items-center gap-2">
                     <Settings2 className="h-5 w-5" />{' '}
@@ -1017,7 +1046,10 @@ function AdminContent() {
               <h3 className="text-lg font-semibold border-b pb-2">Ferramentas Cadastradas</h3>
               <div className="flex flex-col gap-3">
                 {tools.map((tool) => (
-                  <Card key={tool.id} className="p-4 flex items-center justify-between shadow-sm">
+                  <Card
+                    key={tool.id}
+                    className="p-4 flex items-center justify-between shadow-sm border-slate-200/60"
+                  >
                     <div className="flex-1 min-w-0 pr-4">
                       <div className="flex items-center gap-2">
                         <p className="font-semibold text-slate-800 truncate">{tool.name}</p>
@@ -1081,7 +1113,7 @@ function AdminContent() {
         <TabsContent value="projects" className="space-y-6">
           <div className={`grid gap-6 ${isAdmin ? 'lg:grid-cols-3' : 'lg:grid-cols-1'}`}>
             {isAdmin && (
-              <Card className="lg:col-span-1 h-fit">
+              <Card className="lg:col-span-1 h-fit shadow-soft border-slate-200/60">
                 <CardHeader className="border-b">
                   <CardTitle className="text-lg flex items-center gap-2">
                     <Building2 className="h-5 w-5" />{' '}
@@ -1252,7 +1284,12 @@ function AdminContent() {
               </Card>
             )}
 
-            <Card className={isAdmin ? 'lg:col-span-2' : ''}>
+            <Card
+              className={cn(
+                isAdmin ? 'lg:col-span-2' : '',
+                'shadow-soft border-slate-200/60 overflow-hidden',
+              )}
+            >
               <Table>
                 <TableHeader>
                   <TableRow>
