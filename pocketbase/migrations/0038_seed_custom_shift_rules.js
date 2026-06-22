@@ -48,7 +48,7 @@ migrate(
       {
         name: 'Equipe Especializada em Sazonalidade',
         rule_type: 'custom_prompt',
-        value: 0,
+        value: 1,
         prompt:
           'Durante os meses de inverno, priorizar a escala de fisioterapeutas respiratórios no período da manhã e garantir que nunca haja menos de 2 pediatras plantonistas simultâneos.',
         department: pedDept || geralDept,
