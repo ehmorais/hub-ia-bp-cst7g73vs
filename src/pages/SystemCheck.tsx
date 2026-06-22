@@ -8,8 +8,9 @@ import { Button } from '@/components/ui/button'
 interface SystemItem {
   id: string
   name: string
-  type: 'project' | 'tool'
+  type: 'project' | 'tool' | 'system'
   checkStatus: 'pending' | 'checking' | 'success' | 'error'
+  shouldFail?: boolean
 }
 
 export default function SystemCheck() {
@@ -26,26 +27,53 @@ export default function SystemCheck() {
   useEffect(() => {
     async function initCheck() {
       try {
-        const [toolsRecords, projectsRecords] = await Promise.all([
+        const [toolsRecords, projectsRecords, cyclesRecords] = await Promise.all([
           pb.collection('ia_tools').getFullList({ sort: 'name' }),
           pb.collection('projects').getFullList({ sort: 'name' }),
+          pb.collection('shift_cycles').getFullList({ sort: 'name' }),
         ])
+
+        const systemChecks: SystemItem[] = [
+          {
+            id: 'db-conn',
+            name: 'Database Connectivity',
+            type: 'system',
+            checkStatus: 'pending',
+            shouldFail: false,
+          },
+          {
+            id: 'tools-check',
+            name: 'AI Tools Status',
+            type: 'system',
+            checkStatus: 'pending',
+            shouldFail: !toolsRecords.some((t) => t.status === 'active'),
+          },
+          {
+            id: 'shift-check',
+            name: 'Shift Configuration',
+            type: 'system',
+            checkStatus: 'pending',
+            shouldFail: !cyclesRecords.some((c) => c.status === 'active'),
+          },
+        ]
 
         const mappedProjects = projectsRecords.map((r) => ({
           id: r.id,
-          name: r.name,
+          name: `Project: ${r.name}`,
           type: 'project' as const,
           checkStatus: 'pending' as const,
+          shouldFail: false,
         }))
 
         const mappedTools = toolsRecords.map((r) => ({
           id: r.id,
-          name: r.name,
+          name: `Tool: ${r.name}`,
           type: 'tool' as const,
           checkStatus: 'pending' as const,
+          shouldFail: false,
         }))
 
-        const combined = [...mappedProjects, ...mappedTools]
+        const combined = [...systemChecks, ...mappedProjects, ...mappedTools]
 
         if (combined.length === 0) {
           setItems([])
@@ -71,23 +99,33 @@ export default function SystemCheck() {
     const interval = setInterval(() => {
       setItems((prev) => {
         const next = [...prev]
+        let anyFailed = false
 
         if (currentIdx > 0 && currentIdx <= next.length) {
           const prevItem = next[currentIdx - 1]
-          prevItem.checkStatus = 'success'
+          if (prevItem.shouldFail) {
+            prevItem.checkStatus = 'error'
+          } else {
+            prevItem.checkStatus = 'success'
+          }
         }
+
+        anyFailed = next.some((item) => item.checkStatus === 'error')
 
         if (currentIdx < next.length) {
           next[currentIdx].checkStatus = 'checking'
         }
 
+        if (currentIdx >= items.length) {
+          clearInterval(interval)
+          setFinished(true)
+          if (anyFailed) {
+            setGlobalStatus('error')
+          }
+        }
+
         return next
       })
-
-      if (currentIdx >= items.length) {
-        clearInterval(interval)
-        setFinished(true)
-      }
 
       currentIdx++
     }, 300) // Delay for visual effect
@@ -137,7 +175,7 @@ export default function SystemCheck() {
               </div>
             )}
 
-            {items.map((item, idx) => (
+            {items.map((item) => (
               <div
                 key={`${item.type}-${item.id}`}
                 className={`flex justify-between items-center transition-all duration-300 ${
@@ -155,10 +193,10 @@ export default function SystemCheck() {
                     <CheckCircle2 className="w-4 h-4 text-[#06402B] flex-shrink-0" />
                   )}
                   {item.checkStatus === 'error' && (
-                    <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+                    <AlertCircle className="w-4 h-4 text-orange-500 flex-shrink-0" />
                   )}
                   <span
-                    className={`text-sm font-medium truncate ${item.checkStatus === 'success' ? 'text-[#06402B]' : 'text-slate-600'}`}
+                    className={`text-sm font-medium truncate ${item.checkStatus === 'success' ? 'text-[#06402B]' : item.checkStatus === 'error' ? 'text-orange-600' : 'text-slate-600'}`}
                   >
                     {item.name}
                   </span>
@@ -169,17 +207,25 @@ export default function SystemCheck() {
                     <span className="text-slate-400 animate-pulse">verificando</span>
                   )}
                   {item.checkStatus === 'success' && <span className="text-[#06402B]">... Go</span>}
-                  {item.checkStatus === 'error' && <span className="text-red-500">... Fail</span>}
+                  {item.checkStatus === 'error' && (
+                    <span className="text-orange-500">... Fail</span>
+                  )}
                 </div>
               </div>
             ))}
 
-            {globalStatus === 'error' && (
+            {globalStatus === 'error' && finished && (
               <div className="mt-8 pt-6 border-t border-slate-200 flex flex-col items-center animate-in fade-in">
-                <div className="bg-red-100 p-3 rounded-full mb-4">
-                  <AlertCircle className="w-8 h-8 text-red-600" />
+                <div className="bg-orange-100 p-3 rounded-full mb-4">
+                  <AlertCircle className="w-8 h-8 text-orange-600" />
                 </div>
-                <p className="text-xl font-bold text-red-600 tracking-tight">System Check Failed</p>
+                <p className="text-xl font-bold text-orange-600 tracking-tight">
+                  System Check Failed
+                </p>
+                <p className="text-sm text-slate-500 mt-2 text-center max-w-sm">
+                  Alguns componentes do sistema estão inativos ou não configurados. Verifique os
+                  itens marcados em laranja acima.
+                </p>
               </div>
             )}
           </div>
@@ -200,13 +246,23 @@ export default function SystemCheck() {
                   Proceed
                 </Button>
               </div>
+            ) : globalStatus === 'error' ? (
+              <div className="flex flex-col items-center w-full animate-in fade-in slide-in-from-bottom-2 duration-700">
+                <Button
+                  onClick={handleProceed}
+                  variant="outline"
+                  className="w-full h-11 text-base text-orange-600 border-orange-200 hover:bg-orange-50"
+                >
+                  Continuar mesmo com falhas
+                </Button>
+              </div>
             ) : (
               <Button
                 disabled
                 variant="outline"
                 className="w-full h-11 text-base text-slate-400 border-slate-200"
               >
-                {globalStatus === 'error' ? 'Launch Aborted' : 'Awaiting Go...'}
+                Awaiting Go...
               </Button>
             )}
           </div>
