@@ -1,7 +1,8 @@
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -10,15 +11,17 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from '@/components/ui/sidebar'
-import { LayoutDashboard, Settings, ShieldCheck } from 'lucide-react'
+import { LayoutDashboard, Settings, ShieldCheck, LogOut } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import pb from '@/lib/pocketbase/client'
 import { useRealtime } from '@/hooks/use-realtime'
 import { useAuth } from '@/hooks/use-auth'
+import { toast } from 'sonner'
 
 export function AppSidebar() {
   const location = useLocation()
-  const { isAuthenticated } = useAuth()
+  const navigate = useNavigate()
+  const { isAuthenticated, signOut } = useAuth()
   const [departments, setDepartments] = useState<any[]>([])
   const [projects, setProjects] = useState<any[]>([])
 
@@ -187,6 +190,24 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+
+      <SidebarFooter className="p-3 bg-white border-t border-slate-100">
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              onClick={() => {
+                signOut()
+                toast.success('Sessão encerrada com sucesso.')
+                navigate('/login')
+              }}
+              className="h-9 transition-all duration-200 rounded-lg px-2.5 text-[15px] group hover:bg-[#06402B]/10 hover:text-[#06402B] text-slate-600"
+            >
+              <LogOut className="h-[18px] w-[18px] group-hover:text-[#06402B]" />
+              <span className="font-medium">Sair do Sistema</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
     </Sidebar>
   )
 }
