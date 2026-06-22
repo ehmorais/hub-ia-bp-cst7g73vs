@@ -68,10 +68,10 @@ export const getShifts = (cycleId?: string) => {
   if (cycleId) opts.filter = `cycle="${cycleId}"`
   return pb.collection('shifts').getFullList(opts)
 }
-export const generateShifts = (cycleId: string, departmentId: string) =>
+export const generateShifts = (cycleId: string, departmentId: string, sectorId?: string) =>
   pb.send('/backend/v1/escala/generate', {
     method: 'POST',
-    body: JSON.stringify({ cycle_id: cycleId, department_id: departmentId }),
+    body: JSON.stringify({ cycle_id: cycleId, department_id: departmentId, sector_id: sectorId }),
     headers: { 'Content-Type': 'application/json' },
   })
 

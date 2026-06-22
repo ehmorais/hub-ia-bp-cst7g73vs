@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/use-toast'
-import { getShiftCycles, generateShifts, getShifts } from '@/services/escala'
+import { getShiftCycles, generateShifts, getShifts, getStaffContracts } from '@/services/escala'
 import { useRealtime } from '@/hooks/use-realtime'
 import {
   Wand2,
@@ -109,6 +109,8 @@ function CheckItem({ check }: { check: ValidationCheck }) {
   )
 }
 
+import { ShiftCalendar } from './ShiftCalendar'
+
 export function AutoGenerate({
   departmentId,
   projectId,
@@ -118,8 +120,11 @@ export function AutoGenerate({
 }) {
   const [cycles, setCycles] = useState<any[]>([])
   const [selectedCycle, setSelectedCycle] = useState<string>('')
+  const [sectors, setSectors] = useState<any[]>([])
+  const [selectedSector, setSelectedSector] = useState<string>('all')
   const [loading, setLoading] = useState(false)
   const [shifts, setShifts] = useState<any[]>([])
+  const [contracts, setContracts] = useState<any[]>([])
 
   const [projectDeps, setProjectDeps] = useState<string[]>([])
   const [projectMembers, setProjectMembers] = useState<string[]>([])
@@ -134,9 +139,11 @@ export function AutoGenerate({
     getShiftCycles().then((c) => {
       setCycles(c)
       if (!selectedCycle && c.length > 0) {
-        setSelectedCycle(c.find((x: any) => x.status === 'active')?.id || c[0].id)
+        const defaultCycle = c.find((x: any) => x.status === 'active' || x.status === 'draft')
+        if (defaultCycle) setSelectedCycle(defaultCycle.id)
       }
     })
+    getStaffContracts().then(setContracts)
   }
 
   useEffect(() => {
@@ -144,14 +151,37 @@ export function AutoGenerate({
   }, [])
 
   useEffect(() => {
-    if (selectedCycle) {
-      getShifts(selectedCycle).then(setShifts)
+    if (projectDeps.length > 0) {
+      const sectorFilter = projectDeps.map((d) => `department="${d}"`).join(' || ')
+      pb.collection('hospital_sectors')
+        .getFullList({ filter: sectorFilter, sort: 'name' })
+        .then(setSectors)
     }
-  }, [selectedCycle])
+  }, [projectDeps])
+
+  useEffect(() => {
+    if (selectedCycle) {
+      getShifts(selectedCycle).then((res) => {
+        if (selectedSector && selectedSector !== 'all') {
+          setShifts(res.filter((s) => s.sector === selectedSector))
+        } else {
+          setShifts(res)
+        }
+      })
+    }
+  }, [selectedCycle, selectedSector])
 
   useRealtime('shift_cycles', loadData)
   useRealtime('shifts', () => {
-    if (selectedCycle) getShifts(selectedCycle).then(setShifts)
+    if (selectedCycle) {
+      getShifts(selectedCycle).then((res) => {
+        if (selectedSector && selectedSector !== 'all') {
+          setShifts(res.filter((s) => s.sector === selectedSector))
+        } else {
+          setShifts(res)
+        }
+      })
+    }
   })
 
   useEffect(() => {
@@ -389,9 +419,19 @@ export function AutoGenerate({
 
     try {
       let total = 0
-      for (const dep of projectDeps) {
+
+      const depsToGenerate =
+        selectedSector !== 'all'
+          ? [sectors.find((s) => s.id === selectedSector)?.department].filter(Boolean)
+          : projectDeps
+
+      for (const dep of depsToGenerate) {
         try {
-          const res = await generateShifts(selectedCycle, dep)
+          const res = await generateShifts(
+            selectedCycle,
+            dep,
+            selectedSector !== 'all' ? selectedSector : undefined,
+          )
           if (res && res.count) total += res.count
         } catch (e: any) {
           const msg = getErrorMessage(e)
@@ -401,9 +441,15 @@ export function AutoGenerate({
 
       toast({
         title: 'Geração Concluída',
-        description: `Escala gerada com sucesso para os departamentos do projeto! (${total} plantões totais)`,
+        description: `Escala gerada com sucesso! (${total} plantões totais)`,
       })
-      getShifts(selectedCycle).then(setShifts)
+      getShifts(selectedCycle).then((res) => {
+        if (selectedSector && selectedSector !== 'all') {
+          setShifts(res.filter((s) => s.sector === selectedSector))
+        } else {
+          setShifts(res)
+        }
+      })
     } catch (err: any) {
       toast({
         title: 'Falha na geração de escala',
@@ -431,21 +477,40 @@ export function AutoGenerate({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="space-y-2 max-w-sm">
-            <label className="text-sm font-medium">Ciclo Alvo</label>
-            <Select value={selectedCycle} onValueChange={setSelectedCycle}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione o ciclo..." />
-              </SelectTrigger>
-              <SelectContent>
-                {cycles.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.name} ({format(new Date(c.start_date), 'dd/MM', { locale: ptBR })} -{' '}
-                    {format(new Date(c.end_date), 'dd/MM', { locale: ptBR })})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Ciclo Alvo</label>
+              <Select value={selectedCycle} onValueChange={setSelectedCycle}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o ciclo..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {cycles.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name} ({format(new Date(c.start_date), 'dd/MM', { locale: ptBR })} -{' '}
+                      {format(new Date(c.end_date), 'dd/MM', { locale: ptBR })})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Setor Específico</label>
+              <Select value={selectedSector} onValueChange={setSelectedSector}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Todos os setores..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os setores</SelectItem>
+                  {sectors.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <div className="pt-4 border-t border-primary/10">
@@ -522,44 +587,28 @@ export function AutoGenerate({
       </Card>
 
       {shifts.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Prévia da Escala Gerada</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {shifts.map((shift) => (
-                <div
-                  key={shift.id}
-                  className="border rounded-lg p-3 bg-slate-50 flex flex-col gap-2 relative"
-                >
-                  <div className="flex justify-between items-start">
-                    <span className="font-semibold text-sm">
-                      {shift.expand?.user?.name || 'Desconhecido'}
-                    </span>
-                    <Badge variant="outline" className="text-[10px] bg-white">
-                      {shift.expand?.sector?.name}
-                    </Badge>
-                  </div>
-                  <div className="flex items-center text-xs text-slate-500 gap-1 mt-1">
-                    <CalendarIcon className="h-3 w-3" />
-                    <span>
-                      {format(new Date(shift.start_time), 'dd/MM HH:mm', { locale: ptBR })} -{' '}
-                      {format(new Date(shift.end_time), 'HH:mm')}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="mt-6 flex items-center justify-end gap-2">
+        <Card className="shadow-md overflow-hidden border-primary/10">
+          <CardHeader className="bg-slate-50 border-b pb-4">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <CalendarIcon className="h-5 w-5 text-primary" />
+                Calendário de Escala Gerada
+              </CardTitle>
               <Button
-                variant="outline"
-                className="gap-2 text-green-700 hover:text-green-800 hover:bg-green-50 border-green-200"
+                size="sm"
+                className="gap-2 text-green-700 bg-green-100 hover:text-green-800 hover:bg-green-200 border border-green-300"
               >
                 <CheckCircle2 className="h-4 w-4" />
                 Aprovar e Publicar Escala
               </Button>
             </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            <ShiftCalendar
+              shifts={shifts}
+              cycle={cycles.find((c) => c.id === selectedCycle)}
+              contracts={contracts}
+            />
           </CardContent>
         </Card>
       )}

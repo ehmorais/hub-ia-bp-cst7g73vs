@@ -5,6 +5,7 @@ routerAdd(
     const body = e.requestInfo().body || {}
     const cycleId = body.cycle_id
     const departmentId = body.department_id
+    const sectorId = body.sector_id
 
     if (!cycleId || !departmentId) {
       return e.badRequestError('cycle_id and department_id are required')
@@ -20,7 +21,7 @@ routerAdd(
       0,
       { dep: departmentId },
     )
-    const sectors = $app.findRecordsByFilter(
+    let sectors = $app.findRecordsByFilter(
       'hospital_sectors',
       `department = {:dep}`,
       '-created',
@@ -28,6 +29,9 @@ routerAdd(
       0,
       { dep: departmentId },
     )
+    if (sectorId) {
+      sectors = sectors.filter((s) => s.id === sectorId)
+    }
 
     const contracts = $app.findRecordsByFilter('staff_contracts', '', '-created', 1000, 0)
     const roles = $app.findRecordsByFilter('staff_roles', '', '-created', 1000, 0)
@@ -196,6 +200,8 @@ Only output the JSON array, no markdown or text.
       const generatedShifts = JSON.parse(content)
 
       // Process existing shifts
+      // Delete existing shifts ONLY for the sectors being generated in this run
+      const sectorIds = sectors.map((s) => s.id)
       const existingShifts = $app.findRecordsByFilter(
         'shifts',
         `cycle = {:cyc}`,
@@ -205,8 +211,7 @@ Only output the JSON array, no markdown or text.
         { cyc: cycleId },
       )
       existingShifts.forEach((s) => {
-        const sector = sectors.find((sec) => sec.id === s.getString('sector'))
-        if (sector) {
+        if (sectorIds.includes(s.getString('sector'))) {
           $app.delete(s)
         }
       })
