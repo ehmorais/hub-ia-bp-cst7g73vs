@@ -59,13 +59,6 @@ export default function Login() {
     <div className="flex min-h-screen items-center justify-center bg-white p-4">
       <Card className="w-full max-w-sm shadow-[0_4px_24px_-4px_rgba(0,0,0,0.04)] border border-gray-100 rounded-xl">
         <CardHeader className="text-center pb-6">
-          <div className="flex justify-center mb-6">
-            <img
-              src="https://img.usecurling.com/i?q=medical&shape=fill&color=green"
-              alt="Hospital Beneficência Portuguesa de São Caetano do Sul"
-              className="w-full max-w-[120px] h-auto object-contain"
-            />
-          </div>
           <CardTitle className="text-3xl font-bold text-emerald-700 tracking-tight">
             HUB IA BPSCS
           </CardTitle>
