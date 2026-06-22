@@ -22,6 +22,8 @@ export function ShiftTypes() {
   const [types, setTypes] = useState<any[]>([])
   const [name, setName] = useState('')
   const [code, setCode] = useState('')
+  const [startTime, setStartTime] = useState('')
+  const [endTime, setEndTime] = useState('')
   const [workHours, setWorkHours] = useState(12)
   const [restHours, setRestHours] = useState(36)
   const [isAdministrative, setIsAdministrative] = useState(false)
@@ -40,6 +42,23 @@ export function ShiftTypes() {
         description: 'Nome e código obrigatórios',
         variant: 'destructive',
       })
+
+    if (!startTime || !endTime) {
+      return toast({
+        title: 'Erro',
+        description: 'Horário de início e fim são obrigatórios',
+        variant: 'destructive',
+      })
+    }
+
+    if (types.some((t) => t.name.toLowerCase() === name.toLowerCase())) {
+      return toast({
+        title: 'Erro',
+        description: 'Nome de turno já existe.',
+        variant: 'destructive',
+      })
+    }
+
     if (types.some((t) => t.code === code)) {
       return toast({
         title: 'Erro',
@@ -47,16 +66,21 @@ export function ShiftTypes() {
         variant: 'destructive',
       })
     }
+
     try {
       await createShiftType({
         name,
         code,
+        start_time: startTime,
+        end_time: endTime,
         work_hours: workHours,
         rest_hours: restHours,
         is_administrative: isAdministrative,
       })
       setName('')
       setCode('')
+      setStartTime('')
+      setEndTime('')
       setWorkHours(12)
       setRestHours(36)
       setIsAdministrative(false)
@@ -74,6 +98,16 @@ export function ShiftTypes() {
       return toast({
         title: 'Erro',
         description: 'Código de turno já existe.',
+        variant: 'destructive',
+      })
+    }
+    if (
+      field === 'name' &&
+      types.some((t) => t.id !== id && t.name.toLowerCase() === String(val).toLowerCase())
+    ) {
+      return toast({
+        title: 'Erro',
+        description: 'Nome de turno já existe.',
         variant: 'destructive',
       })
     }
@@ -99,18 +133,26 @@ export function ShiftTypes() {
         <CardHeader>
           <CardTitle>Novo Tipo de Escala</CardTitle>
           <CardDescription>
-            Defina modelos de trabalho (Ex: 12x36 Diurno, 5x2 Administrativo).
+            Defina modelos de trabalho e horários (Ex: Manhã das 07:00 às 13:00).
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
+          <div className="grid grid-cols-1 md:grid-cols-8 gap-4 items-end">
             <div className="space-y-2 md:col-span-2">
-              <Label>Nome (Ex: 12x36 Diurno)</Label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} />
+              <Label>Nome (Ex: Manhã)</Label>
+              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Manhã" />
             </div>
             <div className="space-y-2">
               <Label>Código Único</Label>
-              <Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="12X36_D" />
+              <Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="MANHA" />
+            </div>
+            <div className="space-y-2">
+              <Label>Início</Label>
+              <Input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Fim</Label>
+              <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
             </div>
             <div className="space-y-2">
               <Label>Horas Trab.</Label>
@@ -130,11 +172,11 @@ export function ShiftTypes() {
                 onChange={(e) => setRestHours(Number(e.target.value))}
               />
             </div>
-            <div className="space-y-2 flex flex-col">
+            <div className="space-y-2 flex flex-col items-center">
               <Label className="mb-2">Admin?</Label>
               <Switch checked={isAdministrative} onCheckedChange={setIsAdministrative} />
             </div>
-            <div className="md:col-span-6">
+            <div className="md:col-span-8">
               <Button onClick={handleCreate} className="w-full md:w-auto">
                 <Plus className="h-4 w-4 mr-2" />
                 Adicionar Tipo
@@ -153,9 +195,10 @@ export function ShiftTypes() {
             <TableHeader>
               <TableRow>
                 <TableHead>Nome</TableHead>
+                <TableHead>Horários</TableHead>
                 <TableHead>Código</TableHead>
-                <TableHead>Horas</TableHead>
-                <TableHead>Administrativo</TableHead>
+                <TableHead>Carga Horária</TableHead>
+                <TableHead className="text-center">Admin</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
@@ -167,8 +210,25 @@ export function ShiftTypes() {
                     <Input
                       defaultValue={t.name}
                       onBlur={(e) => handleUpdate(t.id, 'name', e.target.value)}
-                      className="w-48 h-8"
+                      className="w-40 h-8"
                     />
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2 text-sm">
+                      <Input
+                        type="time"
+                        defaultValue={t.start_time}
+                        onBlur={(e) => handleUpdate(t.id, 'start_time', e.target.value)}
+                        className="w-24 h-8"
+                      />
+                      <span>-</span>
+                      <Input
+                        type="time"
+                        defaultValue={t.end_time}
+                        onBlur={(e) => handleUpdate(t.id, 'end_time', e.target.value)}
+                        className="w-24 h-8"
+                      />
+                    </div>
                   </TableCell>
                   <TableCell>
                     <Input
@@ -194,7 +254,7 @@ export function ShiftTypes() {
                       />
                     </div>
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="text-center">
                     <Switch
                       checked={t.is_administrative}
                       onCheckedChange={(val) => handleUpdate(t.id, 'is_administrative', val)}
@@ -209,7 +269,7 @@ export function ShiftTypes() {
               ))}
               {types.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-6 text-muted-foreground">
+                  <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
                     Nenhum tipo de escala cadastrado.
                   </TableCell>
                 </TableRow>

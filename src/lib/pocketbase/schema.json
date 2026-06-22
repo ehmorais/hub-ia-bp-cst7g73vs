@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-06-22T15:05:39.673Z",
+  "generatedAt": "2026-06-22T15:20:37.051Z",
   "collections": [
     {
       "name": "users",
@@ -826,9 +826,21 @@
           "required": false,
           "system": false,
           "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "start_time",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "end_time",
+          "type": "text",
+          "required": false,
+          "system": false
         }
       ],
-      "indexes": []
+      "indexes": ["CREATE UNIQUE INDEX `idx_shift_types_name` ON `shift_types` (name)"]
     },
     {
       "name": "staff_profiles",
