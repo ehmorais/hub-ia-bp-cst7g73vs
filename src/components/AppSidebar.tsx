@@ -7,7 +7,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from '@/components/ui/sidebar'
-import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import {
   LayoutDashboard,
   MessageSquare,
@@ -17,6 +17,7 @@ import {
   ShieldCheck,
   Settings,
   Menu,
+  ChevronDown,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import pb from '@/lib/pocketbase/client'
@@ -25,7 +26,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 
-function HoverSection({
+function CollapsibleSection({
   title,
   icon: Icon,
   children,
@@ -37,31 +38,27 @@ function HoverSection({
   isActive?: boolean
 }) {
   return (
-    <HoverCard openDelay={50} closeDelay={150}>
-      <HoverCardTrigger asChild>
+    <Collapsible defaultOpen={isActive} className="group/collapsible px-4 mb-2">
+      <CollapsibleTrigger asChild>
         <div
           className={cn(
-            'flex items-center gap-3 px-5 py-4 cursor-pointer transition-all duration-300 rounded-xl mx-4 mb-4 border border-transparent',
+            'flex items-center gap-3 px-3 py-3 cursor-pointer transition-all duration-300 rounded-xl border border-transparent select-none',
             isActive
-              ? 'bg-[#06402B] text-white shadow-lg shadow-[#06402B]/20'
-              : 'text-[#06402B] bg-white shadow-sm hover:bg-[#06402B]/5 hover:border-[#06402B]/10',
+              ? 'bg-[#06402B]/10 text-[#06402B]'
+              : 'text-slate-600 hover:bg-[#06402B]/5 hover:text-[#06402B]',
           )}
         >
           {Icon && <Icon className="w-5 h-5" />}
-          <span className="font-bold text-[13px] tracking-widest uppercase">{title}</span>
+          <span className="font-bold text-[12px] tracking-widest uppercase flex-1">{title}</span>
+          <ChevronDown className="w-4 h-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180 opacity-50" />
         </div>
-      </HoverCardTrigger>
-      <HoverCardContent
-        side="right"
-        align="start"
-        sideOffset={16}
-        className="w-72 p-2 bg-white/95 backdrop-blur-xl border border-[#06402B]/10 shadow-2xl rounded-2xl z-[100]"
-      >
-        <SidebarMenu className="gap-1 max-h-[75vh] overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-slate-200 [&::-webkit-scrollbar-thumb]:rounded-full pr-1">
+      </CollapsibleTrigger>
+      <CollapsibleContent className="overflow-hidden data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down">
+        <SidebarMenu className="mt-1 gap-1 pl-4 ml-3 border-l border-slate-200 py-1">
           {children}
         </SidebarMenu>
-      </HoverCardContent>
-    </HoverCard>
+      </CollapsibleContent>
+    </Collapsible>
   )
 }
 
@@ -130,8 +127,8 @@ export function AppSidebar() {
         </Link>
       </SidebarHeader>
 
-      <SidebarContent className="px-0 py-2 gap-2 bg-transparent overflow-visible">
-        <HoverSection title="Navegação" icon={Menu} isActive={isNavActive}>
+      <SidebarContent className="px-0 py-2 gap-2 bg-transparent overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-slate-200 [&::-webkit-scrollbar-thumb]:rounded-full">
+        <CollapsibleSection title="Navegação" icon={Menu} isActive={isNavActive}>
           <SidebarMenuItem>
             <SidebarMenuButton
               asChild
@@ -196,9 +193,13 @@ export function AppSidebar() {
               <span className="font-bold">Sair do Sistema</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
-        </HoverSection>
+        </CollapsibleSection>
 
-        <HoverSection title="Projetos Gerais HBPSCSC" icon={Briefcase} isActive={isProjectsActive}>
+        <CollapsibleSection
+          title="Projetos Gerais HBPSCSC"
+          icon={Briefcase}
+          isActive={isProjectsActive}
+        >
           {projects.map((proj) => (
             <SidebarMenuItem key={proj.id}>
               <SidebarMenuButton
@@ -218,9 +219,9 @@ export function AppSidebar() {
               Nenhum projeto ativo
             </div>
           )}
-        </HoverSection>
+        </CollapsibleSection>
 
-        <HoverSection title="Departamentos" icon={Building2} isActive={isDeptsActive}>
+        <CollapsibleSection title="Departamentos" icon={Building2} isActive={isDeptsActive}>
           {departments.map((dept) => (
             <SidebarMenuItem key={dept.id}>
               <SidebarMenuButton
@@ -240,7 +241,7 @@ export function AppSidebar() {
               Nenhum departamento
             </div>
           )}
-        </HoverSection>
+        </CollapsibleSection>
       </SidebarContent>
     </Sidebar>
   )
