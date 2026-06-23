@@ -38,6 +38,8 @@ import { submitCycleToHR } from '@/services/escala'
 export default function DraftSchedules() {
   const [drafts, setDrafts] = useState<any[]>([])
   const [searchQuery, setSearchQuery] = useState('')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
   const [loading, setLoading] = useState(true)
   const [submittingId, setSubmittingId] = useState<string | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -74,7 +76,10 @@ export default function DraftSchedules() {
 
     try {
       setSubmittingId(selectedDraft.id)
-      await submitCycleToHR(selectedDraft.id)
+      await pb.send('/backend/v1/escala/submit-hr', {
+        method: 'POST',
+        body: JSON.stringify({ cycle_id: selectedDraft.id }),
+      })
       toast({ title: 'Sucesso', description: 'Escala gravada e enviada ao RH com sucesso.' })
       setIsDialogOpen(false)
       setSelectedDraft(null)
@@ -91,9 +96,12 @@ export default function DraftSchedules() {
     }
   }
 
-  const filteredDrafts = drafts.filter((d) =>
-    d.name.toLowerCase().includes(searchQuery.toLowerCase()),
-  )
+  const filteredDrafts = drafts.filter((d) => {
+    const matchesName = d.name.toLowerCase().includes(searchQuery.toLowerCase())
+    const matchesStart = startDate ? d.start_date.startsWith(startDate) : true
+    const matchesEnd = endDate ? d.end_date.startsWith(endDate) : true
+    return matchesName && matchesStart && matchesEnd
+  })
 
   return (
     <div className="space-y-6 animate-fade-in-up">
@@ -131,8 +139,18 @@ export default function DraftSchedules() {
               />
             </div>
             <div className="flex gap-2">
-              <Input type="date" className="w-[130px] hidden sm:block" />
-              <Input type="date" className="w-[130px] hidden sm:block" />
+              <Input
+                type="date"
+                className="w-[130px] hidden sm:block"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+              />
+              <Input
+                type="date"
+                className="w-[130px] hidden sm:block"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+              />
               <Select defaultValue="all">
                 <SelectTrigger className="w-[120px]">
                   <SelectValue placeholder="Setor" />

@@ -3,7 +3,15 @@ routerAdd(
   '/backend/v1/escala/draft',
   (e) => {
     const body = e.requestInfo().body || {}
-    const { cycle_id, sector_id, additional_prompt, current_draft, context } = body
+    const {
+      cycle_id,
+      sector_id,
+      additional_prompt,
+      current_draft,
+      context,
+      priority = 'staffing',
+      strictness = 50,
+    } = body
 
     if (!cycle_id || !sector_id || !context) {
       return e.badRequestError('Missing parameters: cycle_id, sector_id, and context are required.')
@@ -26,6 +34,10 @@ ${current_draft ? JSON.stringify(current_draft, null, 2) : 'None'}
 
 User Refinement Request:
 ${additional_prompt || 'Generate an optimal schedule covering the entire cycle period.'}
+
+AI Strictness and Priority:
+- Strictness: ${strictness}% (0% means very flexible, 100% means strictly fail if rules cannot be met).
+- Priority: ${priority === 'timeoff' ? 'Strictly respect time-off over staffing minimums' : 'Ensure minimum staffing even if it means slightly violating secondary rules (but timeoffs still highly prioritized)'}.
 
 OUTPUT FORMAT INSTRUCTIONS:
 Return ONLY a valid JSON array of objects. Do not include markdown formatting, backticks, or explanations. Just the raw JSON array.

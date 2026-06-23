@@ -6,6 +6,8 @@ routerAdd(
     const cycleId = body.cycle_id
     const sectorIds = body.sector_ids || []
     const providedRules = body.rules || ''
+    const priority = body.priority || 'staffing'
+    const strictness = body.strictness !== undefined ? body.strictness : 50
 
     if (!cycleId) {
       return e.badRequestError(
@@ -167,6 +169,10 @@ ${JSON.stringify(ruleData, null, 2)}
 
 Context Rules:
 ${providedRules}
+
+AI Strictness and Priority:
+- Strictness: ${strictness}% (0% means very flexible, 100% means strictly fail if rules cannot be met).
+- Priority: ${priority === 'timeoff' ? 'Strictly respect time-off over staffing minimums' : 'Ensure minimum staffing even if it means slightly violating secondary rules (but timeoffs still highly prioritized)'}.
 
 Timeoff Requests:
 ${JSON.stringify(timeoffData, null, 2)}

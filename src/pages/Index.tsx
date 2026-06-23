@@ -15,6 +15,8 @@ export default function Index() {
   })
   const [activeTools, setActiveTools] = useState<any[]>([])
 
+  const memoizedStats = useMemo(() => stats, [stats])
+
   useEffect(() => {
     Promise.all([
       pb.collection('departments').getList(1, 1),
@@ -66,7 +68,7 @@ export default function Index() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-slate-800">{stats.departments}</div>
+            <div className="text-3xl font-bold text-slate-800">{memoizedStats.departments}</div>
             <p className="text-xs text-muted-foreground mt-1">
               Departamentos registrados na instituição
             </p>
@@ -81,7 +83,7 @@ export default function Index() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-slate-800">{stats.tools}</div>
+            <div className="text-3xl font-bold text-slate-800">{memoizedStats.tools}</div>
             <p className="text-xs text-muted-foreground mt-1">Ferramentas ativas para uso</p>
           </CardContent>
         </Card>
@@ -94,7 +96,7 @@ export default function Index() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-slate-800">{stats.projects}</div>
+            <div className="text-3xl font-bold text-slate-800">{memoizedStats.projects}</div>
             <p className="text-xs text-muted-foreground mt-1">Projetos em andamento</p>
           </CardContent>
         </Card>
