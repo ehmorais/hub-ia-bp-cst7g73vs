@@ -1,9 +1,16 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowLeft, Search, Send, CalendarClock } from 'lucide-react'
+import { ArrowLeft, Search, Send, CalendarClock, Filter } from 'lucide-react'
 import { format } from 'date-fns'
 
 import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import {
@@ -112,15 +119,40 @@ export default function DraftSchedules() {
               Revise e submeta as escalas para aprovação do RH.
             </p>
           </div>
-          <div className="relative w-full sm:w-64">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              type="search"
-              placeholder="Filtrar por nome..."
-              className="pl-8 w-full"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
+          <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+            <div className="relative w-full sm:w-64">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                type="search"
+                placeholder="Filtrar por nome..."
+                className="pl-8 w-full"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+            <div className="flex gap-2">
+              <Input type="date" className="w-[130px] hidden sm:block" />
+              <Input type="date" className="w-[130px] hidden sm:block" />
+              <Select defaultValue="all">
+                <SelectTrigger className="w-[120px]">
+                  <SelectValue placeholder="Setor" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos Setores</SelectItem>
+                  <SelectItem value="uti">UTI</SelectItem>
+                  <SelectItem value="emergencia">Emergência</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select defaultValue="all">
+                <SelectTrigger className="w-[120px]">
+                  <SelectValue placeholder="Gestor" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos Gestores</SelectItem>
+                  <SelectItem value="me">Meus Rascunhos</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </CardHeader>
         <CardContent>

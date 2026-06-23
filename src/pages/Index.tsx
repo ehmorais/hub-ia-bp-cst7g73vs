@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import pb from '@/lib/pocketbase/client'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
 import { Building2, Activity, FileText, Bot, ArrowRight } from 'lucide-react'

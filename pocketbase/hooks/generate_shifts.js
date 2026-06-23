@@ -38,7 +38,7 @@ routerAdd(
     const shiftTypes = $app.findRecordsByFilter('shift_types', '', '-created', 1000, 0)
     const timeoffs = $app.findRecordsByFilter(
       'timeoff_requests',
-      `cycle = {:cyc}`,
+      `cycle = {:cyc} && (status = 'pending' || status = 'fulfilled')`,
       '-created',
       1000,
       0,
@@ -176,7 +176,7 @@ Constraints:
 2. Safety Ratios: Non-critical floors must have at least 1 professional per "staffing_ratio" beds (default 10), and a minimum of 2 professionals. Calculate based on 'bed_capacity'.
 3. Predictive & Critical: Sectors marked as 'is_critical' (like PSRIO/PSI) should prioritize reaching their 'ideal_staff' (e.g. 3) when allocating.
 4. Hierarchical Supervision: A "Técnico de Enfermagem" (or any rank requiring supervision) cannot work alone. They must be paired with at least one "Enfermeiro" (higher hierarchy_rank) in the same sector and shift.
-5. Time-off Requests: Honor 'timeoff_requests'. If weight is high, block scheduling. "Dobradinha" (consecutive days off) should be prioritized if minimum staffing is met.
+5. Time-off Requests: You MUST NOT schedule a user on a day where they have a time-off request (listed in Timeoff Requests). Exclude them completely from any shift that overlaps with their time-off dates.
 6. Hours & Shifts: Respect the assigned 'shift_type' work hours and rest hours. Total hours must not exceed 'hour_limit'. Do not schedule a shift if the 'shift_rest_hours' from the previous shift has not elapsed.
 7. Individual Rules: If a user has 'assigned_rules', these rules override the general department rules for this specific professional.
 8. Custom AI Rules: Apply all rules of type "custom_prompt" by following their textual descriptions in the "prompt" field precisely.
