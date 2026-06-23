@@ -498,14 +498,36 @@ function AutoGenerateInner({
       description: 'A IA está analisando os parâmetros para montar a escala...',
     })
 
+    if (!projectId && !departmentId) {
+      toast({
+        title: 'Contexto Inválido',
+        description: 'É necessário estar no contexto de um projeto para gerar a escala.',
+        variant: 'destructive',
+      })
+      setLoading(false)
+      return
+    }
+
+    const staffCheck = validations.find((v) => v.id === 'staff')
+    if (staffCheck?.status === 'error') {
+      toast({
+        title: 'Sem Colaboradores Operacionais',
+        description:
+          'É necessário ter pelo menos um colaborador (Operador) válido associado ao projeto para gerar a escala.',
+        variant: 'destructive',
+      })
+      setLoading(false)
+      return
+    }
+
     const timeoutId = setTimeout(() => {
       toast({
-        title: 'Processamento longo',
+        title: 'Ainda processando...',
         description:
-          'A geração está levando mais tempo que o normal devido à complexidade das regras. Por favor, aguarde...',
+          'A geração está levando mais tempo que o normal (Still processing, please wait...). Por favor, aguarde...',
         duration: 10000,
       })
-    }, 15000)
+    }, 5000)
 
     try {
       let total = 0

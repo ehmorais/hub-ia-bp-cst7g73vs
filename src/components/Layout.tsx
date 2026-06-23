@@ -42,8 +42,8 @@ export default function Layout() {
               </Avatar>
             </div>
           </header>
-          <div className="h-[1px] w-full bg-green-950"></div>
-          <div className="h-[1px] w-full bg-green-900"></div>
+          <div className="h-[1px] w-full bg-emerald-900"></div>
+          <div className="h-[1px] w-full bg-emerald-950"></div>
         </div>
         <main className="flex-1 p-4 md:p-6 lg:p-8 bg-white">
           <Outlet />
