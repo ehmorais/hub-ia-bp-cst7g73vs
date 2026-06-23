@@ -538,7 +538,9 @@ function AutoGenerateInner({
       },
       users: usersList.map((u) => {
         const contract = contracts.find((c) => c.user === u.id)
-        const timeoffs = timeoffsList.filter((t) => t.user === u.id && t.cycle === selectedCycle)
+        const timeoffs = timeoffsList.filter(
+          (t) => t.user === u.id && t.cycle === selectedCycle && t.status === 'fulfilled',
+        )
         return {
           id: u.id,
           name: u.name,
@@ -552,10 +554,20 @@ function AutoGenerateInner({
     }
 
     try {
+      const aiSettings = {
+        priority: localStorage.getItem('escala_ai_priority') || 'timeoff',
+        strictness: parseInt(localStorage.getItem('escala_ai_strictness') || '50', 10),
+      }
+
+      const fullContext = {
+        ...context,
+        ai_settings: aiSettings,
+      }
+
       const res = await generateDraftShifts(
         selectedCycle,
         selectedSector,
-        context,
+        fullContext,
         isRefinement ? refinementPrompt : undefined,
         isRefinement ? rawDraft : undefined,
       )
@@ -626,6 +638,46 @@ function AutoGenerateInner({
 
   const hasIssues = validations.some((v) => v.status === 'error' || v.status === 'warning')
   const cycleObj = cycles.find((c) => c.id === selectedCycle)
+
+  const dailyStaffing = useMemo(() => {
+    if (!cycleObj || !selectedSector || !isDraftMode) return []
+    const sectorObj = sectors.find((s) => s.id === selectedSector)
+    if (!sectorObj) return []
+
+    try {
+      const start = new Date(cycleObj.start_date.split(' ')[0])
+      const end = new Date(cycleObj.end_date.split(' ')[0])
+
+      const days = []
+      let curr = start
+      while (curr <= end) {
+        days.push(new Date(curr))
+        curr.setDate(curr.getDate() + 1)
+      }
+
+      return days.map((d) => {
+        const dateStr = d.toISOString().split('T')[0]
+        const count = draftShifts.filter((s) => s.start_time.startsWith(dateStr)).length
+
+        let status = 'optimal'
+        if (count < (sectorObj.min_staffing || 0)) status = 'understaffed'
+        else if (count < (sectorObj.ideal_staffing || 0)) status = 'suboptimal'
+
+        return {
+          date: d,
+          dateStr,
+          count,
+          status,
+          min: sectorObj.min_staffing,
+          ideal: sectorObj.ideal_staffing,
+        }
+      })
+    } catch {
+      return []
+    }
+  }, [draftShifts, cycleObj, selectedSector, sectors, isDraftMode])
+
+  const draftAlerts = dailyStaffing.filter((d) => d.status !== 'optimal')
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -774,6 +826,37 @@ function AutoGenerateInner({
             <ShiftCalendar shifts={draftShifts} cycle={cycleObj} contracts={contracts} />
 
             <div className="p-5 bg-emerald-50/50 border-t flex flex-col gap-3">
+              {draftAlerts.length > 0 && (
+                <div className="mb-2">
+                  <label className="text-sm font-semibold text-slate-800 flex items-center gap-2 mb-2">
+                    <AlertCircle className="h-4 w-4 text-amber-500" />
+                    Alertas de Efetivo no Rascunho
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {draftAlerts.map((alert) => (
+                      <Badge
+                        key={alert.dateStr}
+                        variant="outline"
+                        className={cn(
+                          'cursor-pointer hover:bg-slate-100 transition-colors',
+                          alert.status === 'understaffed'
+                            ? 'border-red-300 bg-red-50 text-red-700 hover:bg-red-100'
+                            : 'border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100',
+                        )}
+                        onClick={() =>
+                          setRefinementPrompt(
+                            `Encontre um profissional disponível para preencher a lacuna no dia ${format(alert.date, 'dd/MM/yyyy')} que está com ${alert.count} profissionais (ideal: ${alert.ideal}).`,
+                          )
+                        }
+                      >
+                        {format(alert.date, 'dd/MM')}: {alert.count} agendados (Min: {alert.min},
+                        Ideal: {alert.ideal})
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <label className="text-sm font-semibold text-emerald-900 flex items-center gap-2">
                 <MessageSquare className="h-4 w-4 text-emerald-600" />
                 Refinamento com IA

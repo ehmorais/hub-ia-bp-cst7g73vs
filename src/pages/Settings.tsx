@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '@/hooks/use-auth'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Switch } from '@/components/ui/switch'
+import { Slider } from '@/components/ui/slider'
+import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import {
   Github,
@@ -9,6 +12,8 @@ import {
   Link as LinkIcon,
   ShieldCheck,
   Server,
+  Bot,
+  SlidersHorizontal,
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import pb from '@/lib/pocketbase/client'
@@ -67,6 +72,21 @@ export default function Settings() {
   const [githubStatus, setGithubStatus] = useState<'disconnected' | 'loading' | 'connected'>(
     'disconnected',
   )
+  const [aiPriority, setAiPriority] = useState(
+    localStorage.getItem('escala_ai_priority') === 'staffing' ? 'staffing' : 'timeoff',
+  )
+  const [aiStrictness, setAiStrictness] = useState([
+    parseInt(localStorage.getItem('escala_ai_strictness') || '50', 10),
+  ])
+
+  const handleSaveAiSettings = () => {
+    localStorage.setItem('escala_ai_priority', aiPriority)
+    localStorage.setItem('escala_ai_strictness', aiStrictness[0].toString())
+    toast({
+      title: 'Configurações de IA Salvas',
+      description: 'As preferências de geração de escalas foram atualizadas.',
+    })
+  }
 
   useEffect(() => {
     async function checkDb() {
@@ -123,6 +143,12 @@ export default function Settings() {
             className="rounded-md px-4 py-2 data-[state=active]:bg-[#06402B] data-[state=active]:text-white data-[state=active]:shadow-md transition-all hover:bg-slate-100"
           >
             Integrações
+          </TabsTrigger>
+          <TabsTrigger
+            value="ai"
+            className="rounded-md px-4 py-2 data-[state=active]:bg-[#06402B] data-[state=active]:text-white data-[state=active]:shadow-md transition-all hover:bg-slate-100"
+          >
+            IA & Escalas
           </TabsTrigger>
         </TabsList>
 
@@ -240,6 +266,86 @@ export default function Settings() {
               </CardContent>
             </Card>
           </div>
+        </TabsContent>
+
+        <TabsContent value="ai" className="space-y-6">
+          <Card className="shadow-soft border-slate-200/60 rounded-lg">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Bot className="w-5 h-5 text-[#06402B]" />
+                Preferências Globais da IA
+              </CardTitle>
+              <CardDescription>
+                Configure como a IA deve se comportar ao gerar rascunhos de escalas e resolver
+                conflitos.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-8">
+              <div className="flex flex-col gap-4 max-w-xl">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-base font-semibold text-slate-800">
+                      Prioridade de Resolução
+                    </Label>
+                    <div className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700">
+                      {aiPriority === 'timeoff' ? 'Respeitar Folgas' : 'Garantir Efetivo'}
+                    </div>
+                  </div>
+                  <p className="text-sm text-slate-500">
+                    Define se a IA deve priorizar as solicitações de folga aprovadas ou preencher o
+                    quadro mínimo de funcionários do setor.
+                  </p>
+                  <div className="flex items-center space-x-4 pt-2">
+                    <span className="text-sm font-medium text-slate-700">Folgas</span>
+                    <Switch
+                      checked={aiPriority === 'staffing'}
+                      onCheckedChange={(c) => setAiPriority(c ? 'staffing' : 'timeoff')}
+                    />
+                    <span className="text-sm font-medium text-slate-700">Efetivo</span>
+                  </div>
+                </div>
+
+                <div className="w-full h-px bg-slate-100 my-2" />
+
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-base font-semibold text-slate-800 flex items-center gap-2">
+                      <SlidersHorizontal className="w-4 h-4" />
+                      Rigor nas Regras (Strictness)
+                    </Label>
+                    <span className="font-mono text-sm font-bold text-[#06402B]">
+                      {aiStrictness[0]}%
+                    </span>
+                  </div>
+                  <p className="text-sm text-slate-500">
+                    Determina o quão rigorosa a IA será com regras secundárias (ex: mix de
+                    profissionais, preferências de turno) antes de sugerir "quebras" para revisão
+                    manual.
+                  </p>
+                  <div className="pt-4">
+                    <Slider
+                      value={aiStrictness}
+                      onValueChange={setAiStrictness}
+                      max={100}
+                      step={10}
+                      className="w-full"
+                    />
+                    <div className="flex justify-between text-xs text-slate-400 mt-2">
+                      <span>Flexível (Sugere opções)</span>
+                      <span>Estrito (Falha ao invés de quebrar regra)</span>
+                    </div>
+                  </div>
+                </div>
+
+                <Button
+                  onClick={handleSaveAiSettings}
+                  className="mt-4 w-fit bg-[#06402B] hover:bg-[#06402B]/90"
+                >
+                  Salvar Preferências da IA
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>

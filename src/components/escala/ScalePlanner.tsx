@@ -25,6 +25,7 @@ import {
   Trash2,
   CalendarOff,
   Info,
+  Download,
 } from 'lucide-react'
 import { format, eachDayOfInterval, addDays, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -165,6 +166,31 @@ export function ScalePlanner({
       return []
     }
   }, [selectedCycle])
+
+  const dailyCounts = useMemo(() => {
+    if (!selectedSector || days.length === 0) return {}
+    const counts: Record<
+      string,
+      { count: number; status: 'understaffed' | 'suboptimal' | 'optimal' }
+    > = {}
+
+    days.forEach((day) => {
+      const ds = format(day, 'yyyy-MM-dd')
+      let count = 0
+      draftUsers.forEach((u) => {
+        const val = draft[u.id]?.[ds]
+        if (val && val !== 'F') count++
+      })
+
+      let status: 'optimal' | 'suboptimal' | 'understaffed' = 'optimal'
+      if (count < (selectedSector.min_staffing || 0)) status = 'understaffed'
+      else if (count < (selectedSector.ideal_staffing || 0)) status = 'suboptimal'
+
+      counts[ds] = { count, status }
+    })
+    return counts
+  }, [days, draft, draftUsers, selectedSector])
+
   const timeoffsForCycle = useMemo(
     () =>
       timeoffs.filter(
@@ -268,6 +294,36 @@ export function ScalePlanner({
     })
     return Array.from(new Set(alerts))
   }, [days, draft, draftUsers, selectedSector, contracts, timeoffsForCycle])
+
+  const exportToCSV = () => {
+    if (!selectedCycleId || !selectedSectorId) return
+    const sectorName = selectedSector?.name || 'Setor'
+    const cycleName = selectedCycle?.name || 'Ciclo'
+
+    let csvContent = 'data:text/csv;charset=utf-8,\uFEFF'
+    csvContent += `Escala: ${sectorName} - ${cycleName}\n\n`
+
+    const headers = ['Colaborador', 'Cargo', ...days.map((d) => format(d, 'dd/MM/yyyy'))]
+    csvContent += headers.join(',') + '\n'
+
+    draftUsers.forEach((user) => {
+      const row = [user.name, user.expand?.staff_role?.name || '']
+      days.forEach((day) => {
+        const ds = format(day, 'yyyy-MM-dd')
+        const cell = draft[user.id]?.[ds] || ''
+        row.push(cell)
+      })
+      csvContent += row.join(',') + '\n'
+    })
+
+    const encodedUri = encodeURI(csvContent)
+    const link = document.createElement('a')
+    link.setAttribute('href', encodedUri)
+    link.setAttribute('download', `escala_${sectorName.replace(/\s+/g, '_').toLowerCase()}.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
 
   const handleSave = async (publish: boolean) => {
     if (!selectedCycleId || !selectedSectorId) return
@@ -437,6 +493,14 @@ export function ScalePlanner({
           >
             <Send className="h-4 w-4" /> Publicar Escala
           </Button>
+
+          <Button
+            variant="outline"
+            onClick={exportToCSV}
+            className="gap-2 bg-white flex-1 xl:flex-none border-emerald-200 hover:bg-emerald-50 text-emerald-800"
+          >
+            <Download className="h-4 w-4" /> Exportar
+          </Button>
         </div>
       </div>
 
@@ -449,17 +513,37 @@ export function ScalePlanner({
                   <th className="sticky left-0 z-20 bg-slate-100 border-b border-r p-2 text-left min-w-[150px]">
                     Colaborador
                   </th>
-                  {days.map((day) => (
-                    <th
-                      key={day.toISOString()}
-                      className="border-b border-r p-1.5 min-w-[36px] bg-slate-50 text-center"
-                    >
-                      <div className="text-[10px] uppercase text-slate-500">
-                        {format(day, 'eee', { locale: ptBR })}
-                      </div>
-                      <div className="text-xs">{format(day, 'dd')}</div>
-                    </th>
-                  ))}
+                  {days.map((day) => {
+                    const ds = format(day, 'yyyy-MM-dd')
+                    const dc = dailyCounts[ds]
+                    return (
+                      <th
+                        key={day.toISOString()}
+                        className="border-b border-r p-1.5 min-w-[36px] bg-slate-50 text-center relative"
+                      >
+                        <div className="text-[10px] uppercase text-slate-500">
+                          {format(day, 'eee', { locale: ptBR })}
+                        </div>
+                        <div className="text-xs">{format(day, 'dd')}</div>
+                        {dc && (
+                          <div
+                            className="flex justify-center mt-1"
+                            title={`${dc.count} agendados (Min: ${selectedSector?.min_staffing}, Ideal: ${selectedSector?.ideal_staffing})`}
+                          >
+                            {dc.status === 'understaffed' && (
+                              <div className="w-2 h-2 rounded-full bg-red-500 shadow-sm" />
+                            )}
+                            {dc.status === 'suboptimal' && (
+                              <div className="w-2 h-2 rounded-full bg-amber-400 shadow-sm" />
+                            )}
+                            {dc.status === 'optimal' && (
+                              <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-sm" />
+                            )}
+                          </div>
+                        )}
+                      </th>
+                    )
+                  })}
                 </tr>
               </thead>
               <tbody>
@@ -512,12 +596,20 @@ export function ScalePlanner({
                               }
                               disabled={isTO || selectedCycle?.status !== 'draft'}
                               className={cn(
-                                'w-full h-11 appearance-none bg-transparent text-center text-xs outline-none cursor-pointer hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50',
+                                'w-full h-11 appearance-none bg-transparent text-center text-xs outline-none cursor-pointer hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 transition-colors',
                                 {
-                                  'font-bold text-blue-600': val === 'D',
-                                  'font-bold text-indigo-900': val === 'N',
-                                  'text-red-400 font-bold bg-red-50': isTO && !isPendingTO,
-                                  'text-amber-500 font-bold bg-amber-50': isPendingTO,
+                                  'font-bold text-blue-700 bg-blue-50/80 hover:bg-blue-100':
+                                    val === 'D',
+                                  'font-bold text-indigo-100 bg-indigo-800 hover:bg-indigo-700':
+                                    val === 'N',
+                                  'font-bold text-emerald-700 bg-emerald-50/80 hover:bg-emerald-100':
+                                    val === 'M',
+                                  'font-bold text-orange-700 bg-orange-50/80 hover:bg-orange-100':
+                                    val === 'T',
+                                  'text-red-400 font-bold bg-red-50/80 hover:bg-red-100':
+                                    isTO && !isPendingTO,
+                                  'text-amber-500 font-bold bg-amber-50/80 hover:bg-amber-100':
+                                    isPendingTO,
                                 },
                               )}
                             >

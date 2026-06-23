@@ -194,7 +194,16 @@ export function ShiftCalendar({
                           </Badge>
                           <Badge
                             variant="outline"
-                            className="text-[9px] px-1 h-3 font-normal text-primary bg-primary/5 border-primary/20"
+                            className={cn(
+                              'text-[9px] px-1 h-3 font-normal',
+                              s.start_time.includes('19:00:00')
+                                ? 'text-indigo-100 bg-indigo-800 border-indigo-900'
+                                : s.start_time.includes('13:00:00')
+                                  ? 'text-orange-700 bg-orange-50 border-orange-200'
+                                  : s.end_time.includes('13:00:00')
+                                    ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                                    : 'text-blue-700 bg-blue-50 border-blue-200',
+                            )}
                           >
                             {shiftType}
                           </Badge>
