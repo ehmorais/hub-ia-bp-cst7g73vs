@@ -38,6 +38,7 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { useToast } from '@/components/ui/use-toast'
 import pb from '@/lib/pocketbase/client'
+import { useRealtime } from '@/hooks/use-realtime'
 
 type ViewMode = 'month' | 'week' | 'day'
 
@@ -60,6 +61,17 @@ export function ShiftCalendar({
   const [sectors, setSectors] = useState<any[]>([])
   const [selectedSectorId, setSelectedSectorId] = useState<string>('')
   const { toast } = useToast()
+  const [shiftRules, setShiftRules] = useState<any[]>([])
+
+  const loadRules = () => {
+    pb.collection('shift_rules').getFullList().then(setShiftRules).catch(console.error)
+  }
+
+  useEffect(() => {
+    loadRules()
+  }, [])
+
+  useRealtime('shift_rules', loadRules)
 
   useEffect(() => {
     if (sectors.length > 0 && !selectedSectorId) {
@@ -74,12 +86,26 @@ export function ShiftCalendar({
     )
   }, [shifts, selectedSectorId])
 
+  const days = useMemo(() => {
+    if (view === 'day') return [currentDate]
+    if (view === 'week') {
+      const start = startOfWeek(currentDate, { weekStartsOn: 0 }) // Sunday
+      const end = endOfWeek(currentDate, { weekStartsOn: 0 })
+      return eachDayOfInterval({ start, end })
+    }
+    const start = startOfMonth(currentDate)
+    const end = endOfMonth(currentDate)
+    return eachDayOfInterval({ start, end })
+  }, [currentDate, view])
+
   const alerts = useMemo(() => {
     const newAlerts: { type: 'error' | 'warning' | 'info'; message: string; date?: Date }[] = []
 
     if (!selectedSectorId) return newAlerts
     const sector = sectors.find((s) => s.id === selectedSectorId)
     if (!sector) return newAlerts
+
+    const sectorRules = shiftRules.filter((r) => r.department === sector.department)
 
     // Compute staffing alerts for visible days
     days.forEach((day) => {
@@ -101,6 +127,15 @@ export function ShiftCalendar({
           date: day,
         })
       }
+
+      const minStaffRule = sectorRules.find((r) => r.rule_type === 'min_staff')
+      if (minStaffRule && count < minStaffRule.value) {
+        newAlerts.push({
+          type: 'error',
+          message: `Dia ${format(day, 'dd/MM')}: Efetivo abaixo da regra do departamento (${count}/${minStaffRule.value})`,
+          date: day,
+        })
+      }
     })
 
     // Compute user specific alerts (rest hours, overlaps) for users in this sector
@@ -111,55 +146,88 @@ export function ShiftCalendar({
         .filter((s) => s.user === userId)
         .sort((a, b) => a.start_time.localeCompare(b.start_time))
       const contract = contracts.find((c) => c.user === userId)
-      const restHours = contract?.expand?.shift_type?.rest_hours || 11
+      const baseRestHours = contract?.expand?.shift_type?.rest_hours || 11
+      const minRestRule = sectorRules.find((r) => r.rule_type === 'min_rest_hours')
+      const restHours = minRestRule ? minRestRule.value : baseRestHours
+
+      const maxHoursRule = sectorRules.find((r) => r.rule_type === 'max_hours')
+      const maxConsecutiveRule = sectorRules.find((r) => r.rule_type === 'max_consecutive')
+
       const userName = userShifts[0]?.expand?.user?.name || 'Colaborador'
 
-      for (let i = 0; i < userShifts.length - 1; i++) {
+      let consecutiveDays = 0
+      let previousShiftDate: Date | null = null
+      let totalHoursInPeriod = 0
+
+      for (let i = 0; i < userShifts.length; i++) {
         const currentShift = userShifts[i]
-        const nextShift = userShifts[i + 1]
-
-        const involvesSelectedSector =
-          currentShift.sector === selectedSectorId || nextShift.sector === selectedSectorId
-        if (!involvesSelectedSector) continue
-
+        const currentStart = new Date(currentShift.start_time)
         const currentEnd = new Date(currentShift.end_time)
-        const nextStart = new Date(nextShift.start_time)
+        const shiftDuration = (currentEnd.getTime() - currentStart.getTime()) / (1000 * 60 * 60)
 
-        if (nextStart < currentEnd) {
-          newAlerts.push({
-            type: 'error',
-            message: `${userName}: Conflito de horários no dia ${format(currentEnd, 'dd/MM')}`,
-          })
-        } else {
-          const gap = (nextStart.getTime() - currentEnd.getTime()) / (1000 * 60 * 60)
-          if (gap < restHours) {
+        totalHoursInPeriod += shiftDuration
+
+        if (previousShiftDate && isSameDay(currentStart, addDays(previousShiftDate, 1))) {
+          consecutiveDays++
+        } else if (previousShiftDate && !isSameDay(currentStart, previousShiftDate)) {
+          consecutiveDays = 1
+        } else if (!previousShiftDate) {
+          consecutiveDays = 1
+        }
+        previousShiftDate = currentStart
+
+        if (maxConsecutiveRule && consecutiveDays > maxConsecutiveRule.value) {
+          const involvesSelectedSector = currentShift.sector === selectedSectorId
+          if (
+            involvesSelectedSector &&
+            !newAlerts.some((a) => a.message.includes(`${userName}: Excedeu dias consecutivos`))
+          ) {
             newAlerts.push({
-              type: 'warning',
-              message: `${userName}: Descanso de ${Math.floor(gap)}h (mínimo ${restHours}h) entre ${format(currentEnd, 'dd/MM')} e ${format(nextStart, 'dd/MM')}`,
+              type: 'error',
+              message: `${userName}: Excedeu dias consecutivos (${consecutiveDays} > ${maxConsecutiveRule.value})`,
             })
           }
         }
+
+        if (i < userShifts.length - 1) {
+          const nextShift = userShifts[i + 1]
+          const involvesSelectedSector =
+            currentShift.sector === selectedSectorId || nextShift.sector === selectedSectorId
+          if (!involvesSelectedSector) continue
+
+          const nextStart = new Date(nextShift.start_time)
+
+          if (nextStart < currentEnd) {
+            newAlerts.push({
+              type: 'error',
+              message: `${userName}: Conflito de horários no dia ${format(currentEnd, 'dd/MM')}`,
+            })
+          } else {
+            const gap = (nextStart.getTime() - currentEnd.getTime()) / (1000 * 60 * 60)
+            if (gap < restHours) {
+              newAlerts.push({
+                type: 'warning',
+                message: `${userName}: Descanso de ${Math.floor(gap)}h (mínimo ${restHours}h) entre ${format(currentEnd, 'dd/MM')} e ${format(nextStart, 'dd/MM')}`,
+              })
+            }
+          }
+        }
+      }
+
+      if (maxHoursRule && totalHoursInPeriod > maxHoursRule.value) {
+        newAlerts.push({
+          type: 'warning',
+          message: `${userName}: Total de horas excede o limite do período (${Math.floor(totalHoursInPeriod)}h > ${maxHoursRule.value}h)`,
+        })
       }
     })
 
     return newAlerts
-  }, [visibleShifts, shifts, days, sectors, selectedSectorId, contracts])
+  }, [visibleShifts, shifts, days, sectors, selectedSectorId, contracts, shiftRules])
 
   useEffect(() => {
     pb.collection('hospital_sectors').getFullList().then(setSectors).catch(console.error)
   }, [])
-
-  const days = useMemo(() => {
-    if (view === 'day') return [currentDate]
-    if (view === 'week') {
-      const start = startOfWeek(currentDate, { weekStartsOn: 0 }) // Sunday
-      const end = endOfWeek(currentDate, { weekStartsOn: 0 })
-      return eachDayOfInterval({ start, end })
-    }
-    const start = startOfMonth(currentDate)
-    const end = endOfMonth(currentDate)
-    return eachDayOfInterval({ start, end })
-  }, [currentDate, view])
 
   const next = () => {
     if (view === 'day') setCurrentDate(addDays(currentDate, 1))

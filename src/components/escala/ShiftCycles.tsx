@@ -161,7 +161,7 @@ export function ShiftCycles() {
               <TableHead>Período</TableHead>
               <TableHead>Prazo Folgas</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead className="w-[80px]"></TableHead>
+              <TableHead className="w-[140px]"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -188,8 +188,9 @@ export function ShiftCycles() {
                 </TableCell>
                 <TableCell>
                   <Button
-                    variant="ghost"
-                    size="icon"
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
                     onClick={() => {
                       setEditingCycle(c)
                       setEditFormData({
@@ -202,6 +203,7 @@ export function ShiftCycles() {
                     }}
                   >
                     <Pencil className="h-4 w-4" />
+                    Editar Ciclo
                   </Button>
                 </TableCell>
               </TableRow>
