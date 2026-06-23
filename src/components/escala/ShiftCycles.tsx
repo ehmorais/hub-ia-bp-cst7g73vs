@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import pb from '@/lib/pocketbase/client'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import {
@@ -10,7 +9,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { getShiftCycles, createShiftCycle } from '@/services/escala'
+import { getShiftCycles, createShiftCycle, updateShiftCycle } from '@/services/escala'
 import {
   Dialog,
   DialogContent,
@@ -18,6 +17,9 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
+import { useRealtime } from '@/hooks/use-realtime'
+import { Pencil } from 'lucide-react'
+import { getErrorMessage } from '@/lib/pocketbase/errors'
 import {
   Select,
   SelectContent,
@@ -47,6 +49,9 @@ export function ShiftCycles() {
     status: 'draft',
   })
 
+  const [editingCycle, setEditingCycle] = useState<any>(null)
+  const [editFormData, setEditFormData] = useState<any>(null)
+
   const { toast } = useToast()
 
   const loadData = () => {
@@ -56,6 +61,8 @@ export function ShiftCycles() {
     loadData()
   }, [])
 
+  useRealtime('shift_cycles', loadData)
+
   const handleSubmit = async () => {
     try {
       await createShiftCycle(formData)
@@ -63,7 +70,7 @@ export function ShiftCycles() {
       setIsOpen(false)
       loadData()
     } catch (err: any) {
-      toast({ title: 'Erro', description: err.message, variant: 'destructive' })
+      toast({ title: 'Erro', description: getErrorMessage(err), variant: 'destructive' })
     }
   }
 
@@ -154,6 +161,7 @@ export function ShiftCycles() {
               <TableHead>Período</TableHead>
               <TableHead>Prazo Folgas</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead className="w-[80px]"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -178,11 +186,126 @@ export function ShiftCycles() {
                     {c.status.toUpperCase()}
                   </Badge>
                 </TableCell>
+                <TableCell>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => {
+                      setEditingCycle(c)
+                      setEditFormData({
+                        name: c.name,
+                        start_date: c.start_date.split(' ')[0],
+                        end_date: c.end_date.split(' ')[0],
+                        request_deadline: c.request_deadline.split(' ')[0],
+                        status: c.status,
+                      })
+                    }}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
       </Card>
+
+      <Dialog open={!!editingCycle} onOpenChange={(open) => !open && setEditingCycle(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar Ciclo</DialogTitle>
+          </DialogHeader>
+          {editFormData && (
+            <div className="space-y-4 pt-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Nome</label>
+                <Input
+                  value={editFormData.name}
+                  onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Início</label>
+                  <Input
+                    type="date"
+                    value={editFormData.start_date}
+                    onChange={(e) =>
+                      setEditFormData({ ...editFormData, start_date: e.target.value })
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Fim</label>
+                  <Input
+                    type="date"
+                    value={editFormData.end_date}
+                    onChange={(e) => setEditFormData({ ...editFormData, end_date: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Prazo Folgas</label>
+                <Input
+                  type="date"
+                  value={editFormData.request_deadline}
+                  onChange={(e) =>
+                    setEditFormData({ ...editFormData, request_deadline: e.target.value })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Status</label>
+                <Select
+                  value={editFormData.status}
+                  onValueChange={(v) => setEditFormData({ ...editFormData, status: v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="draft">Rascunho</SelectItem>
+                    <SelectItem value="active">Ativo</SelectItem>
+                    <SelectItem value="closed">Fechado</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button
+                className="w-full"
+                onClick={async () => {
+                  try {
+                    const start = new Date(editFormData.start_date + 'T00:00:00')
+                    const end = new Date(editFormData.end_date + 'T23:59:59')
+
+                    if (end < start) {
+                      throw new Error('A data de fim não pode ser anterior à data de início.')
+                    }
+
+                    await updateShiftCycle(editingCycle.id, {
+                      name: editFormData.name,
+                      start_date: editFormData.start_date + ' 00:00:00.000Z',
+                      end_date: editFormData.end_date + ' 23:59:59.000Z',
+                      request_deadline: editFormData.request_deadline + ' 23:59:59.000Z',
+                      status: editFormData.status,
+                    })
+                    toast({ title: 'Sucesso', description: 'Ciclo atualizado com sucesso' })
+                    setEditingCycle(null)
+                    loadData()
+                  } catch (err: any) {
+                    toast({
+                      title: 'Erro',
+                      description: getErrorMessage(err),
+                      variant: 'destructive',
+                    })
+                  }
+                }}
+              >
+                Salvar Alterações
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
