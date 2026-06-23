@@ -27,6 +27,8 @@ import { AutoGenerate } from './escala/AutoGenerate'
 import { ScalePlanner } from './escala/ScalePlanner'
 import { DepartmentStaffList } from './escala/DepartmentStaffList'
 import { cn } from '@/lib/utils'
+import { Link } from 'react-router-dom'
+import { Button } from '@/components/ui/button'
 
 export interface EscalasManagementProps {
   departmentId?: string
@@ -64,11 +66,21 @@ export function EscalasManagement({ departmentId, projectId }: EscalasManagement
 
   return (
     <div className="flex flex-col space-y-6 animate-fade-in">
-      <div className="mb-2">
-        <h2 className="text-xl font-semibold flex items-center gap-2">Gestão Central de Escalas</h2>
-        <p className="text-muted-foreground">
-          Administração unificada de ciclos, setores, colaboradores e geração automática com IA.
-        </p>
+      <div className="mb-2 flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-semibold flex items-center gap-2">
+            Gestão Central de Escalas
+          </h2>
+          <p className="text-muted-foreground">
+            Administração unificada de ciclos, setores, colaboradores e geração automática com IA.
+          </p>
+        </div>
+        <Button asChild variant="outline" className="shrink-0 bg-white shadow-sm border-slate-200">
+          <Link to="/schedules/drafts">
+            <FileText className="h-4 w-4 mr-2" />
+            Gerenciar Rascunhos
+          </Link>
+        </Button>
       </div>
 
       <Card className="relative overflow-hidden shadow-sm">
