@@ -9,7 +9,12 @@ import {
 } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/use-toast'
-import { getShiftCycles, generateShifts, getShifts, getStaffContracts } from '@/services/escala'
+import {
+  getShiftCycles,
+  generateDraftShifts,
+  getStaffContracts,
+  getTimeoffRequests,
+} from '@/services/escala'
 import { useRealtime } from '@/hooks/use-realtime'
 import {
   Wand2,
@@ -19,6 +24,9 @@ import {
   XCircle,
   Loader2,
   Info,
+  Send,
+  Save,
+  MessageSquare,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -40,6 +48,8 @@ import {
 import pb from '@/lib/pocketbase/client'
 import { cn } from '@/lib/utils'
 import { ShiftCalendar } from './ShiftCalendar'
+import { Input } from '@/components/ui/input'
+import { ScrollArea } from '@/components/ui/scroll-area'
 
 const formatDateSafely = (dateStr: string, fmt: string) => {
   try {
@@ -157,10 +167,13 @@ function AutoGenerateInner({
   const [cycles, setCycles] = useState<any[]>([])
   const [selectedCycle, setSelectedCycle] = useState<string>('')
   const [sectors, setSectors] = useState<any[]>([])
-  const [selectedSector, setSelectedSector] = useState<string>('all')
+  const [selectedSector, setSelectedSector] = useState<string>('')
+
   const [loading, setLoading] = useState(false)
-  const [shifts, setShifts] = useState<any[]>([])
+  const [saving, setSaving] = useState(false)
   const [contracts, setContracts] = useState<any[]>([])
+  const [usersList, setUsersList] = useState<any[]>([])
+  const [timeoffsList, setTimeoffsList] = useState<any[]>([])
 
   const [projectDeps, setProjectDeps] = useState<string[]>([])
   const [projectMembers, setProjectMembers] = useState<string[]>([])
@@ -169,18 +182,28 @@ function AutoGenerateInner({
   const [isValidating, setIsValidating] = useState(false)
   const [showPendencyModal, setShowPendencyModal] = useState(false)
 
+  const [draftShifts, setDraftShifts] = useState<any[]>([])
+  const [rawDraft, setRawDraft] = useState<any[]>([])
+  const [refinementPrompt, setRefinementPrompt] = useState('')
+  const [isDraftMode, setIsDraftMode] = useState(false)
+  const [draftIteration, setDraftIteration] = useState(1)
+
   const { toast } = useToast()
 
   const loadData = async () => {
     try {
-      const c = await getShiftCycles()
+      const [c, conts, to] = await Promise.all([
+        getShiftCycles(),
+        getStaffContracts(),
+        getTimeoffRequests(),
+      ])
       setCycles(c)
       if (!selectedCycle && c.length > 0) {
-        const defaultCycle = c.find((x: any) => x.status === 'active')
+        const defaultCycle = c.find((x: any) => x.status === 'active') || c[0]
         if (defaultCycle) setSelectedCycle(defaultCycle.id)
       }
-      const conts = await getStaffContracts()
       setContracts(conts)
+      setTimeoffsList(to)
     } catch (err) {
       console.error('Failed to load cycles or contracts:', err)
     }
@@ -195,46 +218,16 @@ function AutoGenerateInner({
       const sectorFilter = projectDeps.map((d) => `department="${d}"`).join(' || ')
       pb.collection('hospital_sectors')
         .getFullList({ filter: sectorFilter, sort: 'name' })
-        .then(setSectors)
+        .then((res) => {
+          setSectors(res)
+          if (res.length > 0 && !selectedSector) setSelectedSector(res[0].id)
+        })
         .catch(console.error)
     }
   }, [projectDeps])
 
-  useEffect(() => {
-    if (selectedCycle) {
-      getShifts(selectedCycle)
-        .then((res) => {
-          if (selectedSector && selectedSector !== 'all') {
-            setShifts(res.filter((s) => s.sector === selectedSector))
-          } else {
-            setShifts(res)
-          }
-        })
-        .catch(console.error)
-    }
-  }, [selectedCycle, selectedSector])
-
   useRealtime('shift_cycles', loadData)
-  useRealtime('hospital_sectors', validate)
-  useRealtime('staff_contracts', () => {
-    loadData()
-    validate()
-  })
-  useRealtime('shift_rules', validate)
-  useRealtime('users', validate)
-  useRealtime('shifts', () => {
-    if (selectedCycle) {
-      getShifts(selectedCycle)
-        .then((res) => {
-          if (selectedSector && selectedSector !== 'all') {
-            setShifts(res.filter((s) => s.sector === selectedSector))
-          } else {
-            setShifts(res)
-          }
-        })
-        .catch(console.error)
-    }
-  })
+  useRealtime('staff_contracts', loadData)
 
   useEffect(() => {
     if (projectId) {
@@ -251,7 +244,10 @@ function AutoGenerateInner({
   }, [projectId, departmentId])
 
   const validate = useCallback(async () => {
-    if (!selectedCycle || projectDeps.length === 0) return
+    if (!selectedCycle || !selectedSector || projectDeps.length === 0) {
+      setIsReady(false)
+      return
+    }
     setIsValidating(true)
     setIsReady(false)
     const checks: ValidationCheck[] = []
@@ -273,51 +269,38 @@ function AutoGenerateInner({
       }
       checks.push({
         id: 'cycle',
-        label: 'Ciclos',
+        label: 'Ciclo Vigente',
         status: cycleStatus,
         message: cycleStatus === 'error' ? 'Ciclo inválido' : 'Ciclo configurado',
         details: cycleDetails,
       })
 
-      // Sectors
-      let sectorFilter = projectDeps.map((d) => `department="${d}"`).join(' || ')
-      const sectorsList = sectorFilter
-        ? await pb.collection('hospital_sectors').getFullList({ filter: sectorFilter })
-        : []
-
+      // Sector
+      const sector = sectors.find((s) => s.id === selectedSector)
       const sectorDetails = []
-      let sectorStatus: 'success' | 'warning' | 'error' = 'success'
-      if (sectorsList.length === 0) {
+      let sectorStatus: 'success' | 'error' = 'success'
+      if (!sector) {
         sectorStatus = 'error'
-        sectorDetails.push('Nenhum setor encontrado para os departamentos do projeto.')
+        sectorDetails.push('Nenhum setor selecionado.')
       } else {
-        const invalidSectors = sectorsList.filter((s) => !s.min_staffing || !s.ideal_staffing)
-        if (invalidSectors.length > 0) {
+        if (!sector.min_staffing || !sector.ideal_staffing) {
           sectorStatus = 'error'
-          invalidSectors.forEach((s) =>
-            sectorDetails.push(`Setor "${s.name}" está sem dimensionamento mínimo/ideal.`),
-          )
+          sectorDetails.push(`Setor "${sector.name}" está sem dimensionamento mínimo/ideal.`)
         } else {
-          sectorDetails.push(`${sectorsList.length} setores configurados corretamente.`)
+          sectorDetails.push(`Setor configurado corretamente.`)
         }
       }
       checks.push({
         id: 'sectors',
-        label: 'Setores',
+        label: 'Configuração do Setor',
         status: sectorStatus,
-        message:
-          sectorStatus === 'error'
-            ? 'Setores ausentes'
-            : sectorStatus === 'warning'
-              ? 'Configuração incompleta'
-              : 'Configurados',
+        message: sectorStatus === 'error' ? 'Configuração de Setor Ausente' : 'Configurado',
         details: sectorDetails,
       })
 
       // Staff
       const sfParts = []
-      if (sectorsList.length > 0)
-        sfParts.push(`(${sectorsList.map((s) => `default_sector="${s.id}"`).join(' || ')})`)
+      if (sector) sfParts.push(`default_sector="${sector.id}"`)
       if (projectMembers.length > 0)
         sfParts.push(`(${projectMembers.map((m) => `id="${m}"`).join(' || ')})`)
       const staffFilter = sfParts.join(' || ')
@@ -329,34 +312,29 @@ function AutoGenerateInner({
           expand: 'staff_role,staff_profile',
         })
       }
+      setUsersList(users)
 
       const staffDetails = []
-      let staffStatus: 'success' | 'warning' | 'error' = 'success'
+      let staffStatus: 'success' | 'error' = 'success'
 
       if (users.length === 0) {
         staffStatus = 'error'
-        staffDetails.push('Nenhum colaborador associado aos setores ou ao projeto.')
+        staffDetails.push('Nenhum colaborador associado ao setor ou ao projeto.')
       } else {
-        const usersWithoutProfile = users.filter((u) => !u.staff_profile)
         const usersWithoutRole = users.filter((u) => !u.staff_role)
 
-        if (usersWithoutProfile.length > 0 || usersWithoutRole.length > 0) {
+        if (usersWithoutRole.length > 0) {
           staffStatus = 'error'
-          usersWithoutProfile.forEach((u) =>
-            staffDetails.push(
-              `Colaborador(a) ${u.name || u.email} está sem perfil de escala (staff_profile).`,
-            ),
-          )
           usersWithoutRole.forEach((u) =>
             staffDetails.push(`Colaborador(a) ${u.name || u.email} está sem cargo (staff_role).`),
           )
         } else {
-          staffDetails.push(`Todos os ${users.length} colaboradores possuem cargo e perfil.`)
+          staffDetails.push(`Todos os ${users.length} colaboradores possuem cargo.`)
         }
       }
       checks.push({
         id: 'staff',
-        label: 'Colaboradores',
+        label: 'Colaboradores Ativos',
         status: staffStatus,
         message: staffStatus === 'error' ? 'Dados incompletos ou ausentes' : 'Configurados',
         details: staffDetails,
@@ -364,12 +342,10 @@ function AutoGenerateInner({
 
       // Contracts
       const contractDetails = []
-      let contractStatus: 'success' | 'warning' | 'error' = 'success'
+      let contractStatus: 'success' | 'error' = 'success'
       if (users.length > 0) {
         const userIds = users.map((u) => u.id)
-        const contractsList = await pb.collection('staff_contracts').getFullList({
-          filter: userIds.map((id) => `user="${id}"`).join(' || '),
-        })
+        const contractsList = contracts.filter((c) => userIds.includes(c.user))
         const usersWithoutContract = users.filter(
           (u) => !contractsList.some((c) => c.user === u.id),
         )
@@ -399,70 +375,10 @@ function AutoGenerateInner({
       }
       checks.push({
         id: 'contracts',
-        label: 'Contratos',
+        label: 'Contratos e Carga Horária',
         status: contractStatus,
         message: contractStatus === 'error' ? 'Contratos pendentes' : 'Configurados',
         details: contractDetails,
-      })
-
-      // Rules
-      let rulesFilter = projectDeps.map((d) => `department="${d}"`).join(' || ')
-      const rules = rulesFilter
-        ? await pb.collection('shift_rules').getFullList({ filter: rulesFilter })
-        : []
-      const rulesDetails = []
-      let rulesStatus: 'success' | 'warning' | 'error' = 'success'
-
-      const usersWithRules = users.filter((u) => {
-        const hasPersonalRules = u.assigned_rules && u.assigned_rules.length > 0
-        const hasProfileRules =
-          u.expand?.staff_profile?.rules && u.expand.staff_profile.rules.length > 0
-        return hasPersonalRules || hasProfileRules
-      })
-
-      if (rules.length === 0 && usersWithRules.length === 0) {
-        rulesStatus = 'error'
-        rulesDetails.push(
-          'Nenhuma regra de escala definida (nem no departamento, nem nos colaboradores/perfis). É obrigatório ter regras.',
-        )
-      } else {
-        const hasMinRest = rules.some((r) => r.rule_type === 'min_rest_hours')
-        const hasMaxHours = rules.some((r) => r.rule_type === 'max_hours')
-
-        if (!hasMinRest) {
-          rulesDetails.push(
-            'Aviso: Regra de descanso mínimo (min_rest_hours) não está definida no departamento.',
-          )
-          rulesStatus = 'warning'
-        }
-        if (!hasMaxHours) {
-          rulesDetails.push(
-            'Aviso: Regra de máximo de horas (max_hours) não está definida no departamento.',
-          )
-          rulesStatus = 'warning'
-        }
-
-        if (rulesStatus === 'success') {
-          rulesDetails.push(`${rules.length} regras ativas no departamento.`)
-        }
-        if (usersWithRules.length > 0) {
-          rulesDetails.push(
-            `${usersWithRules.length} colaboradores possuem regras específicas (pessoais ou do perfil).`,
-          )
-        }
-      }
-
-      checks.push({
-        id: 'rules',
-        label: 'Regras de Escala',
-        status: rulesStatus,
-        message:
-          rulesStatus === 'error'
-            ? 'Regras Ausentes'
-            : rulesStatus === 'warning'
-              ? 'Atenção às regras'
-              : 'Configuradas',
-        details: rulesDetails,
       })
 
       setValidations(checks)
@@ -477,7 +393,16 @@ function AutoGenerateInner({
     } finally {
       setIsValidating(false)
     }
-  }, [selectedCycle, projectDeps, projectMembers, cycles, toast])
+  }, [
+    selectedCycle,
+    selectedSector,
+    projectDeps,
+    projectMembers,
+    cycles,
+    sectors,
+    contracts,
+    toast,
+  ])
 
   useEffect(() => {
     validate()
@@ -489,112 +414,149 @@ function AutoGenerateInner({
     }
   }, [showPendencyModal, validate])
 
-  const handleGenerate = async () => {
-    if (!selectedCycle || projectDeps.length === 0) return
+  const mapDraftToShifts = (draftArray: any[]) => {
+    return draftArray.map((d: any, index: number) => {
+      const contract = contracts.find((c) => c.user === d.user_id)
+      const wh = contract?.expand?.shift_type?.work_hours || 12
+
+      let st = '07:00:00'
+      let duration = wh
+      if (d.shift === 'D') {
+        st = '07:00:00'
+        duration = wh || 12
+      } else if (d.shift === 'N') {
+        st = '19:00:00'
+        duration = wh || 12
+      } else if (d.shift === 'M') {
+        st = '07:00:00'
+        duration = wh || 6
+      } else if (d.shift === 'T') {
+        st = '13:00:00'
+        duration = wh || 6
+      }
+
+      const startDate = new Date(`${d.date}T${st}.000Z`)
+      const endDate = new Date(startDate.getTime() + duration * 3600000)
+
+      return {
+        id: `draft_${index}_${Math.random().toString(36).substring(2, 9)}`,
+        user: d.user_id,
+        sector: selectedSector,
+        cycle: selectedCycle,
+        start_time: startDate.toISOString().replace('T', ' ').substring(0, 23) + 'Z',
+        end_time: endDate.toISOString().replace('T', ' ').substring(0, 23) + 'Z',
+        expand: {
+          user: usersList.find((u) => u.id === d.user_id),
+          sector: sectors.find((s) => s.id === selectedSector),
+        },
+      }
+    })
+  }
+
+  const handleGenerateDraft = async (isRefinement = false) => {
+    if (!selectedCycle || !selectedSector || projectDeps.length === 0) return
     setLoading(true)
 
     toast({
-      title: 'Iniciando Geração',
+      title: isRefinement ? 'Refinando Rascunho' : 'Iniciando Geração',
       description: 'A IA está analisando os parâmetros para montar a escala...',
     })
 
-    if (!projectId && !departmentId) {
-      toast({
-        title: 'Contexto Inválido',
-        description: 'É necessário estar no contexto de um projeto para gerar a escala.',
-        variant: 'destructive',
-      })
-      setLoading(false)
-      return
-    }
+    const cycle = cycles.find((c) => c.id === selectedCycle)
+    const sector = sectors.find((s) => s.id === selectedSector)
 
-    const staffCheck = validations.find((v) => v.id === 'staff')
-    if (staffCheck?.status === 'error') {
-      toast({
-        title: 'Sem Colaboradores Operacionais',
-        description:
-          'É necessário ter pelo menos um colaborador (Operador) válido associado ao projeto para gerar a escala.',
-        variant: 'destructive',
-      })
-      setLoading(false)
-      return
+    const context = {
+      cycle: { start_date: cycle?.start_date, end_date: cycle?.end_date },
+      sector: {
+        name: sector?.name,
+        min_staffing: sector?.min_staffing,
+        ideal_staffing: sector?.ideal_staffing,
+      },
+      users: usersList.map((u) => {
+        const contract = contracts.find((c) => c.user === u.id)
+        const timeoffs = timeoffsList.filter((t) => t.user === u.id && t.cycle === selectedCycle)
+        return {
+          id: u.id,
+          name: u.name,
+          role: u.expand?.staff_role?.name,
+          contract_hours: contract?.monthly_hour_limit,
+          shift_type: contract?.expand?.shift_type?.name,
+          work_hours: contract?.expand?.shift_type?.work_hours,
+          timeoffs: timeoffs.map((t) => t.date.substring(0, 10)),
+        }
+      }),
     }
-
-    const timeoutId = setTimeout(() => {
-      toast({
-        title: 'Ainda processando...',
-        description:
-          'A geração está levando mais tempo que o normal (Still processing, please wait...). Por favor, aguarde...',
-        duration: 10000,
-      })
-    }, 5000)
 
     try {
-      let total = 0
+      const res = await generateDraftShifts(
+        selectedCycle,
+        selectedSector,
+        context,
+        isRefinement ? refinementPrompt : undefined,
+        isRefinement ? rawDraft : undefined,
+      )
 
-      const rulesPrompt = validations.find((v) => v.id === 'rules')?.details?.join('\n') || ''
-
-      const sectorsToGenerate =
-        selectedSector !== 'all' ? [selectedSector] : sectors.map((s) => s.id)
-
-      if (sectorsToGenerate.length === 0) {
-        throw new Error('Nenhum setor disponível para geração.')
-      }
-
-      const warnings = validations.filter((v) => v.status === 'warning')
-      if (warnings.length > 0) {
-        try {
-          await pb.collection('audit_logs').create({
-            user: pb.authStore.record?.id,
-            action: 'Generate Shifts (with warnings)',
-            department: projectDeps[0] || 'Gestão de Escalas',
-            details: `Geração iniciada com os seguintes avisos: ${warnings.map((w) => w.label).join(', ')}`,
-            token_usage: 0,
-          })
-        } catch {
-          /* intentionally ignored */
+      if (res && res.draft) {
+        setRawDraft(res.draft)
+        const mapped = mapDraftToShifts(res.draft)
+        setDraftShifts(mapped)
+        setIsDraftMode(true)
+        if (isRefinement) {
+          setDraftIteration((p) => p + 1)
+          setRefinementPrompt('')
         }
-      }
-
-      const res = await generateShifts(selectedCycle, sectorsToGenerate, rulesPrompt)
-      if (res && res.count) total += res.count
-
-      toast({
-        title: 'Geração Concluída',
-        description: `Escala gerada com sucesso! (${total} plantões totais)`,
-      })
-      const resShifts = await getShifts(selectedCycle)
-      if (selectedSector && selectedSector !== 'all') {
-        setShifts(resShifts.filter((s) => s.sector === selectedSector))
-      } else {
-        setShifts(resShifts)
+        toast({
+          title: 'Draft Gerado',
+          description: `Versão ${isRefinement ? draftIteration + 1 : 1} gerada com sucesso!`,
+        })
       }
     } catch (err: any) {
-      console.error('Error during AI generation:', err)
+      console.error('Error during AI draft generation:', err)
       const isPBError = err && typeof err === 'object' && 'response' in err
       const respData = isPBError ? err.response : null
-
-      const msg =
-        respData?.error || respData?.message || err.message || 'Falha na geração da escala.'
-      const suggestion =
-        respData?.suggestion || respData?.hint || (respData?.data && respData.data.suggestion)
-
+      const msg = respData?.error || respData?.message || err.message || 'Falha na geração.'
       toast({
-        title: 'Falha na geração de escala',
+        title: 'Falha na geração do draft',
         description: typeof msg === 'string' ? msg : JSON.stringify(msg),
         variant: 'destructive',
       })
+    } finally {
+      setLoading(false)
+    }
+  }
 
-      if (suggestion) {
-        toast({
-          title: 'Análise do Especialista (IA)',
-          description: typeof suggestion === 'string' ? suggestion : JSON.stringify(suggestion),
-          duration: 15000,
+  const handleSaveScale = async () => {
+    if (!draftShifts.length) return
+    setSaving(true)
+    try {
+      // Clear previous shifts for this sector and cycle
+      const existing = await pb
+        .collection('shifts')
+        .getFullList({ filter: `cycle="${selectedCycle}" && sector="${selectedSector}"` })
+      for (const s of existing) await pb.collection('shifts').delete(s.id)
+
+      // Save new shifts
+      for (const ds of draftShifts) {
+        await pb.collection('shifts').create({
+          user: ds.user,
+          sector: ds.sector,
+          cycle: ds.cycle,
+          start_time: ds.start_time,
+          end_time: ds.end_time,
         })
       }
+      toast({
+        title: 'Escala Salva',
+        description: 'Os plantões foram persistidos no banco de dados com sucesso.',
+      })
+      setIsDraftMode(false)
+      setDraftShifts([])
+      setRawDraft([])
+      setDraftIteration(1)
+    } catch (err: any) {
+      toast({ title: 'Erro ao salvar', description: err.message, variant: 'destructive' })
     } finally {
-      clearTimeout(timeoutId)
-      setLoading(false)
+      setSaving(false)
     }
   }
 
@@ -603,23 +565,23 @@ function AutoGenerateInner({
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <Card className="relative overflow-hidden border-primary/20 bg-gradient-to-b from-white to-primary/5 shadow-sm">
-        <div className="absolute top-0 left-0 right-0 h-1 bg-green-700 z-10" />
+      <Card className="relative overflow-hidden border-emerald-900/20 bg-gradient-to-b from-white to-emerald-50/30 shadow-sm">
+        <div className="absolute top-0 left-0 right-0 h-1 bg-emerald-700 z-10" />
         <CardHeader className="pb-4 pt-6">
           <div className="flex items-center gap-2">
-            <Wand2 className="h-5 w-5 text-green-700" />
+            <Wand2 className="h-5 w-5 text-emerald-700" />
             <CardTitle>Geração Inteligente de Escalas</CardTitle>
           </div>
           <CardDescription>
             O motor de IA analisará os contratos, regras, disponibilidade e setorização para gerar
-            uma escala ótima.
+            um rascunho de escala para revisão.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl">
             <div className="space-y-2">
               <label className="text-sm font-medium">Ciclo Alvo</label>
-              <Select value={selectedCycle} onValueChange={setSelectedCycle}>
+              <Select value={selectedCycle} onValueChange={setSelectedCycle} disabled={isDraftMode}>
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione o ciclo..." />
                 </SelectTrigger>
@@ -636,12 +598,15 @@ function AutoGenerateInner({
 
             <div className="space-y-2">
               <label className="text-sm font-medium">Setor Específico</label>
-              <Select value={selectedSector} onValueChange={setSelectedSector}>
+              <Select
+                value={selectedSector}
+                onValueChange={setSelectedSector}
+                disabled={isDraftMode}
+              >
                 <SelectTrigger>
-                  <SelectValue placeholder="Todos os setores..." />
+                  <SelectValue placeholder="Selecione o setor..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Todos os setores</SelectItem>
                   {sectors.map((s) => (
                     <SelectItem key={s.id} value={s.id}>
                       {s.name}
@@ -652,22 +617,22 @@ function AutoGenerateInner({
             </div>
           </div>
 
-          <div className="pt-4 border-t border-primary/10">
+          <div className="pt-4 border-t border-emerald-900/10">
             <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-              Dashboard de Prontidão (Readiness Report)
+              Checklist de Validação
               {isValidating && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
             </h3>
 
-            {!selectedCycle ? (
+            {!selectedCycle || !selectedSector ? (
               <p className="text-sm text-muted-foreground">
-                Selecione um ciclo para validar os parâmetros.
+                Selecione um ciclo e um setor para validar os parâmetros de prontidão da escala.
               </p>
             ) : validations.length === 0 && isValidating ? (
               <p className="text-sm text-muted-foreground flex items-center gap-2">
                 <Loader2 className="h-4 w-4 animate-spin" /> Verificando banco de dados...
               </p>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                 {validations.map((v) => (
                   <CheckItem key={v.id} check={v} />
                 ))}
@@ -676,71 +641,149 @@ function AutoGenerateInner({
           </div>
         </CardContent>
         <CardFooter className="bg-white/50 border-t py-4 flex flex-col items-start gap-4">
-          <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
-            <Button
-              onClick={handleGenerate}
-              disabled={loading || !selectedCycle || isValidating || !isReady}
-              className={cn(
-                'w-full sm:w-auto gap-2 transition-all',
-                isReady && 'bg-green-700 hover:bg-green-800 text-white',
-              )}
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Processando com IA...
-                </>
-              ) : (
-                <>
-                  <Wand2 className="h-4 w-4" />
-                  Gerar Escala Automática
-                </>
-              )}
-            </Button>
-
-            {selectedCycle && hasIssues && (
+          {!isDraftMode ? (
+            <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
               <Button
-                variant={!isReady ? 'destructive' : 'secondary'}
+                onClick={() => handleGenerateDraft(false)}
+                disabled={loading || !selectedCycle || !selectedSector || isValidating || !isReady}
                 className={cn(
-                  'gap-2 w-full sm:w-auto transition-colors',
-                  isReady && 'bg-amber-100 text-amber-700 hover:bg-amber-200',
+                  'w-full sm:w-auto gap-2 transition-all',
+                  isReady && 'bg-emerald-700 hover:bg-emerald-800 text-white',
                 )}
-                onClick={() => setShowPendencyModal(true)}
               >
-                {!isReady ? <AlertCircle className="h-4 w-4" /> : <Info className="h-4 w-4" />}
-                Ver Pendências
+                {loading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Processando com IA...
+                  </>
+                ) : (
+                  <>
+                    <Wand2 className="h-4 w-4" />
+                    Gerar Rascunho Inicial
+                  </>
+                )}
               </Button>
-            )}
-          </div>
-          {!isReady && selectedCycle && (
+
+              {selectedCycle && selectedSector && hasIssues && (
+                <Button
+                  variant={!isReady ? 'destructive' : 'secondary'}
+                  className={cn(
+                    'gap-2 w-full sm:w-auto transition-colors',
+                    isReady && 'bg-amber-100 text-amber-700 hover:bg-amber-200',
+                  )}
+                  onClick={() => setShowPendencyModal(true)}
+                >
+                  {!isReady ? <AlertCircle className="h-4 w-4" /> : <Info className="h-4 w-4" />}
+                  Ver Pendências
+                </Button>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center gap-3 w-full bg-emerald-50 p-3 rounded-lg border border-emerald-200">
+              <Info className="h-5 w-5 text-emerald-600 shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-emerald-800">
+                  Modo Rascunho Ativo (Versão {draftIteration})
+                </p>
+                <p className="text-xs text-emerald-600">
+                  Refine o draft usando a caixa de texto abaixo ou salve se estiver satisfeito.
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setIsDraftMode(false)
+                  setDraftShifts([])
+                  setRawDraft([])
+                  setDraftIteration(1)
+                }}
+                disabled={loading || saving}
+                className="border-emerald-200 text-emerald-700 hover:bg-emerald-100"
+              >
+                Descartar Rascunho
+              </Button>
+            </div>
+          )}
+          {!isReady && selectedCycle && selectedSector && !isDraftMode && (
             <p className="text-xs text-red-500 font-medium">
-              A geração está desabilitada devido a erros de validação nos parâmetros críticos.
-              Clique em Ver Pendências para detalhes.
+              A geração está desabilitada devido a erros de validação nos parâmetros. Clique em "Ver
+              Pendências".
             </p>
           )}
         </CardFooter>
       </Card>
 
-      {shifts.length > 0 && cycleObj && (
-        <Card className="relative overflow-hidden shadow-md border-primary/10">
-          <div className="absolute top-0 left-0 right-0 h-1 bg-green-700 z-10" />
+      {isDraftMode && draftShifts.length > 0 && cycleObj && (
+        <Card className="relative overflow-hidden shadow-md border-emerald-900/10 animate-fade-in-up">
+          <div className="absolute top-0 left-0 right-0 h-1 bg-emerald-600 z-10" />
           <CardHeader className="bg-slate-50 border-b pb-4 pt-6">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <CalendarIcon className="h-5 w-5 text-green-700" />
-                Calendário de Escala Gerada
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <CardTitle className="text-lg flex items-center gap-2 text-slate-800">
+                <CalendarIcon className="h-5 w-5 text-emerald-600" />
+                Rascunho de Escala (Versão {draftIteration})
+                <Badge
+                  variant="outline"
+                  className="bg-amber-100 text-amber-800 border-amber-300 ml-2"
+                >
+                  Não Salvo
+                </Badge>
               </CardTitle>
               <Button
                 size="sm"
-                className="gap-2 text-green-700 bg-green-100 hover:text-green-800 hover:bg-green-200 border border-green-300"
+                onClick={handleSaveScale}
+                disabled={saving || loading}
+                className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white w-full sm:w-auto shadow-sm"
               >
-                <CheckCircle2 className="h-4 w-4" />
-                Aprovar e Publicar Escala
+                {saving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                Salvar Escala Definitiva
               </Button>
             </div>
           </CardHeader>
           <CardContent className="p-0">
-            <ShiftCalendar shifts={shifts} cycle={cycleObj} contracts={contracts} />
+            <ShiftCalendar shifts={draftShifts} cycle={cycleObj} contracts={contracts} />
+
+            <div className="p-5 bg-emerald-50/50 border-t flex flex-col gap-3">
+              <label className="text-sm font-semibold text-emerald-900 flex items-center gap-2">
+                <MessageSquare className="h-4 w-4 text-emerald-600" />
+                Refinamento com IA
+              </label>
+              <p className="text-xs text-emerald-700">
+                Utilize linguagem natural para solicitar ajustes e melhorias na escala atual. A IA
+                considerará este rascunho como base.
+              </p>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Ex: Troque o plantão do João com a Maria no dia 15, ou garanta mais uma folga para Pedro."
+                  value={refinementPrompt}
+                  onChange={(e) => setRefinementPrompt(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey && refinementPrompt.trim()) {
+                      e.preventDefault()
+                      handleGenerateDraft(true)
+                    }
+                  }}
+                  disabled={loading || saving}
+                  className="bg-white border-emerald-200 focus-visible:ring-emerald-500"
+                />
+                <Button
+                  onClick={() => handleGenerateDraft(true)}
+                  disabled={!refinementPrompt.trim() || loading || saving}
+                  className="gap-2 shrink-0 bg-slate-800 hover:bg-slate-900 text-white"
+                >
+                  {loading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4" />
+                  )}
+                  Refinar Draft
+                </Button>
+              </div>
+            </div>
           </CardContent>
         </Card>
       )}
@@ -748,55 +791,68 @@ function AutoGenerateInner({
       <Dialog open={showPendencyModal} onOpenChange={setShowPendencyModal}>
         <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col gap-0 p-0">
           <DialogHeader className="p-6 pb-4 border-b">
-            <DialogTitle className="text-xl">Pendências para Geração de Escala</DialogTitle>
-            <DialogDescription className="mt-2">
-              Verifique os itens abaixo para permitir a geração automática. Resolva as pendências
-              listadas antes de prosseguir.
+            <DialogTitle className="text-xl text-slate-800">Pendências de Validação</DialogTitle>
+            <DialogDescription className="mt-2 text-slate-600">
+              Verifique os itens abaixo para permitir a geração da escala. Resolva os erros críticos
+              antes de prosseguir.
             </DialogDescription>
           </DialogHeader>
-          <div className="flex-1 overflow-y-auto p-6 space-y-6">
-            {isValidating && validations.length === 0 ? (
-              <div className="flex items-center justify-center py-10 gap-3 text-muted-foreground">
-                <Loader2 className="h-6 w-6 animate-spin" />
-                <span>Atualizando dados...</span>
-              </div>
-            ) : (
-              validations.map((v) => (
-                <div key={v.id} className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <CheckItemIcon status={v.status} />
-                    <h4 className="font-semibold text-base text-slate-800 flex items-center gap-2">
-                      {v.label}
-                      {v.status === 'error' && (
-                        <Badge variant="destructive" className="text-[10px] h-5">
-                          Erro Crítico
-                        </Badge>
-                      )}
-                      {v.status === 'warning' && (
-                        <Badge
-                          variant="outline"
-                          className="text-[10px] h-5 bg-amber-50 text-amber-700 border-amber-200"
-                        >
-                          Aviso
-                        </Badge>
-                      )}
-                    </h4>
-                  </div>
-                  {v.details && v.details.length > 0 ? (
-                    <ul className="space-y-1.5 ml-8 border-l-2 border-slate-100 pl-4">
-                      {v.details.map((detail, idx) => (
-                        <li key={idx} className="text-sm text-slate-600">
-                          {detail}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="text-sm text-slate-500 ml-8 italic">Sem detalhes adicionais.</p>
-                  )}
+          <ScrollArea className="flex-1 p-6">
+            <div className="space-y-6">
+              {isValidating && validations.length === 0 ? (
+                <div className="flex items-center justify-center py-10 gap-3 text-muted-foreground">
+                  <Loader2 className="h-6 w-6 animate-spin" />
+                  <span>Verificando dados...</span>
                 </div>
-              ))
-            )}
-          </div>
+              ) : (
+                validations.map((v) => (
+                  <div key={v.id} className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <CheckItemIcon status={v.status} />
+                      <h4 className="font-semibold text-base text-slate-800 flex items-center gap-2">
+                        {v.label}
+                        {v.status === 'error' && (
+                          <Badge
+                            variant="destructive"
+                            className="text-[10px] h-5 px-1.5 font-medium"
+                          >
+                            Erro Crítico
+                          </Badge>
+                        )}
+                        {v.status === 'warning' && (
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] h-5 bg-amber-50 text-amber-700 border-amber-200 px-1.5 font-medium"
+                          >
+                            Aviso
+                          </Badge>
+                        )}
+                        {v.status === 'success' && (
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] h-5 bg-green-50 text-green-700 border-green-200 px-1.5 font-medium"
+                          >
+                            Tudo Certo
+                          </Badge>
+                        )}
+                      </h4>
+                    </div>
+                    {v.details && v.details.length > 0 ? (
+                      <ul className="space-y-1.5 ml-8 border-l-2 border-slate-200 pl-4">
+                        {v.details.map((detail, idx) => (
+                          <li key={idx} className="text-sm text-slate-600">
+                            {detail}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-sm text-slate-500 ml-8 italic">Sem detalhes adicionais.</p>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </ScrollArea>
         </DialogContent>
       </Dialog>
     </div>

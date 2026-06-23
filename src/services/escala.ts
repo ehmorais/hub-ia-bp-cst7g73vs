@@ -75,6 +75,25 @@ export const generateShifts = (cycleId: string, sectorIds: string[], rules: stri
     headers: { 'Content-Type': 'application/json' },
   })
 
+export const generateDraftShifts = (
+  cycleId: string,
+  sectorId: string,
+  context: any,
+  additionalPrompt?: string,
+  currentDraft?: any[],
+) =>
+  pb.send('/backend/v1/escala/draft', {
+    method: 'POST',
+    body: JSON.stringify({
+      cycle_id: cycleId,
+      sector_id: sectorId,
+      context,
+      additional_prompt: additionalPrompt,
+      current_draft: currentDraft,
+    }),
+    headers: { 'Content-Type': 'application/json' },
+  })
+
 // Timeoff Requests
 export const getTimeoffRequests = () =>
   pb.collection('timeoff_requests').getFullList({ expand: 'user,cycle', sort: '-created' })
