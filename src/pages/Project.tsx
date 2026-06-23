@@ -91,7 +91,7 @@ function ProjectContent() {
       </div>
 
       {project.name === 'Gestão de Escalas' ? (
-        <EscalasManagement />
+        <EscalasManagement projectId={id} departmentId={project.department} />
       ) : (
         <div className="p-8 text-center border rounded-lg bg-white shadow-sm flex flex-col items-center justify-center min-h-[300px]">
           <Blocks className="h-12 w-12 text-slate-300 mb-4" />

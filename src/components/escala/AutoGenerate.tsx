@@ -171,6 +171,7 @@ function AutoGenerateInner({
 
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [isSectorsLoading, setIsSectorsLoading] = useState(false)
   const [contracts, setContracts] = useState<any[]>([])
   const [usersList, setUsersList] = useState<any[]>([])
   const [timeoffsList, setTimeoffsList] = useState<any[]>([])
@@ -215,14 +216,18 @@ function AutoGenerateInner({
 
   useEffect(() => {
     if (projectDeps.length > 0) {
+      setIsSectorsLoading(true)
       const sectorFilter = projectDeps.map((d) => `department="${d}"`).join(' || ')
       pb.collection('hospital_sectors')
         .getFullList({ filter: sectorFilter, sort: 'name' })
         .then((res) => {
           setSectors(res)
-          if (res.length > 0 && !selectedSector) setSelectedSector(res[0].id)
+          if (res.length > 0) {
+            setSelectedSector((prev) => prev || res[0].id)
+          }
         })
         .catch(console.error)
+        .finally(() => setIsSectorsLoading(false))
     }
   }, [projectDeps])
 
@@ -259,13 +264,13 @@ function AutoGenerateInner({
       if (cycle && cycle.status === 'active') {
         if (!cycle.start_date || !cycle.end_date) {
           cycleStatus = 'error'
-          cycleDetails.push('O ciclo selecionado possui datas de início e/ou fim inválidas.')
+          cycleDetails.push('⚠️ O ciclo selecionado possui datas de início e/ou fim inválidas.')
         } else {
-          cycleDetails.push(`O ciclo ${cycle.name} é válido para geração.`)
+          cycleDetails.push(`✅ O ciclo ${cycle.name} é válido para geração.`)
         }
       } else {
         cycleStatus = 'error'
-        cycleDetails.push('O ciclo selecionado não está ativo. O status deve ser "ativo".')
+        cycleDetails.push('⚠️ O ciclo selecionado não está ativo. O status deve ser "ativo".')
       }
       checks.push({
         id: 'cycle',
@@ -281,13 +286,13 @@ function AutoGenerateInner({
       let sectorStatus: 'success' | 'error' = 'success'
       if (!sector) {
         sectorStatus = 'error'
-        sectorDetails.push('Nenhum setor selecionado.')
+        sectorDetails.push('⚠️ Nenhum setor selecionado.')
       } else {
         if (!sector.min_staffing || !sector.ideal_staffing) {
           sectorStatus = 'error'
-          sectorDetails.push(`Setor "${sector.name}" está sem dimensionamento mínimo/ideal.`)
+          sectorDetails.push(`⚠️ Setor "${sector.name}" está sem dimensionamento mínimo/ideal.`)
         } else {
-          sectorDetails.push(`Setor configurado corretamente.`)
+          sectorDetails.push(`✅ Setor configurado corretamente.`)
         }
       }
       checks.push({
@@ -322,12 +327,24 @@ function AutoGenerateInner({
         staffDetails.push('Nenhum colaborador associado ao setor selecionado ou ao projeto.')
       } else {
         const usersWithoutRole = users.filter((u) => !u.staff_role)
+        const usersWithoutProfile = users.filter((u) => !u.staff_profile)
         const usersWrongSector = users.filter((u) => u.default_sector !== selectedSector)
 
         if (usersWithoutRole.length > 0) {
           staffStatus = 'error'
           usersWithoutRole.forEach((u) =>
-            staffDetails.push(`Colaborador(a) ${u.name || u.email} está sem cargo (staff_role).`),
+            staffDetails.push(
+              `⚠️ Colaborador(a) ${u.name || u.email} está sem cargo (staff_role) atribuído.`,
+            ),
+          )
+        }
+
+        if (usersWithoutProfile.length > 0) {
+          staffStatus = 'error'
+          usersWithoutProfile.forEach((u) =>
+            staffDetails.push(
+              `⚠️ Colaborador(a) ${u.name || u.email} está sem perfil (staff_profile) configurado.`,
+            ),
           )
         }
 
@@ -335,20 +352,20 @@ function AutoGenerateInner({
           if (staffStatus !== 'error') staffStatus = 'warning'
           usersWrongSector.forEach((u) =>
             staffDetails.push(
-              `Colaborador(a) ${u.name || u.email} não possui este setor como setor padrão.`,
+              `⚠️ Colaborador(a) ${u.name || u.email} não possui este setor como setor padrão.`,
             ),
           )
         }
 
         if (staffStatus === 'success') {
           staffDetails.push(
-            `Todos os ${users.length} colaboradores possuem cargo e pertencem ao setor.`,
+            `✅ Todos os ${users.length} colaboradores possuem cargo e perfil configurados e pertencem ao setor.`,
           )
         }
       }
       checks.push({
         id: 'staff',
-        label: 'Colaboradores Ativos',
+        label: 'Colaboradores (Cargos e Perfis)',
         status: staffStatus,
         message:
           staffStatus === 'error'
@@ -376,23 +393,23 @@ function AutoGenerateInner({
           contractStatus = 'error'
           usersWithoutContract.forEach((u) =>
             contractDetails.push(
-              `Colaborador(a) ${u.name || u.email} não possui contrato cadastrado.`,
+              `⚠️ Colaborador(a) ${u.name || u.email} não possui contrato (staff_contracts) cadastrado.`,
             ),
           )
           invalidContracts.forEach((c) => {
             const u = users.find((x) => x.id === c.user)
             contractDetails.push(
-              `Contrato de ${u?.name || u?.email || 'Desconhecido'} possui dados incompletos (tipo, carga horária ou tipo de turno).`,
+              `⚠️ Contrato de ${u?.name || u?.email || 'Desconhecido'} possui dados incompletos (tipo, carga horária ou tipo de turno).`,
             )
           })
         } else {
           contractDetails.push(
-            `Todos os ${users.length} colaboradores possuem contratos e tipos de turno válidos.`,
+            `✅ Todos os ${users.length} colaboradores possuem contratos válidos cadastrados.`,
           )
         }
       } else {
         contractStatus = 'error'
-        contractDetails.push('Sem colaboradores para validar contratos.')
+        contractDetails.push('⚠️ Sem colaboradores para validar contratos.')
       }
       checks.push({
         id: 'contracts',
@@ -412,11 +429,11 @@ function AutoGenerateInner({
       if (timeoffsInCycle.length === 0) {
         timeoffStatus = 'warning'
         timeoffDetails.push(
-          'Nenhuma solicitação de folga encontrada para os colaboradores neste ciclo.',
+          '⚠️ Nenhuma solicitação de folga encontrada para os colaboradores neste ciclo.',
         )
       } else {
         timeoffDetails.push(
-          `${timeoffsInCycle.length} solicitações de folga cadastradas neste ciclo.`,
+          `✅ ${timeoffsInCycle.length} solicitações de folga cadastradas neste ciclo.`,
         )
       }
 
@@ -648,10 +665,14 @@ function AutoGenerateInner({
               <Select
                 value={selectedSector}
                 onValueChange={setSelectedSector}
-                disabled={isDraftMode}
+                disabled={isDraftMode || isSectorsLoading}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Selecione o setor..." />
+                  <SelectValue
+                    placeholder={
+                      isSectorsLoading ? 'Carregando setores...' : 'Selecione o setor...'
+                    }
+                  />
                 </SelectTrigger>
                 <SelectContent>
                   {sectors.map((s) => (
