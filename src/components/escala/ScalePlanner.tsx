@@ -26,7 +26,9 @@ import {
   CalendarOff,
   Info,
   Download,
+  AlertTriangle,
 } from 'lucide-react'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { format, eachDayOfInterval, addDays, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import pb from '@/lib/pocketbase/client'
@@ -504,8 +506,8 @@ export function ScalePlanner({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-        <div className="lg:col-span-3 border rounded-xl bg-white shadow-sm overflow-hidden flex flex-col">
+      <div className="flex flex-col gap-4">
+        <div className="border rounded-xl bg-white shadow-sm overflow-hidden flex flex-col">
           <ScrollArea className="w-full max-w-[calc(100vw-2rem)]">
             <table className="w-full text-sm border-collapse">
               <thead>
@@ -525,22 +527,6 @@ export function ScalePlanner({
                           {format(day, 'eee', { locale: ptBR })}
                         </div>
                         <div className="text-xs">{format(day, 'dd')}</div>
-                        {dc && (
-                          <div
-                            className="flex justify-center mt-1"
-                            title={`${dc.count} agendados (Min: ${selectedSector?.min_staffing}, Ideal: ${selectedSector?.ideal_staffing})`}
-                          >
-                            {dc.status === 'understaffed' && (
-                              <div className="w-2 h-2 rounded-full bg-red-500 shadow-sm" />
-                            )}
-                            {dc.status === 'suboptimal' && (
-                              <div className="w-2 h-2 rounded-full bg-amber-400 shadow-sm" />
-                            )}
-                            {dc.status === 'optimal' && (
-                              <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-sm" />
-                            )}
-                          </div>
-                        )}
                       </th>
                     )
                   })}
@@ -643,31 +629,50 @@ export function ScalePlanner({
           </ScrollArea>
         </div>
 
-        <div className="lg:col-span-1 flex flex-col gap-4">
-          <Card className="border-amber-200 bg-amber-50/30 flex-1">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-semibold flex items-center gap-2 text-amber-800">
-                <AlertCircle className="h-4 w-4" />
-                Validação
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {validations.length === 0 ? (
-                <div className="flex flex-col items-center justify-center p-4 text-green-700 gap-2">
-                  <CheckCircle2 className="h-8 w-8" />
-                  <p className="text-xs font-medium">Escala validada.</p>
-                </div>
-              ) : (
-                <ul className="space-y-2">
-                  {validations.map((v, i) => (
-                    <li key={i} className="text-xs text-amber-800 bg-amber-100/50 p-2 rounded">
-                      • {v}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </CardContent>
-          </Card>
+        {/* Alert Panel Below Calendar */}
+        <div className="border rounded-lg bg-slate-50/80 p-4 shadow-sm mt-2">
+          <h3 className="font-semibold mb-4 text-slate-800 flex items-center gap-2">
+            <AlertCircle className="h-5 w-5 text-slate-500" />
+            Alertas e Validações
+          </h3>
+
+          {validations.length === 0 ? (
+            <div className="text-sm text-slate-500 italic flex items-center gap-2 p-4 bg-white rounded-md border border-dashed">
+              <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+              Nenhum alerta para o setor selecionado. Escala validada.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {validations.map((v, i) => {
+                const isError =
+                  v.toLowerCase().includes('falta') ||
+                  v.toLowerCase().includes('abaixo do efetivo mínimo') ||
+                  v.toLowerCase().includes('< mínimo') ||
+                  v.toLowerCase().includes('excede') ||
+                  v.toLowerCase().includes('sem descanso')
+                return (
+                  <Alert
+                    key={i}
+                    variant={isError ? 'destructive' : 'default'}
+                    className={cn(
+                      !isError && 'border-amber-500/50 text-amber-800 bg-amber-50/50',
+                      'bg-white',
+                    )}
+                  >
+                    {isError ? (
+                      <AlertCircle className="h-4 w-4" />
+                    ) : (
+                      <AlertTriangle className="h-4 w-4 text-amber-500" />
+                    )}
+                    <AlertTitle className="text-sm font-medium">
+                      {isError ? 'Violação de Regra' : 'Aviso de Dimensionamento'}
+                    </AlertTitle>
+                    <AlertDescription className="text-xs mt-1">{v}</AlertDescription>
+                  </Alert>
+                )
+              })}
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -15,8 +15,17 @@ import {
   differenceInDays,
 } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from 'lucide-react'
+import {
+  ChevronLeft,
+  ChevronRight,
+  Calendar as CalendarIcon,
+  AlertCircle,
+  AlertTriangle,
+  Info,
+  CheckCircle2,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import {
@@ -49,7 +58,92 @@ export function ShiftCalendar({
 
   const [currentDate, setCurrentDate] = useState(cycleStart)
   const [sectors, setSectors] = useState<any[]>([])
+  const [selectedSectorId, setSelectedSectorId] = useState<string>('')
   const { toast } = useToast()
+
+  useEffect(() => {
+    if (sectors.length > 0 && !selectedSectorId) {
+      setSelectedSectorId(sectors[0].id)
+    }
+  }, [sectors, selectedSectorId])
+
+  const visibleShifts = useMemo(() => {
+    if (!selectedSectorId) return []
+    return shifts.filter(
+      (s) => s.sector === selectedSectorId || s.expand?.sector?.id === selectedSectorId,
+    )
+  }, [shifts, selectedSectorId])
+
+  const alerts = useMemo(() => {
+    const newAlerts: { type: 'error' | 'warning' | 'info'; message: string; date?: Date }[] = []
+
+    if (!selectedSectorId) return newAlerts
+    const sector = sectors.find((s) => s.id === selectedSectorId)
+    if (!sector) return newAlerts
+
+    // Compute staffing alerts for visible days
+    days.forEach((day) => {
+      const dayShifts = visibleShifts.filter((s) =>
+        isSameDay(parseISO(s.start_time.split(' ')[0]), day),
+      )
+      const count = dayShifts.length
+
+      if (sector.min_staffing > 0 && count < sector.min_staffing) {
+        newAlerts.push({
+          type: 'error',
+          message: `Dia ${format(day, 'dd/MM')}: Efetivo abaixo do mínimo (${count}/${sector.min_staffing})`,
+          date: day,
+        })
+      } else if (sector.ideal_staffing > 0 && count < sector.ideal_staffing) {
+        newAlerts.push({
+          type: 'warning',
+          message: `Dia ${format(day, 'dd/MM')}: Efetivo abaixo do ideal (${count}/${sector.ideal_staffing})`,
+          date: day,
+        })
+      }
+    })
+
+    // Compute user specific alerts (rest hours, overlaps) for users in this sector
+    const usersInSector = Array.from(new Set(visibleShifts.map((s) => s.user)))
+
+    usersInSector.forEach((userId) => {
+      const userShifts = shifts
+        .filter((s) => s.user === userId)
+        .sort((a, b) => a.start_time.localeCompare(b.start_time))
+      const contract = contracts.find((c) => c.user === userId)
+      const restHours = contract?.expand?.shift_type?.rest_hours || 11
+      const userName = userShifts[0]?.expand?.user?.name || 'Colaborador'
+
+      for (let i = 0; i < userShifts.length - 1; i++) {
+        const currentShift = userShifts[i]
+        const nextShift = userShifts[i + 1]
+
+        const involvesSelectedSector =
+          currentShift.sector === selectedSectorId || nextShift.sector === selectedSectorId
+        if (!involvesSelectedSector) continue
+
+        const currentEnd = new Date(currentShift.end_time)
+        const nextStart = new Date(nextShift.start_time)
+
+        if (nextStart < currentEnd) {
+          newAlerts.push({
+            type: 'error',
+            message: `${userName}: Conflito de horários no dia ${format(currentEnd, 'dd/MM')}`,
+          })
+        } else {
+          const gap = (nextStart.getTime() - currentEnd.getTime()) / (1000 * 60 * 60)
+          if (gap < restHours) {
+            newAlerts.push({
+              type: 'warning',
+              message: `${userName}: Descanso de ${Math.floor(gap)}h (mínimo ${restHours}h) entre ${format(currentEnd, 'dd/MM')} e ${format(nextStart, 'dd/MM')}`,
+            })
+          }
+        }
+      }
+    })
+
+    return newAlerts
+  }, [visibleShifts, shifts, days, sectors, selectedSectorId, contracts])
 
   useEffect(() => {
     pb.collection('hospital_sectors').getFullList().then(setSectors).catch(console.error)
@@ -80,7 +174,7 @@ export function ShiftCalendar({
   }
 
   const getShiftsForDay = (day: Date) => {
-    return shifts
+    return visibleShifts
       .filter((s) => {
         const sDate = parseISO(s.start_time.split(' ')[0])
         return isSameDay(sDate, day)
@@ -158,189 +252,211 @@ export function ShiftCalendar({
   }
 
   return (
-    <div className="flex flex-col h-[700px] border-0 rounded-b-lg overflow-hidden bg-white">
-      <div className="flex flex-wrap items-center justify-between p-4 border-b gap-4 bg-slate-50/50">
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" onClick={prev}>
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <span className="font-semibold w-[180px] text-center capitalize text-slate-700">
-            {view === 'day' && format(currentDate, "dd 'de' MMMM, yyyy", { locale: ptBR })}
-            {view === 'week' &&
-              `${format(days[0], 'dd/MM')} a ${format(days[days.length - 1], 'dd/MM')}`}
-            {view === 'month' && format(currentDate, "MMMM 'de' yyyy", { locale: ptBR })}
-          </span>
-          <Button variant="outline" size="icon" onClick={next}>
-            <ChevronRight className="h-4 w-4" />
-          </Button>
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col h-[700px] border rounded-lg overflow-hidden bg-white shadow-sm">
+        <div className="flex flex-wrap items-center justify-between p-4 border-b gap-4 bg-slate-50/50">
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="icon" onClick={prev}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="font-semibold w-[180px] text-center capitalize text-slate-700">
+              {view === 'day' && format(currentDate, "dd 'de' MMMM, yyyy", { locale: ptBR })}
+              {view === 'week' &&
+                `${format(days[0], 'dd/MM')} a ${format(days[days.length - 1], 'dd/MM')}`}
+              {view === 'month' && format(currentDate, "MMMM 'de' yyyy", { locale: ptBR })}
+            </span>
+            <Button variant="outline" size="icon" onClick={next}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+          <div className="flex items-center gap-3">
+            <Select value={selectedSectorId} onValueChange={setSelectedSectorId}>
+              <SelectTrigger className="w-[200px] bg-white">
+                <SelectValue placeholder="Selecione o Setor" />
+              </SelectTrigger>
+              <SelectContent>
+                {sectors.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={view} onValueChange={(v: ViewMode) => setView(v)}>
+              <SelectTrigger className="w-[120px] bg-white">
+                <CalendarIcon className="w-4 h-4 mr-2 text-slate-500" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="month">Mês</SelectItem>
+                <SelectItem value="week">Semana</SelectItem>
+                <SelectItem value="day">Dia</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
-        <Select value={view} onValueChange={(v: ViewMode) => setView(v)}>
-          <SelectTrigger className="w-[120px] bg-white">
-            <CalendarIcon className="w-4 h-4 mr-2 text-slate-500" />
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="month">Mês</SelectItem>
-            <SelectItem value="week">Semana</SelectItem>
-            <SelectItem value="day">Dia</SelectItem>
-          </SelectContent>
-        </Select>
+
+        <ScrollArea className="flex-1 bg-slate-50/30">
+          {view === 'month' && (
+            <div className="grid grid-cols-7 border-b sticky top-0 bg-slate-100 z-10">
+              {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((d) => (
+                <div
+                  key={d}
+                  className="p-2 text-center text-xs font-semibold text-slate-500 border-r last:border-r-0"
+                >
+                  {d}
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div
+            className={cn(
+              'grid',
+              view === 'month' && 'grid-cols-7 auto-rows-[130px]',
+              view === 'week' && 'grid-cols-7 min-h-full',
+              view === 'day' && 'grid-cols-1 min-h-full',
+            )}
+          >
+            {days.map((day, i) => {
+              const dayShifts = getShiftsForDay(day)
+              const inCycle = cycle ? isWithinInterval(day, cycleInterval) : true
+
+              return (
+                <div
+                  key={i}
+                  onDrop={(e) => handleDrop(e, day)}
+                  onDragOver={handleDragOver}
+                  className={cn(
+                    'border-r border-b p-2 flex flex-col gap-1 overflow-hidden transition-colors',
+                    !inCycle ? 'bg-slate-100/50 opacity-50' : 'hover:bg-slate-50/80',
+                  )}
+                >
+                  <div
+                    className={cn(
+                      'text-sm font-medium mb-1 flex flex-col gap-1',
+                      isSameDay(day, new Date()) ? 'text-primary font-bold' : 'text-slate-700',
+                    )}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span>
+                        {format(day, view === 'month' ? 'd' : 'dd/MM (EEEE)', { locale: ptBR })}
+                      </span>
+                      {dayShifts.length > 0 && view === 'month' && (
+                        <Badge variant="secondary" className="text-[10px] h-4 px-1">
+                          {dayShifts.length}
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                  <div
+                    className={cn(
+                      'flex-1 overflow-y-auto space-y-1.5 pr-1',
+                      view === 'month' ? 'scrollbar-none' : '',
+                    )}
+                  >
+                    {dayShifts.map((s) => {
+                      const contract = contracts.find((c) => c.user === s.user)
+                      const shiftType = contract?.expand?.shift_type?.name || 'Padrão'
+                      return (
+                        <div
+                          key={s.id}
+                          draggable
+                          onDragStart={(e) => handleDragStart(e, s)}
+                          className="text-xs p-2 rounded bg-white border border-slate-200 shadow-sm flex flex-col gap-1 hover:border-primary/50 transition-colors cursor-move active:cursor-grabbing"
+                        >
+                          <div
+                            className="font-semibold text-slate-800 truncate"
+                            title={s.expand?.user?.name}
+                          >
+                            {s.expand?.user?.name || 'Sem nome'}
+                          </div>
+                          <div className="flex justify-between items-center text-slate-500 text-[10px]">
+                            <span className="flex items-center gap-1">
+                              <ClockIcon className="w-3 h-3" />
+                              {s.start_time.split(' ')[1].substring(0, 5)} -{' '}
+                              {s.end_time.split(' ')[1].substring(0, 5)}
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap gap-1 mt-0.5">
+                            <Badge
+                              variant="outline"
+                              className="text-[9px] px-1 h-3 font-normal text-slate-600 bg-slate-50"
+                            >
+                              {s.expand?.sector?.name || 'Setor'}
+                            </Badge>
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                'text-[9px] px-1 h-3 font-normal',
+                                s.start_time.includes('19:00:00')
+                                  ? 'text-indigo-100 bg-indigo-800 border-indigo-900'
+                                  : s.start_time.includes('13:00:00')
+                                    ? 'text-orange-700 bg-orange-50 border-orange-200'
+                                    : s.end_time.includes('13:00:00')
+                                      ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                                      : 'text-blue-700 bg-blue-50 border-blue-200',
+                              )}
+                            >
+                              {shiftType}
+                            </Badge>
+                          </div>
+                        </div>
+                      )
+                    })}
+                    {dayShifts.length === 0 && view !== 'month' && (
+                      <div className="text-xs text-slate-400 italic p-4 text-center mt-4 border-2 border-dashed rounded-lg border-slate-200">
+                        Nenhum plantão agendado
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </ScrollArea>
       </div>
 
-      <ScrollArea className="flex-1 bg-slate-50/30">
-        {view === 'month' && (
-          <div className="grid grid-cols-7 border-b sticky top-0 bg-slate-100 z-10">
-            {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((d) => (
-              <div
-                key={d}
-                className="p-2 text-center text-xs font-semibold text-slate-500 border-r last:border-r-0"
+      {/* Alert Panel */}
+      <div className="border rounded-lg bg-slate-50/80 p-4 shadow-sm">
+        <h3 className="font-semibold mb-4 text-slate-800 flex items-center gap-2">
+          <AlertCircle className="h-5 w-5 text-slate-500" />
+          Alertas e Validações
+        </h3>
+
+        {alerts.length === 0 ? (
+          <div className="text-sm text-slate-500 italic flex items-center gap-2 p-4 bg-white rounded-md border border-dashed">
+            <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+            Nenhum alerta para o setor selecionado no período visível.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {alerts.map((alert, i) => (
+              <Alert
+                key={i}
+                variant={alert.type === 'error' ? 'destructive' : 'default'}
+                className={cn(
+                  alert.type === 'warning' && 'border-amber-500/50 text-amber-800 bg-amber-50/50',
+                  'bg-white',
+                )}
               >
-                {d}
-              </div>
+                {alert.type === 'error' ? (
+                  <AlertCircle className="h-4 w-4" />
+                ) : alert.type === 'warning' ? (
+                  <AlertTriangle className="h-4 w-4 text-amber-500" />
+                ) : (
+                  <Info className="h-4 w-4" />
+                )}
+                <AlertTitle className="text-sm font-medium">
+                  {alert.type === 'error' ? 'Violação de Regra' : 'Aviso'}
+                </AlertTitle>
+                <AlertDescription className="text-xs mt-1">{alert.message}</AlertDescription>
+              </Alert>
             ))}
           </div>
         )}
-
-        <div
-          className={cn(
-            'grid',
-            view === 'month' && 'grid-cols-7 auto-rows-[130px]',
-            view === 'week' && 'grid-cols-7 min-h-full',
-            view === 'day' && 'grid-cols-1 min-h-full',
-          )}
-        >
-          {days.map((day, i) => {
-            const dayShifts = getShiftsForDay(day)
-            const inCycle = cycle ? isWithinInterval(day, cycleInterval) : true
-
-            // Calculate sector health indicators for this day
-            const sectorHealth = sectors
-              .map((sec) => {
-                const count = dayShifts.filter(
-                  (s) => s.sector === sec.id || s.expand?.sector?.id === sec.id,
-                ).length
-                const ideal = sec.ideal_staffing || 0
-                const min = sec.min_staffing || 0
-                let color = 'bg-red-500' // Below min
-                if (count >= ideal)
-                  color = 'bg-green-500' // Meets or exceeds ideal
-                else if (count >= min) color = 'bg-yellow-500' // Meets min, below ideal
-                return { ...sec, count, color }
-              })
-              .filter((s) => s.count > 0 || s.min_staffing > 0)
-
-            return (
-              <div
-                key={i}
-                onDrop={(e) => handleDrop(e, day)}
-                onDragOver={handleDragOver}
-                className={cn(
-                  'border-r border-b p-2 flex flex-col gap-1 overflow-hidden transition-colors',
-                  !inCycle ? 'bg-slate-100/50 opacity-50' : 'hover:bg-slate-50/80',
-                )}
-              >
-                <div
-                  className={cn(
-                    'text-sm font-medium mb-1 flex flex-col gap-1',
-                    isSameDay(day, new Date()) ? 'text-primary font-bold' : 'text-slate-700',
-                  )}
-                >
-                  <div className="flex items-center justify-between">
-                    <span>
-                      {format(day, view === 'month' ? 'd' : 'dd/MM (EEEE)', { locale: ptBR })}
-                    </span>
-                    {dayShifts.length > 0 && view === 'month' && (
-                      <Badge variant="secondary" className="text-[10px] h-4 px-1">
-                        {dayShifts.length}
-                      </Badge>
-                    )}
-                  </div>
-
-                  {/* Visual Staffing Health */}
-                  {view !== 'month' && sectorHealth.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {sectorHealth.map((sh) => (
-                        <div
-                          key={sh.id}
-                          className="flex items-center gap-1 text-[10px] text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded shadow-sm"
-                          title={`${sh.name}: ${sh.count} alocados (Min: ${sh.min_staffing}, Ideal: ${sh.ideal_staffing})`}
-                        >
-                          <div className={cn('w-2 h-2 rounded-full', sh.color)} />
-                          <span className="max-w-[70px] truncate">{sh.name}</span>
-                          <span className="font-semibold">
-                            {sh.count}/{sh.ideal_staffing}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div
-                  className={cn(
-                    'flex-1 overflow-y-auto space-y-1.5 pr-1',
-                    view === 'month' ? 'scrollbar-none' : '',
-                  )}
-                >
-                  {dayShifts.map((s) => {
-                    const contract = contracts.find((c) => c.user === s.user)
-                    const shiftType = contract?.expand?.shift_type?.name || 'Padrão'
-                    return (
-                      <div
-                        key={s.id}
-                        draggable
-                        onDragStart={(e) => handleDragStart(e, s)}
-                        className="text-xs p-2 rounded bg-white border border-slate-200 shadow-sm flex flex-col gap-1 hover:border-primary/50 transition-colors cursor-move active:cursor-grabbing"
-                      >
-                        <div
-                          className="font-semibold text-slate-800 truncate"
-                          title={s.expand?.user?.name}
-                        >
-                          {s.expand?.user?.name || 'Sem nome'}
-                        </div>
-                        <div className="flex justify-between items-center text-slate-500 text-[10px]">
-                          <span className="flex items-center gap-1">
-                            <ClockIcon className="w-3 h-3" />
-                            {s.start_time.split(' ')[1].substring(0, 5)} -{' '}
-                            {s.end_time.split(' ')[1].substring(0, 5)}
-                          </span>
-                        </div>
-                        <div className="flex flex-wrap gap-1 mt-0.5">
-                          <Badge
-                            variant="outline"
-                            className="text-[9px] px-1 h-3 font-normal text-slate-600 bg-slate-50"
-                          >
-                            {s.expand?.sector?.name || 'Setor'}
-                          </Badge>
-                          <Badge
-                            variant="outline"
-                            className={cn(
-                              'text-[9px] px-1 h-3 font-normal',
-                              s.start_time.includes('19:00:00')
-                                ? 'text-indigo-100 bg-indigo-800 border-indigo-900'
-                                : s.start_time.includes('13:00:00')
-                                  ? 'text-orange-700 bg-orange-50 border-orange-200'
-                                  : s.end_time.includes('13:00:00')
-                                    ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
-                                    : 'text-blue-700 bg-blue-50 border-blue-200',
-                            )}
-                          >
-                            {shiftType}
-                          </Badge>
-                        </div>
-                      </div>
-                    )
-                  })}
-                  {dayShifts.length === 0 && view !== 'month' && (
-                    <div className="text-xs text-slate-400 italic p-4 text-center mt-4 border-2 border-dashed rounded-lg border-slate-200">
-                      Nenhum plantão agendado
-                    </div>
-                  )}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      </ScrollArea>
+      </div>
     </div>
   )
 }
