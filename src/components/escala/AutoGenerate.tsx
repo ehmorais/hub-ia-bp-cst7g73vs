@@ -298,7 +298,7 @@ function AutoGenerateInner({
         details: sectorDetails,
       })
 
-      // Staff
+      // Staff & Default Sector
       const sfParts = []
       if (sector) sfParts.push(`default_sector="${sector.id}"`)
       if (projectMembers.length > 0)
@@ -315,32 +315,51 @@ function AutoGenerateInner({
       setUsersList(users)
 
       const staffDetails = []
-      let staffStatus: 'success' | 'error' = 'success'
+      let staffStatus: 'success' | 'error' | 'warning' = 'success'
 
       if (users.length === 0) {
         staffStatus = 'error'
-        staffDetails.push('Nenhum colaborador associado ao setor ou ao projeto.')
+        staffDetails.push('Nenhum colaborador associado ao setor selecionado ou ao projeto.')
       } else {
         const usersWithoutRole = users.filter((u) => !u.staff_role)
+        const usersWrongSector = users.filter((u) => u.default_sector !== selectedSector)
 
         if (usersWithoutRole.length > 0) {
           staffStatus = 'error'
           usersWithoutRole.forEach((u) =>
             staffDetails.push(`Colaborador(a) ${u.name || u.email} está sem cargo (staff_role).`),
           )
-        } else {
-          staffDetails.push(`Todos os ${users.length} colaboradores possuem cargo.`)
+        }
+
+        if (usersWrongSector.length > 0) {
+          if (staffStatus !== 'error') staffStatus = 'warning'
+          usersWrongSector.forEach((u) =>
+            staffDetails.push(
+              `Colaborador(a) ${u.name || u.email} não possui este setor como setor padrão.`,
+            ),
+          )
+        }
+
+        if (staffStatus === 'success') {
+          staffDetails.push(
+            `Todos os ${users.length} colaboradores possuem cargo e pertencem ao setor.`,
+          )
         }
       }
       checks.push({
         id: 'staff',
         label: 'Colaboradores Ativos',
         status: staffStatus,
-        message: staffStatus === 'error' ? 'Dados incompletos ou ausentes' : 'Configurados',
+        message:
+          staffStatus === 'error'
+            ? 'Dados incompletos ou ausentes'
+            : staffStatus === 'warning'
+              ? 'Atenção aos setores'
+              : 'Configurados',
         details: staffDetails,
       })
 
-      // Contracts
+      // Contracts & Shift Types
       const contractDetails = []
       let contractStatus: 'success' | 'error' = 'success'
       if (users.length > 0) {
@@ -350,7 +369,7 @@ function AutoGenerateInner({
           (u) => !contractsList.some((c) => c.user === u.id),
         )
         const invalidContracts = contractsList.filter(
-          (c) => !c.contract_type || !c.monthly_hour_limit,
+          (c) => !c.contract_type || !c.monthly_hour_limit || !c.shift_type,
         )
 
         if (usersWithoutContract.length > 0 || invalidContracts.length > 0) {
@@ -363,11 +382,13 @@ function AutoGenerateInner({
           invalidContracts.forEach((c) => {
             const u = users.find((x) => x.id === c.user)
             contractDetails.push(
-              `Contrato de ${u?.name || u?.email || 'Desconhecido'} possui dados incompletos (tipo ou carga horária).`,
+              `Contrato de ${u?.name || u?.email || 'Desconhecido'} possui dados incompletos (tipo, carga horária ou tipo de turno).`,
             )
           })
         } else {
-          contractDetails.push(`Todos os ${users.length} colaboradores possuem contratos válidos.`)
+          contractDetails.push(
+            `Todos os ${users.length} colaboradores possuem contratos e tipos de turno válidos.`,
+          )
         }
       } else {
         contractStatus = 'error'
@@ -375,10 +396,36 @@ function AutoGenerateInner({
       }
       checks.push({
         id: 'contracts',
-        label: 'Contratos e Carga Horária',
+        label: 'Contratos e Tipos de Turno',
         status: contractStatus,
         message: contractStatus === 'error' ? 'Contratos pendentes' : 'Configurados',
         details: contractDetails,
+      })
+
+      // Timeoff requests
+      const timeoffDetails = []
+      let timeoffStatus: 'success' | 'warning' = 'success'
+      const timeoffsInCycle = timeoffsList.filter(
+        (t) => t.cycle === selectedCycle && users.some((u) => u.id === t.user),
+      )
+
+      if (timeoffsInCycle.length === 0) {
+        timeoffStatus = 'warning'
+        timeoffDetails.push(
+          'Nenhuma solicitação de folga encontrada para os colaboradores neste ciclo.',
+        )
+      } else {
+        timeoffDetails.push(
+          `${timeoffsInCycle.length} solicitações de folga cadastradas neste ciclo.`,
+        )
+      }
+
+      checks.push({
+        id: 'timeoff',
+        label: 'Solicitações de Folga',
+        status: timeoffStatus,
+        message: timeoffStatus === 'warning' ? 'Sem folgas cadastradas' : 'Folgas carregadas',
+        details: timeoffDetails,
       })
 
       setValidations(checks)
@@ -616,70 +663,28 @@ function AutoGenerateInner({
               </Select>
             </div>
           </div>
-
-          <div className="pt-4 border-t border-emerald-900/10">
-            <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-              Checklist de Validação
-              {isValidating && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
-            </h3>
-
-            {!selectedCycle || !selectedSector ? (
-              <p className="text-sm text-muted-foreground">
-                Selecione um ciclo e um setor para validar os parâmetros de prontidão da escala.
-              </p>
-            ) : validations.length === 0 && isValidating ? (
-              <p className="text-sm text-muted-foreground flex items-center gap-2">
-                <Loader2 className="h-4 w-4 animate-spin" /> Verificando banco de dados...
-              </p>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-                {validations.map((v) => (
-                  <CheckItem key={v.id} check={v} />
-                ))}
-              </div>
-            )}
-          </div>
         </CardContent>
         <CardFooter className="bg-white/50 border-t py-4 flex flex-col items-start gap-4">
           {!isDraftMode ? (
             <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
               <Button
-                onClick={() => handleGenerateDraft(false)}
-                disabled={loading || !selectedCycle || !selectedSector || isValidating || !isReady}
-                className={cn(
-                  'w-full sm:w-auto gap-2 transition-all',
-                  isReady && 'bg-emerald-700 hover:bg-emerald-800 text-white',
-                )}
+                onClick={() => {
+                  validate()
+                  setShowPendencyModal(true)
+                }}
+                disabled={loading || !selectedCycle || !selectedSector}
+                className="w-full sm:w-auto gap-2 transition-all bg-emerald-700 hover:bg-emerald-800 text-white shadow-sm"
               >
                 {loading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Processando com IA...
-                  </>
+                  <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
-                  <>
-                    <Wand2 className="h-4 w-4" />
-                    Gerar Rascunho Inicial
-                  </>
+                  <Wand2 className="h-4 w-4" />
                 )}
+                Gerar com IA
               </Button>
-
-              {selectedCycle && selectedSector && hasIssues && (
-                <Button
-                  variant={!isReady ? 'destructive' : 'secondary'}
-                  className={cn(
-                    'gap-2 w-full sm:w-auto transition-colors',
-                    isReady && 'bg-amber-100 text-amber-700 hover:bg-amber-200',
-                  )}
-                  onClick={() => setShowPendencyModal(true)}
-                >
-                  {!isReady ? <AlertCircle className="h-4 w-4" /> : <Info className="h-4 w-4" />}
-                  Ver Pendências
-                </Button>
-              )}
             </div>
           ) : (
-            <div className="flex items-center gap-3 w-full bg-emerald-50 p-3 rounded-lg border border-emerald-200">
+            <div className="flex flex-col sm:flex-row items-center gap-3 w-full bg-emerald-50 p-3 rounded-lg border border-emerald-200 shadow-sm">
               <Info className="h-5 w-5 text-emerald-600 shrink-0" />
               <div className="flex-1">
                 <p className="text-sm font-medium text-emerald-800">
@@ -789,24 +794,27 @@ function AutoGenerateInner({
       )}
 
       <Dialog open={showPendencyModal} onOpenChange={setShowPendencyModal}>
-        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col gap-0 p-0">
-          <DialogHeader className="p-6 pb-4 border-b">
-            <DialogTitle className="text-xl text-slate-800">Pendências de Validação</DialogTitle>
+        <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col gap-0 p-0 overflow-hidden">
+          <DialogHeader className="p-6 pb-4 border-b bg-white">
+            <DialogTitle className="text-xl text-slate-800 flex items-center gap-2">
+              <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+              Checklist de Validação (Pré-Geração)
+            </DialogTitle>
             <DialogDescription className="mt-2 text-slate-600">
-              Verifique os itens abaixo para permitir a geração da escala. Resolva os erros críticos
-              antes de prosseguir.
+              A IA precisa de dados estruturados para gerar a escala. Verifique as pendências
+              abaixo.
             </DialogDescription>
           </DialogHeader>
-          <ScrollArea className="flex-1 p-6">
+          <ScrollArea className="flex-1 p-6 bg-slate-50/50">
             <div className="space-y-6">
               {isValidating && validations.length === 0 ? (
                 <div className="flex items-center justify-center py-10 gap-3 text-muted-foreground">
                   <Loader2 className="h-6 w-6 animate-spin" />
-                  <span>Verificando dados...</span>
+                  <span>Verificando dados no banco...</span>
                 </div>
               ) : (
                 validations.map((v) => (
-                  <div key={v.id} className="space-y-3">
+                  <div key={v.id} className="space-y-3 bg-white p-4 rounded-lg border shadow-sm">
                     <div className="flex items-center gap-2">
                       <CheckItemIcon status={v.status} />
                       <h4 className="font-semibold text-base text-slate-800 flex items-center gap-2">
@@ -824,21 +832,21 @@ function AutoGenerateInner({
                             variant="outline"
                             className="text-[10px] h-5 bg-amber-50 text-amber-700 border-amber-200 px-1.5 font-medium"
                           >
-                            Aviso
+                            Atenção
                           </Badge>
                         )}
                         {v.status === 'success' && (
                           <Badge
                             variant="outline"
-                            className="text-[10px] h-5 bg-green-50 text-green-700 border-green-200 px-1.5 font-medium"
+                            className="text-[10px] h-5 bg-emerald-50 text-emerald-700 border-emerald-200 px-1.5 font-medium"
                           >
-                            Tudo Certo
+                            Validado
                           </Badge>
                         )}
                       </h4>
                     </div>
                     {v.details && v.details.length > 0 ? (
-                      <ul className="space-y-1.5 ml-8 border-l-2 border-slate-200 pl-4">
+                      <ul className="space-y-1.5 ml-8 border-l-2 border-slate-100 pl-4">
                         {v.details.map((detail, idx) => (
                           <li key={idx} className="text-sm text-slate-600">
                             {detail}
@@ -853,6 +861,30 @@ function AutoGenerateInner({
               )}
             </div>
           </ScrollArea>
+          <div className="p-4 border-t bg-white flex justify-end gap-3 shadow-[0_-4px_6px_-1px_rgb(0,0,0,0.05)]">
+            <Button
+              variant="outline"
+              onClick={() => setShowPendencyModal(false)}
+              disabled={loading}
+            >
+              Cancelar
+            </Button>
+            <Button
+              disabled={!isReady || loading || isValidating}
+              onClick={() => {
+                setShowPendencyModal(false)
+                handleGenerateDraft(false)
+              }}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2 shadow-sm"
+            >
+              {loading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Wand2 className="h-4 w-4" />
+              )}
+              {isReady ? 'Prosseguir para Geração' : 'Resolva as pendências'}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
