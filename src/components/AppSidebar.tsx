@@ -17,6 +17,7 @@ import {
   Settings,
   Menu,
   ChevronDown,
+  Calendar,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import pb from '@/lib/pocketbase/client'
@@ -123,6 +124,11 @@ export function AppSidebar() {
   const escalasProject = projects.find((p) => p.name === 'Gestão de Escalas')
   const otherProjects = projects.filter((p) => p.name !== 'Gestão de Escalas')
 
+  const isEscalasActive = escalasProject
+    ? location.pathname === `/project/${escalasProject.id}` ||
+      location.pathname.startsWith('/schedules/')
+    : false
+
   return (
     <Sidebar variant="inset" className="border-r border-[#06402B]/10 shadow-sm !bg-slate-50/50">
       <SidebarHeader className="p-6 min-h-[5rem] flex items-center justify-center border-b border-[#06402B]/10 bg-transparent mb-6">
@@ -192,9 +198,9 @@ export function AppSidebar() {
           </SidebarMenuItem>
         </CollapsibleSection>
 
-        <CollapsibleSection title="Projetos Gerais" icon={Briefcase} isActive={isProjectsActive}>
-          {escalasProject && (
-            <SidebarMenuItem key={escalasProject.id}>
+        {escalasProject && (
+          <CollapsibleSection title="Gestão de Escalas" icon={Calendar} isActive={isEscalasActive}>
+            <SidebarMenuItem>
               <SidebarMenuButton
                 asChild
                 isActive={location.pathname === `/project/${escalasProject.id}`}
@@ -202,11 +208,30 @@ export function AppSidebar() {
               >
                 <Link to={`/project/${escalasProject.id}`}>
                   <div className="w-1.5 h-1.5 rounded-sm bg-current shrink-0 transition-colors opacity-70 group-data-[active=true]:opacity-100 mr-2" />
-                  <span className="line-clamp-1">{escalasProject.name}</span>
+                  <span className="line-clamp-1">Projeto Base</span>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
-          )}
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                asChild
+                isActive={location.pathname === '/schedules/drafts'}
+                className="h-10 transition-all duration-200 rounded-lg px-3 text-[14px] group hover:bg-[#06402B]/10 hover:text-[#06402B] data-[active=true]:bg-[#06402B] data-[active=true]:text-white data-[active=true]:font-bold"
+              >
+                <Link to="/schedules/drafts">
+                  <div className="w-1.5 h-1.5 rounded-sm bg-current shrink-0 transition-colors opacity-70 group-data-[active=true]:opacity-100 mr-2" />
+                  <span className="line-clamp-1">Gerenciar Rascunhos</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </CollapsibleSection>
+        )}
+
+        <CollapsibleSection
+          title="Projetos Gerais"
+          icon={Briefcase}
+          isActive={isProjectsActive && location.pathname !== `/project/${escalasProject?.id}`}
+        >
           {otherProjects.map((proj) => (
             <SidebarMenuItem key={proj.id}>
               <SidebarMenuButton
