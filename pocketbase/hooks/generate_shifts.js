@@ -48,7 +48,9 @@ routerAdd(
     const usersWithContracts = []
     contracts.forEach((c) => {
       try {
-        const u = $app.findRecordById('users', c.getString('user'))
+        const userId = c.getString('user')
+        if (!userId) return
+        const u = $app.findRecordById('users', userId)
         if (u.getString('role') === 'Admin') return // Ignore Admin users
 
         const rId = u.getString('staff_role')
@@ -88,12 +90,12 @@ routerAdd(
               } catch (_) {}
             }
             if (rule) {
-              const rType = rule.getString('rule_type')
+              const rType = rule.getString('rule_type') || 'other'
               return {
-                name: rule.getString('name'),
+                name: rule.getString('name') || 'Regra',
                 type: rType,
-                value: rule.getInt('value'),
-                ...(rType === 'custom_prompt' ? { prompt: rule.getString('prompt') } : {}),
+                value: rule.getInt('value') || 0,
+                ...(rType === 'custom_prompt' ? { prompt: rule.getString('prompt') || '' } : {}),
               }
             }
             return null
@@ -128,20 +130,23 @@ routerAdd(
     }))
 
     const ruleData = dbRules.map((r) => {
-      const type = r.getString('rule_type')
+      const type = r.getString('rule_type') || 'other'
       return {
-        name: r.getString('name'),
+        name: r.getString('name') || 'Regra',
         type: type,
-        value: r.getInt('value'),
-        ...(type === 'custom_prompt' ? { prompt: r.getString('prompt') } : {}),
+        value: r.getInt('value') || 0,
+        ...(type === 'custom_prompt' ? { prompt: r.getString('prompt') || '' } : {}),
       }
     })
 
-    const timeoffData = timeoffs.map((t) => ({
-      user: t.getString('user'),
-      date: t.getString('date').split(' ')[0],
-      weight: t.getInt('priority_weight'),
-    }))
+    const timeoffData = timeoffs.map((t) => {
+      const dateStr = t.getString('date') || ''
+      return {
+        user: t.getString('user'),
+        date: dateStr.split(' ')[0],
+        weight: t.getInt('priority_weight') || 0,
+      }
+    })
 
     // Build the prompt for Skip AI Gateway
     const prompt = `
@@ -258,17 +263,25 @@ Only output the JSON array, no markdown or text.
 
       return e.json(200, { success: true, count: generatedShifts.length })
     } catch (err) {
+      const isTimeout =
+        err.message &&
+        (err.message.toLowerCase().includes('timeout') ||
+          err.message.toLowerCase().includes('deadline'))
+      const errorMessage = isTimeout
+        ? 'A geração demorou muito e expirou. Tente reduzir o número de setores ou o período.'
+        : err.message || 'Falha desconhecida durante a geração de escalas.'
+
       // Use escala-expert to provide hints about the failure
       try {
         const helper = $ai.agent('escala-expert').chat({
           user_id: e.auth?.id || 'system',
-          message: `A geração de escala falhou. Erro detectado: ${err.message}. Analise a situação e sugira, de forma concisa, por que os contratos e regras de descanso podem ter entrado em conflito com o dimensionamento mínimo.`,
+          message: `A geração de escala falhou. Erro detectado: ${errorMessage}. Analise a situação e sugira, de forma concisa, por que os contratos e regras de descanso podem ter entrado em conflito com o dimensionamento mínimo.`,
         })
-        return e.json(500, { error: err.message, suggestion: helper.content })
+        return e.json(400, { error: errorMessage, suggestion: helper.content })
       } catch (_) {}
 
-      return e.json(500, {
-        error: err.message || 'Falha desconhecida durante a geração de escalas.',
+      return e.json(400, {
+        error: errorMessage,
       })
     }
   },

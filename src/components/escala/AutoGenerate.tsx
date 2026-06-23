@@ -498,6 +498,15 @@ function AutoGenerateInner({
       description: 'A IA está analisando os parâmetros para montar a escala...',
     })
 
+    const timeoutId = setTimeout(() => {
+      toast({
+        title: 'Processamento longo',
+        description:
+          'A geração está levando mais tempo que o normal devido à complexidade das regras. Por favor, aguarde...',
+        duration: 10000,
+      })
+    }, 15000)
+
     try {
       let total = 0
 
@@ -562,6 +571,7 @@ function AutoGenerateInner({
         })
       }
     } finally {
+      clearTimeout(timeoutId)
       setLoading(false)
     }
   }
