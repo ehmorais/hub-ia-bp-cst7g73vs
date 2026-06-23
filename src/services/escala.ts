@@ -7,6 +7,12 @@ export const createShiftCycle = (data: any) => pb.collection('shift_cycles').cre
 export const updateShiftCycle = (id: string, data: any) =>
   pb.collection('shift_cycles').update(id, data)
 export const deleteShiftCycle = (id: string) => pb.collection('shift_cycles').delete(id)
+export const submitCycleToHR = (cycleId: string) =>
+  pb.send('/backend/v1/escala/submit-hr', {
+    method: 'POST',
+    body: JSON.stringify({ cycle_id: cycleId }),
+    headers: { 'Content-Type': 'application/json' },
+  })
 
 // Shift Types
 export const getShiftTypes = () => pb.collection('shift_types').getFullList({ sort: 'name' })
