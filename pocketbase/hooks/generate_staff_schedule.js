@@ -75,9 +75,6 @@ routerAdd(
       0,
     )
 
-    const startDateRaw = cycle.getString('start_date').split(' ')[0]
-    const endDateRaw = cycle.getString('end_date').split(' ')[0]
-
     // Create a map of day -> count of shifts
     const staffingCount = {}
     let current = new Date(startDateRaw + 'T00:00:00Z')
