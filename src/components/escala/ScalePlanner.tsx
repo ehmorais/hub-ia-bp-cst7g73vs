@@ -320,7 +320,13 @@ export function ScalePlanner({
       days.forEach((day) => {
         const ds = format(day, 'yyyy-MM-dd')
         const cell = draft[user.id]?.[ds] || ''
-        row.push(cell)
+        let displayCell = cell
+        if (cell === 'D') displayCell = '07:00 - 19:00'
+        if (cell === 'N') displayCell = '19:00 - 07:00'
+        if (cell === 'M') displayCell = '07:00 - 13:00'
+        if (cell === 'T') displayCell = '13:00 - 19:00'
+        if (cell === 'F') displayCell = 'Folga'
+        row.push(displayCell)
       })
       csvContent += row.join(',') + '\n'
     })
@@ -559,7 +565,7 @@ export function ScalePlanner({
                     return (
                       <th
                         key={day.toISOString()}
-                        className="border-b border-r p-1.5 min-w-[36px] bg-slate-50 text-center relative"
+                        className="border-b border-r p-1.5 min-w-[95px] bg-slate-50 text-center relative"
                       >
                         <div className="text-[10px] uppercase text-slate-500">
                           {format(day, 'eee', { locale: ptBR })}
@@ -630,16 +636,11 @@ export function ScalePlanner({
                               }
                               disabled={isTO || selectedCycle?.status !== 'draft'}
                               className={cn(
-                                'w-full h-11 appearance-none bg-transparent text-center text-xs outline-none cursor-pointer hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 transition-colors',
+                                'w-full h-11 appearance-none bg-transparent text-center text-[11px] md:text-xs outline-none cursor-pointer hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 transition-colors',
                                 {
-                                  'font-bold text-blue-700 bg-blue-50/80 hover:bg-blue-100':
-                                    val === 'D',
-                                  'font-bold text-indigo-100 bg-indigo-800 hover:bg-indigo-700':
-                                    val === 'N',
-                                  'font-bold text-emerald-700 bg-emerald-50/80 hover:bg-emerald-100':
-                                    val === 'M',
-                                  'font-bold text-orange-700 bg-orange-50/80 hover:bg-orange-100':
-                                    val === 'T',
+                                  'font-bold text-black bg-white':
+                                    val === 'D' || val === 'M' || val === 'T',
+                                  'font-bold text-white bg-black hover:bg-slate-800': val === 'N',
                                   'text-red-400 font-bold bg-red-50/80 hover:bg-red-100':
                                     isTO && !isPendingTO,
                                   'text-amber-500 font-bold bg-amber-50/80 hover:bg-amber-100':
@@ -648,11 +649,11 @@ export function ScalePlanner({
                               )}
                             >
                               <option value=""></option>
-                              <option value="D">D</option>
-                              <option value="N">N</option>
-                              <option value="M">M</option>
-                              <option value="T">T</option>
-                              <option value="F">F</option>
+                              <option value="D">07:00 - 19:00</option>
+                              <option value="N">19:00 - 07:00</option>
+                              <option value="M">07:00 - 13:00</option>
+                              <option value="T">13:00 - 19:00</option>
+                              <option value="F">Folga</option>
                             </select>
                             {isTO && (
                               <div
