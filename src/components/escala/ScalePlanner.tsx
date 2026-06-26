@@ -802,7 +802,7 @@ export function ScalePlanner({
                                   {
                                     'font-bold text-black bg-white':
                                       val === 'D' || val === 'M' || val === 'T',
-                                    'font-bold text-white bg-slate-600 hover:bg-slate-700':
+                                    'font-bold text-black bg-slate-200 hover:bg-slate-300':
                                       val === 'N',
                                     'text-red-400 font-bold bg-red-50/80 hover:bg-red-100':
                                       isTO && !isPendingTO,
@@ -835,7 +835,7 @@ export function ScalePlanner({
                                   {
                                     'font-bold text-black bg-white':
                                       val === 'D' || val === 'M' || val === 'T',
-                                    'font-bold text-white bg-slate-600 hover:bg-slate-700':
+                                    'font-bold text-black bg-slate-200 hover:bg-slate-300':
                                       val === 'N',
                                     'text-red-400 font-bold bg-red-50/80 hover:bg-red-100':
                                       isTO && !isPendingTO,
