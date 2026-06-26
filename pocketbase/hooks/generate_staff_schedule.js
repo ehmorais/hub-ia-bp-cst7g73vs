@@ -54,23 +54,76 @@ routerAdd(
     )
     const timeoffDays = timeoffs.map((t) => t.getString('date').split(' ')[0])
 
+    const monthlyLimit = contract.getInt('monthly_hour_limit') || 180
+
     // Delete existing shifts for this user in this cycle
-    const existingShifts = $app.findRecordsByFilter(
+    const existingUserShifts = $app.findRecordsByFilter(
       'shifts',
       `user='${userId}' && cycle='${cycleId}'`,
       '',
       10000,
       0,
     )
-    existingShifts.forEach((s) => $app.delete(s))
+    existingUserShifts.forEach((s) => $app.delete(s))
+
+    // To respect sector rules (min staffing), let's count existing staff per day
+    const allSectorShifts = $app.findRecordsByFilter(
+      'shifts',
+      `sector='${targetSector}' && cycle='${cycleId}'`,
+      '',
+      10000,
+      0,
+    )
+
+    const startDateRaw = cycle.getString('start_date').split(' ')[0]
+    const endDateRaw = cycle.getString('end_date').split(' ')[0]
+
+    // Create a map of day -> count of shifts
+    const staffingCount = {}
+    let current = new Date(startDateRaw + 'T00:00:00Z')
+    const endObj = new Date(endDateRaw + 'T23:59:59Z')
+    while (current <= endObj) {
+      staffingCount[current.toISOString().split('T')[0]] = 0
+      current = new Date(current.getTime() + 24 * 3600000)
+    }
+
+    allSectorShifts.forEach((s) => {
+      const d = s.getString('start_time').split(' ')[0]
+      if (staffingCount[d] !== undefined) staffingCount[d]++
+    })
 
     const shiftsCol = $app.findCollectionByNameOrId('shifts')
     const createdShifts = []
 
-    let current = new Date(startDateRaw + 'T00:00:00Z')
-    const endObj = new Date(endDateRaw + 'T23:59:59Z')
+    let bestStartOffset = 0
+    let minScore = 999999
 
-    while (current <= endObj) {
+    const stepHours = workHours + restHours
+    const stepDays = Math.max(1, Math.round(stepHours / 24))
+
+    for (let offset = 0; offset < stepDays; offset++) {
+      let score = 0
+      let c = new Date(startDateRaw + 'T00:00:00Z')
+      c = new Date(c.getTime() + offset * 24 * 3600000)
+
+      while (c <= endObj) {
+        const dStr = c.toISOString().split('T')[0]
+        score += staffingCount[dStr] || 0
+        c = new Date(c.getTime() + stepDays * 24 * 3600000)
+      }
+
+      if (score < minScore) {
+        minScore = score
+        bestStartOffset = offset
+      }
+    }
+
+    // Now generate using the best offset
+    current = new Date(startDateRaw + 'T00:00:00Z')
+    current = new Date(current.getTime() + bestStartOffset * 24 * 3600000)
+    let totalHours = 0
+
+    while (current <= endObj && totalHours + workHours <= monthlyLimit) {
       const dateStr = current.toISOString().split('T')[0]
 
       if (!timeoffDays.includes(dateStr)) {
@@ -90,12 +143,10 @@ routerAdd(
 
         $app.save(record)
         createdShifts.push(record)
+        totalHours += workHours
       }
 
-      const step = workHours + restHours
-      if (step <= 0) break
-
-      current = new Date(current.getTime() + step * 3600000)
+      current = new Date(current.getTime() + stepDays * 24 * 3600000)
     }
 
     return e.json(200, { success: true, count: createdShifts.length })

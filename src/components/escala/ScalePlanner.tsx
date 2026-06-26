@@ -121,10 +121,16 @@ export function ScalePlanner({
   }, [selectedCycleId])
 
   useEffect(() => {
-    if (!selectedCycleId || !selectedSectorId || allShifts.length === 0) return
+    if (!selectedCycleId || !selectedSectorId) return
     const sectorShifts = allShifts.filter((s) => s.sector === selectedSectorId)
     const newDraft: Record<string, Record<string, DraftCell>> = {}
     const newUsers = new Map<string, any>()
+
+    // Initialize all existing draft users to empty records so deleted shifts are removed
+    draftUsers.forEach((u) => {
+      newUsers.set(u.id, u)
+      newDraft[u.id] = {}
+    })
 
     sectorShifts.forEach((s) => {
       const u = users.find((x) => x.id === s.user)
@@ -132,21 +138,20 @@ export function ScalePlanner({
       if (!newDraft[s.user]) newDraft[s.user] = {}
 
       const dateStr = s.start_time.split(' ')[0]
-      const sh = s.start_time.split(' ')[1]
-      const eh = s.end_time.split(' ')[1]
+      const sh = s.start_time.split(' ')[1]?.substring(0, 8)
+      const eh = s.end_time.split(' ')[1]?.substring(0, 8)
 
       let val: DraftCell = ''
       if (sh === '07:00:00' && eh === '19:00:00') val = 'D'
-      if (sh === '19:00:00' && eh === '07:00:00') val = 'N'
-      if (sh === '07:00:00' && eh === '13:00:00') val = 'M'
-      if (sh === '13:00:00' && eh === '19:00:00') val = 'T'
+      else if (sh === '19:00:00' && eh === '07:00:00') val = 'N'
+      else if (sh === '07:00:00' && eh === '13:00:00') val = 'M'
+      else if (sh === '13:00:00' && eh === '19:00:00') val = 'T'
 
       if (val) newDraft[s.user][dateStr] = val
     })
 
-    draftUsers.forEach((u) => newUsers.set(u.id, u))
     setDraftUsers(Array.from(newUsers.values()))
-    setDraft((prev) => ({ ...prev, ...newDraft }))
+    setDraft(newDraft)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allShifts, selectedSectorId, selectedCycleId])
 
