@@ -28,8 +28,10 @@ import {
   Download,
   AlertTriangle,
   Loader2,
+  Move,
 } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { useRealtime } from '@/hooks/use-realtime'
 import { format, eachDayOfInterval, addDays, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import pb from '@/lib/pocketbase/client'
@@ -83,6 +85,9 @@ export function ScalePlanner({
   const [searchUser, setSearchUser] = useState('')
   const [generatingUserId, setGeneratingUserId] = useState<string | null>(null)
 
+  const [isEditMode, setIsEditMode] = useState(false)
+  const [dragOverCell, setDragOverCell] = useState<{ userId: string; dateStr: string } | null>(null)
+
   const { toast } = useToast()
   const isCollectionPast = new Date().getDate() > 10
 
@@ -119,6 +124,18 @@ export function ScalePlanner({
         .getFullList({ filter: `cycle="${selectedCycleId}"` })
         .then(setAllShifts)
   }, [selectedCycleId])
+
+  useRealtime(
+    'shifts',
+    () => {
+      if (selectedCycleId) {
+        pb.collection('shifts')
+          .getFullList({ filter: `cycle="${selectedCycleId}"` })
+          .then(setAllShifts)
+      }
+    },
+    !!selectedCycleId,
+  )
 
   useEffect(() => {
     if (!selectedCycleId || !selectedSectorId) return
@@ -303,6 +320,129 @@ export function ScalePlanner({
     })
     return Array.from(new Set(alerts))
   }, [days, draft, draftUsers, selectedSector, contracts, timeoffsForCycle])
+
+  const handleDragStart = (
+    e: React.DragEvent,
+    userId: string,
+    dateStr: string,
+    shiftVal: string,
+  ) => {
+    e.dataTransfer.setData('text/plain', JSON.stringify({ userId, dateStr, shiftVal }))
+    e.dataTransfer.effectAllowed = 'move'
+  }
+
+  const handleDragOver = (e: React.DragEvent, userId: string, dateStr: string) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    if (dragOverCell?.userId !== userId || dragOverCell?.dateStr !== dateStr) {
+      setDragOverCell({ userId, dateStr })
+    }
+  }
+
+  const handleDragLeave = () => {
+    setDragOverCell(null)
+  }
+
+  const handleDrop = async (e: React.DragEvent, targetUserId: string, targetDateStr: string) => {
+    e.preventDefault()
+    setDragOverCell(null)
+
+    if (!isEditMode) return
+
+    try {
+      const dataStr = e.dataTransfer.getData('text/plain')
+      if (!dataStr) return
+
+      const data = JSON.parse(dataStr)
+      const sourceUserId = data.userId
+      const sourceDateStr = data.dateStr
+      const shiftVal = data.shiftVal as DraftCell
+
+      if (sourceUserId === targetUserId && sourceDateStr === targetDateStr) return
+
+      // Optimistic local update
+      setDraft((prev) => {
+        const next = { ...prev }
+        if (!next[sourceUserId]) next[sourceUserId] = {}
+        if (!next[targetUserId]) next[targetUserId] = {}
+
+        next[targetUserId] = { ...next[targetUserId], [targetDateStr]: shiftVal }
+        next[sourceUserId] = { ...next[sourceUserId], [sourceDateStr]: '' }
+        return next
+      })
+
+      // Backend sync
+      const sourceShift = allShifts.find(
+        (s) =>
+          s.user === sourceUserId &&
+          s.start_time.startsWith(sourceDateStr) &&
+          s.sector === selectedSectorId,
+      )
+      const targetShift = allShifts.find(
+        (s) =>
+          s.user === targetUserId &&
+          s.start_time.startsWith(targetDateStr) &&
+          s.sector === selectedSectorId,
+      )
+
+      const contract = contracts.find((c) => c.user === targetUserId)
+      const wh = contract?.expand?.shift_type?.work_hours
+      let st = '07:00:00'
+      let duration = 12
+
+      if (shiftVal === 'D') {
+        st = '07:00:00'
+        duration = wh || 12
+      } else if (shiftVal === 'N') {
+        st = '19:00:00'
+        duration = wh || 12
+      } else if (shiftVal === 'M') {
+        st = '07:00:00'
+        duration = wh || 6
+      } else if (shiftVal === 'T') {
+        st = '13:00:00'
+        duration = wh || 6
+      }
+
+      const startDate = new Date(`${targetDateStr}T${st}.000Z`)
+      const endDate = new Date(startDate.getTime() + duration * 3600000)
+      const formattedEnd = endDate.toISOString().replace('T', ' ').substring(0, 23) + 'Z'
+
+      if (sourceShift) {
+        if (targetShift) {
+          await pb.collection('shifts').delete(targetShift.id)
+        }
+        await pb.collection('shifts').update(sourceShift.id, {
+          user: targetUserId,
+          start_time: `${targetDateStr} ${st}.000Z`,
+          end_time: formattedEnd,
+        })
+      } else {
+        if (targetShift) {
+          await pb.collection('shifts').delete(targetShift.id)
+        }
+        await pb.collection('shifts').create({
+          user: targetUserId,
+          sector: selectedSectorId,
+          cycle: selectedCycleId,
+          start_time: `${targetDateStr} ${st}.000Z`,
+          end_time: formattedEnd,
+        })
+      }
+
+      toast({ title: 'Sucesso', description: 'Turno movido com sucesso.' })
+    } catch (err: any) {
+      toast({
+        title: 'Erro',
+        description: err.message || 'Falha ao mover turno',
+        variant: 'destructive',
+      })
+      const reloaded = await pb
+        .collection('shifts')
+        .getFullList({ filter: `cycle="${selectedCycleId}"` })
+      setAllShifts(reloaded)
+    }
+  }
 
   const exportToCSV = () => {
     if (!selectedCycleId || !selectedSectorId) return
@@ -524,6 +664,14 @@ export function ScalePlanner({
           </Dialog>
 
           <Button
+            variant={isEditMode ? 'default' : 'outline'}
+            onClick={() => setIsEditMode(!isEditMode)}
+            className={cn('gap-2 flex-1 whitespace-nowrap', !isEditMode && 'bg-white')}
+          >
+            <Move className="h-4 w-4" /> {isEditMode ? 'Concluir Edição' : 'Habilitar Edição'}
+          </Button>
+
+          <Button
             variant="outline"
             onClick={() => handleSave(false)}
             disabled={isSaving || selectedCycle?.status !== 'draft'}
@@ -625,36 +773,83 @@ export function ScalePlanner({
                         const isTO = !!toReq
                         const isPendingTO = toReq?.status === 'pending'
                         return (
-                          <td key={ds} className="p-0 border-b border-r relative">
-                            <select
-                              value={val}
-                              onChange={(e) =>
-                                setDraft((p) => ({
-                                  ...p,
-                                  [user.id]: { ...p[user.id], [ds]: e.target.value as DraftCell },
-                                }))
-                              }
-                              disabled={isTO || selectedCycle?.status !== 'draft'}
-                              className={cn(
-                                'w-full h-11 appearance-none bg-transparent text-center text-[11px] md:text-xs outline-none cursor-pointer hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 transition-colors',
-                                {
-                                  'font-bold text-black bg-white':
-                                    val === 'D' || val === 'M' || val === 'T',
-                                  'font-bold text-white bg-black hover:bg-slate-800': val === 'N',
-                                  'text-red-400 font-bold bg-red-50/80 hover:bg-red-100':
-                                    isTO && !isPendingTO,
-                                  'text-amber-500 font-bold bg-amber-50/80 hover:bg-amber-100':
-                                    isPendingTO,
-                                },
-                              )}
-                            >
-                              <option value=""></option>
-                              <option value="D">07:00 - 19:00</option>
-                              <option value="N">19:00 - 07:00</option>
-                              <option value="M">07:00 - 13:00</option>
-                              <option value="T">13:00 - 19:00</option>
-                              <option value="F">Folga</option>
-                            </select>
+                          <td
+                            key={ds}
+                            className={cn('p-0 border-b border-r relative', {
+                              'bg-emerald-50':
+                                dragOverCell?.userId === user.id && dragOverCell?.dateStr === ds,
+                            })}
+                            onDragOver={(e) =>
+                              isEditMode && !isTO ? handleDragOver(e, user.id, ds) : undefined
+                            }
+                            onDragLeave={isEditMode && !isTO ? handleDragLeave : undefined}
+                            onDrop={(e) =>
+                              isEditMode && !isTO ? handleDrop(e, user.id, ds) : undefined
+                            }
+                          >
+                            {isEditMode ? (
+                              <div
+                                draggable={!!val && val !== 'F'}
+                                onDragStart={(e) => {
+                                  if (val && val !== 'F') {
+                                    handleDragStart(e, user.id, ds, val)
+                                  } else {
+                                    e.preventDefault()
+                                  }
+                                }}
+                                className={cn(
+                                  'w-full h-11 flex items-center justify-center text-center text-[11px] md:text-xs transition-colors',
+                                  {
+                                    'font-bold text-black bg-white':
+                                      val === 'D' || val === 'M' || val === 'T',
+                                    'font-bold text-white bg-black hover:bg-slate-800': val === 'N',
+                                    'text-red-400 font-bold bg-red-50/80 hover:bg-red-100':
+                                      isTO && !isPendingTO,
+                                    'text-amber-500 font-bold bg-amber-50/80 hover:bg-amber-100':
+                                      isPendingTO,
+                                    'cursor-move hover:opacity-80 border-2 border-dashed border-transparent hover:border-slate-400':
+                                      !!val && val !== 'F',
+                                    'bg-transparent': !val || val === 'F',
+                                  },
+                                )}
+                              >
+                                {val === 'D' && '07:00 - 19:00'}
+                                {val === 'N' && '19:00 - 07:00'}
+                                {val === 'M' && '07:00 - 13:00'}
+                                {val === 'T' && '13:00 - 19:00'}
+                                {val === 'F' && 'Folga'}
+                              </div>
+                            ) : (
+                              <select
+                                value={val}
+                                onChange={(e) =>
+                                  setDraft((p) => ({
+                                    ...p,
+                                    [user.id]: { ...p[user.id], [ds]: e.target.value as DraftCell },
+                                  }))
+                                }
+                                disabled={isTO || selectedCycle?.status !== 'draft'}
+                                className={cn(
+                                  'w-full h-11 appearance-none bg-transparent text-center text-[11px] md:text-xs outline-none cursor-pointer hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 transition-colors',
+                                  {
+                                    'font-bold text-black bg-white':
+                                      val === 'D' || val === 'M' || val === 'T',
+                                    'font-bold text-white bg-black hover:bg-slate-800': val === 'N',
+                                    'text-red-400 font-bold bg-red-50/80 hover:bg-red-100':
+                                      isTO && !isPendingTO,
+                                    'text-amber-500 font-bold bg-amber-50/80 hover:bg-amber-100':
+                                      isPendingTO,
+                                  },
+                                )}
+                              >
+                                <option value=""></option>
+                                <option value="D">07:00 - 19:00</option>
+                                <option value="N">19:00 - 07:00</option>
+                                <option value="M">07:00 - 13:00</option>
+                                <option value="T">13:00 - 19:00</option>
+                                <option value="F">Folga</option>
+                              </select>
+                            )}
                             {isTO && (
                               <div
                                 className={cn(
