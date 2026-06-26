@@ -27,6 +27,7 @@ import {
   Info,
   Download,
   AlertTriangle,
+  Loader2,
 } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { format, eachDayOfInterval, addDays, parseISO } from 'date-fns'
@@ -80,6 +81,7 @@ export function ScalePlanner({
   const [draft, setDraft] = useState<Record<string, Record<string, DraftCell>>>({})
   const [isSaving, setIsSaving] = useState(false)
   const [searchUser, setSearchUser] = useState('')
+  const [generatingUserId, setGeneratingUserId] = useState<string | null>(null)
 
   const { toast } = useToast()
   const isCollectionPast = new Date().getDate() > 10
@@ -327,6 +329,37 @@ export function ScalePlanner({
     document.body.removeChild(link)
   }
 
+  const handleDoubleClickStaff = async (userId: string) => {
+    if (!selectedCycleId || !selectedSectorId) return
+    setGeneratingUserId(userId)
+    try {
+      await pb.send('/backend/v1/generate-staff-schedule', {
+        method: 'POST',
+        body: JSON.stringify({
+          user_id: userId,
+          cycle_id: selectedCycleId,
+          sector_id: selectedSectorId,
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      })
+      toast({ title: 'Sucesso', description: 'Escala individual gerada com sucesso.' })
+
+      setDraft((prev) => ({ ...prev, [userId]: {} }))
+      const newShifts = await pb
+        .collection('shifts')
+        .getFullList({ filter: `cycle="${selectedCycleId}"` })
+      setAllShifts(newShifts)
+    } catch (err: any) {
+      toast({
+        title: 'Erro',
+        description: err.message || 'Falha ao gerar escala',
+        variant: 'destructive',
+      })
+    } finally {
+      setGeneratingUserId(null)
+    }
+  }
+
   const handleSave = async (publish: boolean) => {
     if (!selectedCycleId || !selectedSectorId) return
     setIsSaving(true)
@@ -539,11 +572,18 @@ export function ScalePlanner({
                     allShifts.some((s) => s.user === user.id)
                   return (
                     <tr key={user.id} className="hover:bg-slate-50 group">
-                      <td className="sticky left-0 z-20 bg-white border-b border-r p-2 shadow-[1px_0_0_0_#e2e8f0]">
+                      <td
+                        className="sticky left-0 z-20 bg-white border-b border-r p-2 shadow-[1px_0_0_0_#e2e8f0] cursor-pointer"
+                        onDoubleClick={() => handleDoubleClickStaff(user.id)}
+                        title="Duplo clique para preencher a escala automaticamente"
+                      >
                         <div className="flex items-center justify-between">
                           <div className="flex flex-col">
-                            <span className="font-medium text-xs truncate max-w-[120px]">
+                            <span className="font-medium text-xs truncate max-w-[120px] flex items-center gap-2">
                               {user.name}
+                              {generatingUserId === user.id && (
+                                <Loader2 className="h-3 w-3 animate-spin text-primary" />
+                              )}
                             </span>
                             <span className="text-[9px] text-slate-400">
                               {user.expand?.staff_role?.name}{' '}
@@ -555,7 +595,10 @@ export function ScalePlanner({
                             </span>
                           </div>
                           <button
-                            onClick={() => setDraftUsers((p) => p.filter((u) => u.id !== user.id))}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setDraftUsers((p) => p.filter((u) => u.id !== user.id))
+                            }}
                             className="text-slate-300 hover:text-red-500"
                           >
                             <Trash2 className="h-3 w-3" />
