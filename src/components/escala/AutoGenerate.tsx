@@ -591,11 +591,18 @@ function AutoGenerateInner({
       const isPBError = err && typeof err === 'object' && 'response' in err
       const respData = isPBError ? err.response : null
       const msg = respData?.error || respData?.message || err.message || 'Falha na geração.'
+      const suggestion = respData?.suggestion
       toast({
         title: 'Falha na geração do draft',
         description: typeof msg === 'string' ? msg : JSON.stringify(msg),
         variant: 'destructive',
       })
+      if (suggestion) {
+        toast({
+          title: 'Sugestão da IA',
+          description: suggestion,
+        })
+      }
     } finally {
       setLoading(false)
     }

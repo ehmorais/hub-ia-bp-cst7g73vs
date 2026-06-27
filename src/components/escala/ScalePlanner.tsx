@@ -29,6 +29,7 @@ import {
   AlertTriangle,
   Loader2,
   Move,
+  Wand2,
 } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { useRealtime } from '@/hooks/use-realtime'
@@ -87,9 +88,61 @@ export function ScalePlanner({
 
   const [isEditMode, setIsEditMode] = useState(false)
   const [dragOverCell, setDragOverCell] = useState<{ userId: string; dateStr: string } | null>(null)
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [generationError, setGenerationError] = useState<string | null>(null)
 
   const { toast } = useToast()
   const isCollectionPast = new Date().getDate() > 10
+
+  const handleGenerateAI = async () => {
+    if (!selectedCycleId || !selectedSectorId) return
+    setIsGenerating(true)
+    setGenerationError(null)
+    try {
+      const res = await generateShifts(
+        selectedCycleId,
+        [selectedSectorId],
+        '',
+        localStorage.getItem('escala_ai_priority') || 'staffing',
+        parseInt(localStorage.getItem('escala_ai_strictness') || '50', 10),
+      )
+
+      if (res && res.error) {
+        setGenerationError(res.error)
+        toast({
+          title: 'Geração Falhou',
+          description: 'A IA encontrou conflitos. Veja os detalhes abaixo.',
+          variant: 'destructive',
+        })
+        if (res.suggestion) {
+          toast({ title: 'Sugestão da IA', description: res.suggestion })
+        }
+      } else {
+        toast({
+          title: 'Sucesso',
+          description: `${res.count} plantões gerados com IA.`,
+        })
+        const newShifts = await pb
+          .collection('shifts')
+          .getFullList({ filter: `cycle="${selectedCycleId}"` })
+        setAllShifts(newShifts)
+      }
+    } catch (err: any) {
+      const errorData = err?.response
+      const errorMsg = errorData?.error || err.message || 'Falha na geração de escala.'
+      setGenerationError(errorMsg)
+      toast({
+        title: 'Erro na Geração',
+        description: errorMsg,
+        variant: 'destructive',
+      })
+      if (errorData?.suggestion) {
+        toast({ title: 'Sugestão', description: errorData.suggestion })
+      }
+    } finally {
+      setIsGenerating(false)
+    }
+  }
 
   useEffect(() => {
     Promise.all([
@@ -588,6 +641,23 @@ export function ScalePlanner({
 
       <div className="flex flex-col xl:flex-row gap-4 justify-between items-start xl:items-center bg-white p-4 rounded-xl border shadow-sm">
         <div className="flex flex-wrap items-center gap-3">
+          <Button
+            onClick={handleGenerateAI}
+            disabled={
+              isGenerating ||
+              !selectedCycleId ||
+              !selectedSectorId ||
+              selectedCycle?.status !== 'draft'
+            }
+            className="gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-sm"
+          >
+            {isGenerating ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Wand2 className="h-4 w-4" />
+            )}
+            Gerar com IA
+          </Button>
           <Select value={selectedCycleId} onValueChange={setSelectedCycleId}>
             <SelectTrigger className="w-[200px]">
               <SelectValue placeholder="Selecione o Ciclo" />
@@ -699,7 +769,31 @@ export function ScalePlanner({
       </div>
 
       <div className="flex flex-col gap-4">
-        <div className="border rounded-xl bg-white shadow-sm overflow-hidden flex flex-col">
+        {generationError && (
+          <Alert variant="destructive" className="animate-fade-in">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Falha na Geração de Escala</AlertTitle>
+            <AlertDescription className="whitespace-pre-line text-xs">
+              {generationError}
+            </AlertDescription>
+          </Alert>
+        )}
+
+        <div className="relative border rounded-xl bg-white shadow-sm overflow-hidden flex flex-col">
+          {isGenerating && (
+            <div className="absolute inset-0 bg-white/80 backdrop-blur-sm z-30 flex items-center justify-center rounded-xl">
+              <div className="flex flex-col items-center gap-3">
+                <div className="relative">
+                  <Loader2 className="h-10 w-10 animate-spin text-emerald-600" />
+                  <Wand2 className="h-5 w-5 text-emerald-600 absolute inset-0 m-auto" />
+                </div>
+                <p className="text-sm font-medium text-slate-700">Gerando escala com IA...</p>
+                <p className="text-xs text-slate-500">
+                  Analisando contratos, regras e folgas. Isso pode levar alguns segundos.
+                </p>
+              </div>
+            </div>
+          )}
           <ScrollArea className="w-full max-w-[calc(100vw-2rem)]">
             <table className="w-full text-sm border-collapse">
               <thead>
