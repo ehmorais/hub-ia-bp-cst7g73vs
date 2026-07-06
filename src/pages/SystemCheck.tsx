@@ -27,11 +27,19 @@ export default function SystemCheck() {
   useEffect(() => {
     async function initCheck() {
       try {
-        const [toolsRecords, projectsRecords, cyclesRecords] = await Promise.all([
-          pb.collection('ia_tools').getFullList({ sort: 'name' }),
-          pb.collection('projects').getFullList({ sort: 'name' }),
-          pb.collection('shift_cycles').getFullList({ sort: 'name' }),
-        ])
+        const [toolsRecords, projectsRecords, cyclesRecords, usersRecords, contractsRecords] =
+          await Promise.all([
+            pb.collection('ia_tools').getFullList({ sort: 'name' }),
+            pb.collection('projects').getFullList({ sort: 'name' }),
+            pb.collection('shift_cycles').getFullList({ sort: 'name' }),
+            pb.collection('users').getFullList({ sort: 'name' }),
+            pb.collection('staff_contracts').getFullList(),
+          ])
+
+        const userIdsWithContracts = new Set(contractsRecords.map((c) => c.user))
+        const usersMissingRole = usersRecords.filter((u) => !u.staff_role)
+        const usersMissingContract = usersRecords.filter((u) => !userIdsWithContracts.has(u.id))
+        const hasStaffDataGaps = usersMissingRole.length > 0 || usersMissingContract.length > 0
 
         const systemChecks: SystemItem[] = [
           {
@@ -54,6 +62,13 @@ export default function SystemCheck() {
             type: 'system',
             checkStatus: 'pending',
             shouldFail: !cyclesRecords.some((c) => c.status === 'active'),
+          },
+          {
+            id: 'staff-data-check',
+            name: `Staff Data Integrity${hasStaffDataGaps ? ` (${usersMissingRole.length + usersMissingContract.length} gaps)` : ''}`,
+            type: 'system',
+            checkStatus: 'pending',
+            shouldFail: hasStaffDataGaps,
           },
         ]
 

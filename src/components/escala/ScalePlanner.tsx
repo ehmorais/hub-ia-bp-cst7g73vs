@@ -160,7 +160,7 @@ export function ScalePlanner({
       }
       setSectors(s)
 
-      setUsers(u.filter((user: any) => user.expand?.staff_role))
+      setUsers(u)
       setContracts(cont)
       setTimeoffs(to)
       if (c.length > 0)

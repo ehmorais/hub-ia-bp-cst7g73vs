@@ -12,33 +12,152 @@ routerAdd(
     }
 
     var auditCol = $app.findCollectionByNameOrId('audit_logs')
-    var audit = new Record(auditCol)
-    audit.set('user', e.auth ? e.auth.id : '')
-    audit.set('action', 'AI_STAFF_SCHEDULE_GENERATION')
-    audit.set(
-      'details',
-      JSON.stringify({
-        status: 'started',
+    var logAudit = function (action, details, tokens) {
+      var audit = new Record(auditCol)
+      audit.set('user', e.auth ? e.auth.id : '')
+      audit.set('action', action)
+      audit.set('details', typeof details === 'string' ? details : JSON.stringify(details))
+      if (tokens) audit.set('token_usage', tokens)
+      $app.saveNoValidate(audit)
+    }
+
+    logAudit('AI_STAFF_SCHEDULE_GENERATION', {
+      status: 'started',
+      target_user: userId,
+      cycle_id: cycleId,
+      sector_id: sectorId,
+    })
+
+    var cycle
+    try {
+      cycle = $app.findRecordById('shift_cycles', cycleId)
+    } catch (_) {
+      logAudit('AI_STAFF_SCHEDULE_GENERATION', {
+        status: 'error',
         target_user: userId,
         cycle_id: cycleId,
-        sector_id: sectorId,
-      }),
-    )
-    $app.saveNoValidate(audit)
+        error: 'Cycle not found',
+        staff_processed: 0,
+      })
+      return e.json(400, {
+        error: 'CYCLE_NOT_FOUND',
+        message: 'O ciclo de escala informado não foi encontrado.',
+      })
+    }
 
-    const cycle = $app.findRecordById('shift_cycles', cycleId)
-    const user = $app.findRecordById('users', userId)
+    var user
+    try {
+      user = $app.findRecordById('users', userId)
+    } catch (_) {
+      logAudit('AI_STAFF_SCHEDULE_GENERATION', {
+        status: 'error',
+        target_user: userId,
+        cycle_id: cycleId,
+        error: 'User not found',
+        staff_processed: 0,
+      })
+      return e.json(400, {
+        error: 'USER_NOT_FOUND',
+        message: 'O usuário informado não foi encontrado.',
+      })
+    }
+
     const targetSector = sectorId || user.getString('default_sector')
 
     if (!targetSector) {
-      return e.badRequestError('No sector selected and user has no default sector')
+      logAudit('AI_STAFF_SCHEDULE_GENERATION', {
+        status: 'error',
+        target_user: userId,
+        cycle_id: cycleId,
+        error: 'No sector selected',
+        staff_processed: 0,
+      })
+      return e.json(400, {
+        error: 'MISSING_SECTOR',
+        message: 'Nenhum setor selecionado e o usuário não possui setor padrão.',
+      })
+    }
+
+    // Pre-check: verify the target sector has users with both staff_role and staff_contract
+    var sectorUsers = $app.findRecordsByFilter(
+      'users',
+      "default_sector='" + targetSector + "'",
+      '',
+      10000,
+      0,
+    )
+
+    var eligibleStaffCount = 0
+    sectorUsers.forEach(function (su) {
+      var hasRole = !!su.getString('staff_role')
+      var hasContract = false
+      if (hasRole) {
+        try {
+          $app.findFirstRecordByFilter('staff_contracts', "user='" + su.id + "'")
+          hasContract = true
+        } catch (_) {}
+      }
+      if (hasRole && hasContract) eligibleStaffCount++
+    })
+
+    // Also check the target user specifically
+    var targetHasRole = !!user.getString('staff_role')
+    var targetHasContract = false
+    if (targetHasRole) {
+      try {
+        $app.findFirstRecordByFilter('staff_contracts', "user='" + userId + "'")
+        targetHasContract = true
+      } catch (_) {}
+    }
+
+    if (!targetHasRole || !targetHasContract) {
+      logAudit('AI_STAFF_SCHEDULE_GENERATION', {
+        status: 'error',
+        target_user: userId,
+        cycle_id: cycleId,
+        sector_id: targetSector,
+        error: 'MISSING_STAFF_DATA',
+        target_has_role: targetHasRole,
+        target_has_contract: targetHasContract,
+        staff_processed: 0,
+      })
+      return e.json(400, {
+        error: 'MISSING_STAFF_DATA',
+        message: 'Nenhum colaborador com contrato e cargo ativo encontrado para este setor.',
+      })
+    }
+
+    if (eligibleStaffCount === 0) {
+      logAudit('AI_STAFF_SCHEDULE_GENERATION', {
+        status: 'error',
+        target_user: userId,
+        cycle_id: cycleId,
+        sector_id: targetSector,
+        error: 'MISSING_STAFF_DATA',
+        staff_processed: 0,
+      })
+      return e.json(400, {
+        error: 'MISSING_STAFF_DATA',
+        message: 'Nenhum colaborador com contrato e cargo ativo encontrado para este setor.',
+      })
     }
 
     let contract
     try {
       contract = $app.findFirstRecordByFilter('staff_contracts', "user='" + userId + "'")
     } catch (_) {
-      return e.badRequestError('User has no contract')
+      logAudit('AI_STAFF_SCHEDULE_GENERATION', {
+        status: 'error',
+        target_user: userId,
+        cycle_id: cycleId,
+        sector_id: targetSector,
+        error: 'User has no contract',
+        staff_processed: eligibleStaffCount,
+      })
+      return e.json(400, {
+        error: 'MISSING_STAFF_DATA',
+        message: 'Nenhum colaborador com contrato e cargo ativo encontrado para este setor.',
+      })
     }
 
     const shiftTypeId = contract.getString('shift_type')
@@ -68,7 +187,6 @@ routerAdd(
 
     const monthlyLimit = contract.getInt('monthly_hour_limit') || 180
 
-    // Also check pending timeoffs
     const pendingTimeoffs = $app.findRecordsByFilter(
       'timeoff_requests',
       "user='" + userId + "' && cycle='" + cycleId + "' && status='pending'",
@@ -168,22 +286,16 @@ routerAdd(
       current = new Date(current.getTime() + stepDays * 24 * 3600000)
     }
 
-    var successAudit = new Record(auditCol)
-    successAudit.set('user', e.auth ? e.auth.id : '')
-    successAudit.set('action', 'AI_STAFF_SCHEDULE_GENERATION')
-    successAudit.set(
-      'details',
-      JSON.stringify({
-        status: 'success',
-        target_user: userId,
-        cycle_id: cycleId,
-        sector_id: targetSector,
-        shifts_created: createdShifts.length,
-        total_hours: totalHours,
-        skipped_timeoff_days: skippedTimeoff,
-      }),
-    )
-    $app.saveNoValidate(successAudit)
+    logAudit('AI_STAFF_SCHEDULE_GENERATION', {
+      status: 'success',
+      target_user: userId,
+      cycle_id: cycleId,
+      sector_id: targetSector,
+      shifts_created: createdShifts.length,
+      total_hours: totalHours,
+      skipped_timeoff_days: skippedTimeoff,
+      staff_processed: eligibleStaffCount,
+    })
 
     return e.json(200, { success: true, count: createdShifts.length })
   },
