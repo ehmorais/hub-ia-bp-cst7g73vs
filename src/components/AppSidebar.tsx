@@ -114,10 +114,10 @@ export function AppSidebar() {
     location.pathname === '/' ||
     location.pathname === '/dashboard' ||
     location.pathname.startsWith('/ai/') ||
-    location.pathname === '/admin' ||
-    location.pathname === '/sectors' ||
     location.pathname === '/settings' ||
     location.pathname === '/profile'
+
+  const isAdminActive = location.pathname === '/admin' || location.pathname === '/sectors'
 
   const isProjectsActive =
     location.pathname.startsWith('/project/') || location.pathname.startsWith('/schedules/')
@@ -153,30 +153,6 @@ export function AppSidebar() {
           <SidebarMenuItem>
             <SidebarMenuButton
               asChild
-              isActive={location.pathname === '/admin'}
-              className="h-10 transition-all duration-200 rounded-lg px-3 text-[14px] group hover:bg-[#06402B]/10 hover:text-[#06402B] data-[active=true]:bg-[#06402B] data-[active=true]:text-white data-[active=true]:font-bold"
-            >
-              <Link to="/admin">
-                <ShieldCheck className="h-[18px] w-[18px] mr-2" />
-                Administração
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              asChild
-              isActive={location.pathname === '/sectors'}
-              className="h-10 transition-all duration-200 rounded-lg px-3 text-[14px] group hover:bg-[#06402B]/10 hover:text-[#06402B] data-[active=true]:bg-[#06402B] data-[active=true]:text-white data-[active=true]:font-bold"
-            >
-              <Link to="/sectors">
-                <Building2 className="h-[18px] w-[18px] mr-2" />
-                Setores Hospitalares
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              asChild
               isActive={location.pathname === '/settings'}
               className="h-10 transition-all duration-200 rounded-lg px-3 text-[14px] group hover:bg-[#06402B]/10 hover:text-[#06402B] data-[active=true]:bg-[#06402B] data-[active=true]:text-white data-[active=true]:font-bold"
             >
@@ -200,6 +176,33 @@ export function AppSidebar() {
             >
               <LogOut className="h-[18px] w-[18px] mr-2" />
               <span className="font-bold">Sair do Sistema</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </CollapsibleSection>
+
+        <CollapsibleSection title="Administração" icon={ShieldCheck} isActive={isAdminActive}>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              asChild
+              isActive={location.pathname === '/admin'}
+              className="h-10 transition-all duration-200 rounded-lg px-3 text-[14px] group hover:bg-[#06402B]/10 hover:text-[#06402B] data-[active=true]:bg-[#06402B] data-[active=true]:text-white data-[active=true]:font-bold"
+            >
+              <Link to="/admin">
+                <ShieldCheck className="h-[18px] w-[18px] mr-2" />
+                Painel Admin
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              asChild
+              isActive={location.pathname === '/sectors'}
+              className="h-10 transition-all duration-200 rounded-lg px-3 text-[14px] group hover:bg-[#06402B]/10 hover:text-[#06402B] data-[active=true]:bg-[#06402B] data-[active=true]:text-white data-[active=true]:font-bold"
+            >
+              <Link to="/sectors">
+                <Building2 className="h-[18px] w-[18px] mr-2" />
+                Setores Hospitalares
+              </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </CollapsibleSection>
