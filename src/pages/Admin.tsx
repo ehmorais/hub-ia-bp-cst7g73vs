@@ -69,8 +69,9 @@ import { useRealtime } from '@/hooks/use-realtime'
 import { cn } from '@/lib/utils'
 import { getIcon } from '@/lib/icons'
 import { EscalasManagement } from '@/components/EscalasManagement'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { ToolUsageChart } from '@/components/ToolUsageChart'
+import { Building2 } from 'lucide-react'
 
 const ICONS_LIST = [
   'Building2',
@@ -121,6 +122,7 @@ export default function Admin() {
 
 function AdminContent() {
   const location = useLocation()
+  const navigate = useNavigate()
   const { toast } = useToast()
   const { user } = useAuth()
   const isAdmin = user?.role === 'Admin'
@@ -162,6 +164,14 @@ function AdminContent() {
   const [activeTab, setActiveTab] = useState(
     location.hash === '#escalas' ? 'escalas' : 'performance',
   )
+
+  const handleTabChange = (value: string) => {
+    if (value === 'sectors') {
+      navigate('/sectors')
+      return
+    }
+    setActiveTab(value)
+  }
 
   const [dbStatus, setDbStatus] = useState<'connected' | 'disconnected' | 'loading'>('loading')
   const [githubStatus, setGithubStatus] = useState<'connected' | 'disconnected' | 'loading'>(
@@ -560,7 +570,7 @@ function AdminContent() {
         </div>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
         <TabsList className="flex flex-wrap w-full justify-start max-w-6xl mb-8 h-auto p-1.5 gap-1 bg-white/60 backdrop-blur-md border border-slate-200/60 shadow-sm rounded-lg font-interactive">
           <TabsTrigger
             value="performance"
@@ -603,6 +613,12 @@ function AdminContent() {
             className="rounded-md px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all hover:bg-accent hover:text-accent-foreground"
           >
             Gestão de Escalas
+          </TabsTrigger>
+          <TabsTrigger
+            value="sectors"
+            className="rounded-md px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all hover:bg-accent hover:text-accent-foreground"
+          >
+            Setores Hospitalares
           </TabsTrigger>
         </TabsList>
 
