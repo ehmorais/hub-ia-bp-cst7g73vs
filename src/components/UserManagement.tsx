@@ -58,8 +58,10 @@ export function UserManagement() {
     staff_role: '',
     default_sector: '',
     staff_profile: '',
+    professional_id: '',
     assigned_rules: [] as string[],
   })
+
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -67,7 +69,10 @@ export function UserManagement() {
     if (user?.role !== 'Admin') return
     try {
       const [u, s, r, p, sr] = await Promise.all([
-        pb.collection('users').getFullList({ sort: 'name', expand: 'default_sector,staff_role' }),
+        pb.collection('users').getFullList({
+          sort: 'name',
+          expand: 'default_sector,staff_role,staff_profile',
+        }),
         pb.collection('hospital_sectors').getFullList({ sort: 'name' }),
         pb.collection('staff_roles').getFullList({ sort: 'name' }),
         pb.collection('staff_profiles').getFullList({ sort: 'name' }),
@@ -114,6 +119,7 @@ export function UserManagement() {
         staff_role: u.staff_role || '',
         default_sector: u.default_sector || '',
         staff_profile: u.staff_profile || '',
+        professional_id: u.expand?.staff_profile?.professional_id || '',
         assigned_rules: u.assigned_rules || [],
       })
     } else {
@@ -126,6 +132,7 @@ export function UserManagement() {
         staff_role: '',
         default_sector: '',
         staff_profile: '',
+        professional_id: '',
         assigned_rules: [],
       })
     }
@@ -171,6 +178,17 @@ export function UserManagement() {
         await pb.collection('users').create(payload)
         toast({ title: 'Usuário criado com sucesso' })
       }
+
+      if (formData.staff_profile) {
+        try {
+          await pb.collection('staff_profiles').update(formData.staff_profile, {
+            professional_id: formData.professional_id || '',
+          })
+        } catch (profileErr) {
+          console.error('Failed to update professional_id on staff_profile', profileErr)
+        }
+      }
+
       setIsFormOpen(false)
     } catch (err: any) {
       const fieldErrs = extractFieldErrors(err)
@@ -252,13 +270,14 @@ export function UserManagement() {
                 <TableHead className="font-semibold text-gray-700">Função</TableHead>
                 <TableHead className="font-semibold text-gray-700">Setor Padrão</TableHead>
                 <TableHead className="font-semibold text-gray-700">Cargo</TableHead>
+                <TableHead className="font-semibold text-gray-700">Registro Profissional</TableHead>
                 <TableHead className="text-right font-semibold text-gray-700">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredUsers.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-gray-500">
+                  <TableCell colSpan={7} className="text-center py-8 text-gray-500">
                     Nenhum usuário encontrado.
                   </TableCell>
                 </TableRow>
@@ -289,6 +308,9 @@ export function UserManagement() {
                     </TableCell>
                     <TableCell className="text-gray-600">
                       {u.expand?.staff_role?.name || '-'}
+                    </TableCell>
+                    <TableCell className="text-gray-600">
+                      {u.expand?.staff_profile?.professional_id || '-'}
                     </TableCell>
                     <TableCell className="text-right space-x-2">
                       <Button
@@ -463,6 +485,15 @@ export function UserManagement() {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-gray-700">Registro Profissional (CRM/Coren)</Label>
+                <Input
+                  value={formData.professional_id}
+                  onChange={(e) => setFormData({ ...formData, professional_id: e.target.value })}
+                  placeholder="Ex: CRM/SP 123456"
+                  className="border-gray-300 focus-visible:ring-emerald-500"
+                />
               </div>
             </div>
 

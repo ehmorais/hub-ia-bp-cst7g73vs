@@ -27,7 +27,9 @@ export function StaffProfiles({ departmentId }: { departmentId?: string }) {
   const [profiles, setProfiles] = useState<any[]>([])
   const [rules, setRules] = useState<any[]>([])
   const [name, setName] = useState('')
+  const [professionalId, setProfessionalId] = useState('')
   const [selectedRules, setSelectedRules] = useState<string[]>([])
+
   const { toast } = useToast()
 
   const loadData = async () => {
@@ -61,9 +63,12 @@ export function StaffProfiles({ departmentId }: { departmentId?: string }) {
       await createStaffProfile({
         name,
         rules: selectedRules,
+        professional_id: professionalId,
       })
       setName('')
+      setProfessionalId('')
       setSelectedRules([])
+
       toast({ title: 'Perfil criado' })
     } catch {
       toast({ title: 'Erro ao criar perfil', variant: 'destructive' })
@@ -136,6 +141,14 @@ export function StaffProfiles({ departmentId }: { departmentId?: string }) {
               </ScrollArea>
             </div>
           </div>
+          <div className="space-y-2 mt-4">
+            <Label>Registro Profissional (CRM/Coren)</Label>
+            <Input
+              value={professionalId}
+              onChange={(e) => setProfessionalId(e.target.value)}
+              placeholder="Ex: CRM/SP 123456"
+            />
+          </div>
           <Button onClick={handleCreate} className="mt-4">
             <Plus className="h-4 w-4 mr-2" />
             Adicionar Perfil
@@ -152,6 +165,7 @@ export function StaffProfiles({ departmentId }: { departmentId?: string }) {
             <TableHeader>
               <TableRow>
                 <TableHead>Nome do Perfil</TableHead>
+                <TableHead>Registro Profissional</TableHead>
                 <TableHead>Total de Regras</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
@@ -160,6 +174,7 @@ export function StaffProfiles({ departmentId }: { departmentId?: string }) {
               {profiles.map((p) => (
                 <TableRow key={p.id}>
                   <TableCell className="font-medium">{p.name}</TableCell>
+                  <TableCell>{p.professional_id || '-'}</TableCell>
                   <TableCell>{p.rules?.length || 0} regra(s)</TableCell>
                   <TableCell className="text-right">
                     <Button variant="ghost" size="icon" onClick={() => handleDelete(p.id)}>
@@ -170,7 +185,7 @@ export function StaffProfiles({ departmentId }: { departmentId?: string }) {
               ))}
               {profiles.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={3} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
                     Nenhum perfil cadastrado.
                   </TableCell>
                 </TableRow>

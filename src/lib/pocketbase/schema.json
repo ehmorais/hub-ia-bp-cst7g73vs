@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-06T13:58:00.820Z",
+  "generatedAt": "2026-07-06T14:55:07.845Z",
   "collections": [
     {
       "name": "users",
@@ -879,6 +879,12 @@
           "required": false,
           "system": false,
           "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "professional_id",
+          "type": "text",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": []
