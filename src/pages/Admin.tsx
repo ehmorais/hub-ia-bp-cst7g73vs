@@ -71,7 +71,6 @@ import { getIcon } from '@/lib/icons'
 import { EscalasManagement } from '@/components/EscalasManagement'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { ToolUsageChart } from '@/components/ToolUsageChart'
-import { Building2 } from 'lucide-react'
 
 const ICONS_LIST = [
   'Building2',
