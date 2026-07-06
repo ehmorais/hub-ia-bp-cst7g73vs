@@ -17,6 +17,7 @@ import DraftSchedules from './pages/DraftSchedules'
 import Login from './pages/Login'
 import Profile from './pages/Profile'
 import SystemCheck from './pages/SystemCheck'
+import Sectors from './pages/Sectors'
 import { AuthProvider, useAuth } from './hooks/use-auth'
 
 function ProtectedRoute() {
@@ -50,6 +51,7 @@ const App = () => (
               <Route path="/project/:id" element={<Project />} />
               <Route path="/ai/:id" element={<AiChat />} />
               <Route path="/admin" element={<Admin />} />
+              <Route path="/sectors" element={<Sectors />} />
               <Route path="/schedules/drafts" element={<DraftSchedules />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/profile" element={<Profile />} />

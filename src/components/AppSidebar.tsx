@@ -18,6 +18,7 @@ import {
   Menu,
   ChevronDown,
   Calendar,
+  Building2,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import pb from '@/lib/pocketbase/client'
@@ -115,6 +116,7 @@ export function AppSidebar() {
     location.pathname === '/dashboard' ||
     location.pathname.startsWith('/ai/') ||
     location.pathname === '/admin' ||
+    location.pathname === '/sectors' ||
     location.pathname === '/settings' ||
     location.pathname === '/profile'
 
@@ -162,6 +164,17 @@ export function AppSidebar() {
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
+            <SidebarMenuButton
+              asChild
+              isActive={location.pathname === '/sectors'}
+              className="h-10 transition-all duration-200 rounded-lg px-3 text-[14px] group hover:bg-[#06402B]/10 hover:text-[#06402B] data-[active=true]:bg-[#06402B] data-[active=true]:text-white data-[active=true]:font-bold"
+            >
+              <Link to="/sectors">
+                <Building2 className="h-[18px] w-[18px] mr-2" />
+                Setores Hospitalares
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
             <SidebarMenuButton
               asChild
               isActive={location.pathname === '/settings'}

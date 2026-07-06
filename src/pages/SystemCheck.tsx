@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import pb from '@/lib/pocketbase/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { CheckCircle2, Circle, Loader2, AlertCircle } from 'lucide-react'
+import { CheckCircle2, Circle, Loader2, AlertCircle, Building2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Link } from 'react-router-dom'
 
 interface SystemItem {
   id: string
@@ -280,6 +281,16 @@ export default function SystemCheck() {
                       className="border-orange-300 text-orange-700 hover:bg-orange-50 gap-2"
                     >
                       Ir para Admin
+                    </Button>
+                    <Button
+                      asChild
+                      variant="outline"
+                      className="border-orange-300 text-orange-700 hover:bg-orange-50 gap-2"
+                    >
+                      <Link to="/sectors">
+                        <Building2 className="h-4 w-4" />
+                        Gerenciar Setores
+                      </Link>
                     </Button>
                   </div>
                 )}
