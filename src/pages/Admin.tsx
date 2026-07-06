@@ -70,7 +70,7 @@ import { useRealtime } from '@/hooks/use-realtime'
 import { cn } from '@/lib/utils'
 import { getIcon } from '@/lib/icons'
 import { EscalasManagement } from '@/components/EscalasManagement'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { ToolUsageChart } from '@/components/ToolUsageChart'
 
 const ICONS_LIST = [
@@ -90,8 +90,7 @@ const ICONS_LIST = [
   'Lightbulb',
 ]
 
-export default function Admin() {
-  const location = useLocation()
+export default function Admin({ defaultTab }: { defaultTab?: string }) {
   const { user } = useAuth()
 
   if (user?.role !== 'Admin') {
@@ -100,28 +99,18 @@ export default function Admin() {
     )
   }
 
-  if (location.hash === '#users') {
+  if (defaultTab === 'users') {
     return <UserManagement />
   }
 
   return (
     <div className="relative h-full w-full">
-      <AdminContent />
-      <div className="fixed bottom-6 right-6 z-50">
-        <Button
-          onClick={() => (window.location.hash = '#users')}
-          className="shadow-lg rounded-lg px-6 h-12"
-        >
-          <Users className="w-5 h-5 mr-2" />
-          Gerenciar Usuários
-        </Button>
-      </div>
+      <AdminContent defaultTab={defaultTab} />
     </div>
   )
 }
 
-function AdminContent() {
-  const location = useLocation()
+function AdminContent({ defaultTab }: { defaultTab?: string }) {
   const navigate = useNavigate()
   const { toast } = useToast()
   const { user } = useAuth()
@@ -161,12 +150,19 @@ function AdminContent() {
   const [isSubmittingProj, setIsSubmittingProj] = useState(false)
   const [openProjDeps, setOpenProjDeps] = useState(false)
 
-  const [activeTab, setActiveTab] = useState(
-    location.hash === '#escalas' ? 'escalas' : 'performance',
-  )
+  const [activeTab, setActiveTab] = useState(defaultTab || 'performance')
 
   const handleTabChange = (value: string) => {
     setActiveTab(value)
+    const tabRoutes: Record<string, string> = {
+      performance: '/performance',
+      audit: '/auditoria',
+      users: '/colaboradores',
+      escalas: '/gestao-escalas',
+    }
+    if (tabRoutes[value] && tabRoutes[value] !== window.location.pathname) {
+      navigate(tabRoutes[value])
+    }
   }
 
   const [dbStatus, setDbStatus] = useState<'connected' | 'disconnected' | 'loading'>('loading')
@@ -191,14 +187,6 @@ function AdminContent() {
     const interval = setInterval(checkHealth, 30000)
     return () => clearInterval(interval)
   }, [])
-
-  useEffect(() => {
-    if (location.hash === '#escalas') {
-      setActiveTab('escalas')
-    } else if (location.pathname === '/admin' && !location.hash) {
-      if (activeTab === 'escalas') setActiveTab('performance')
-    }
-  }, [location.hash, location.pathname])
 
   const loadLogs = async () => {
     try {
@@ -576,7 +564,7 @@ function AdminContent() {
               <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-100 shadow-sm flex items-center justify-center">
                 <Building2 className="h-5 w-5" />
               </div>
-              Setores Hospitalares
+              Setores
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -656,7 +644,7 @@ function AdminContent() {
                   <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-100 shadow-sm flex items-center justify-center">
                     <Building2 className="h-5 w-5" />
                   </div>
-                  Setores Hospitalares
+                  Setores
                 </CardTitle>
               </CardHeader>
               <CardContent className="flex-1 flex flex-col justify-end">

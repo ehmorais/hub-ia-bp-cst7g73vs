@@ -19,6 +19,8 @@ import {
   ChevronDown,
   Users,
   CalendarClock,
+  Activity,
+  ScrollText,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import pb from '@/lib/pocketbase/client'
@@ -164,7 +166,12 @@ export function AppSidebar() {
     location.pathname.startsWith('/project/') || location.pathname.startsWith('/schedules/')
   const isDeptsActive = location.pathname.startsWith('/department/')
 
-  const isAdminActive = location.pathname === '/admin' || location.pathname === '/sectors'
+  const isAdminActive =
+    location.pathname === '/performance' ||
+    location.pathname === '/auditoria' ||
+    location.pathname === '/sectors' ||
+    location.pathname === '/colaboradores' ||
+    location.pathname === '/gestao-escalas'
 
   return (
     <Sidebar variant="inset" className="border-r border-[#06402B]/10 shadow-sm !bg-slate-50/50">
@@ -218,6 +225,22 @@ export function AppSidebar() {
                 <SidebarMenu className="mt-1 gap-1 pl-4 ml-3 border-l border-slate-200 py-1">
                   <SidebarMenuItem>
                     <NavButton
+                      to="/performance"
+                      icon={Activity}
+                      label="Performance"
+                      active={location.pathname === '/performance'}
+                    />
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <NavButton
+                      to="/auditoria"
+                      icon={ScrollText}
+                      label="Auditoria"
+                      active={location.pathname === '/auditoria'}
+                    />
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <NavButton
                       to="/sectors"
                       icon={Building2}
                       label="Setores"
@@ -226,18 +249,18 @@ export function AppSidebar() {
                   </SidebarMenuItem>
                   <SidebarMenuItem>
                     <NavButton
-                      to="/admin#users"
+                      to="/colaboradores"
                       icon={Users}
                       label="Colaboradores"
-                      active={location.pathname === '/admin' && location.hash === '#users'}
+                      active={location.pathname === '/colaboradores'}
                     />
                   </SidebarMenuItem>
                   <SidebarMenuItem>
                     <NavButton
-                      to="/admin#escalas"
+                      to="/gestao-escalas"
                       icon={CalendarClock}
                       label="Escalas"
-                      active={location.pathname === '/admin' && location.hash === '#escalas'}
+                      active={location.pathname === '/gestao-escalas'}
                     />
                   </SidebarMenuItem>
                 </SidebarMenu>

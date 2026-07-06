@@ -225,14 +225,14 @@ export default function Sectors() {
         <div className="flex flex-col gap-3">
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="icon" asChild>
-              <Link to="/admin">
+              <Link to="/performance">
                 <ArrowLeft className="h-5 w-5" />
               </Link>
             </Button>
             <div>
               <div className="flex items-center gap-2 text-sm text-slate-400 mb-1">
                 <Link
-                  to="/admin"
+                  to="/performance"
                   className="flex items-center gap-1 hover:text-[#06402B] transition-colors"
                 >
                   <ShieldCheck className="h-3.5 w-3.5" />
@@ -243,7 +243,7 @@ export default function Sectors() {
               </div>
               <h1 className="text-2xl font-bold tracking-tight text-[#06402B] flex items-center gap-2">
                 <Building2 className="h-6 w-6" />
-                Setores Hospitalares
+                Setores
               </h1>
               <p className="text-sm text-slate-500 mt-1">
                 Gerencie áreas de trabalho, dimensionamento e criticidade.

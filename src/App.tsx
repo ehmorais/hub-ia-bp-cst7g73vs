@@ -50,7 +50,17 @@ const App = () => (
               <Route path="/department/:id" element={<Department />} />
               <Route path="/project/:id" element={<Project />} />
               <Route path="/ai/:id" element={<AiChat />} />
-              <Route path="/admin" element={<Admin />} />
+              <Route
+                path="/performance"
+                element={<Admin key="performance" defaultTab="performance" />}
+              />
+              <Route path="/auditoria" element={<Admin key="auditoria" defaultTab="audit" />} />
+              <Route path="/colaboradores" element={<Admin key="users" defaultTab="users" />} />
+              <Route
+                path="/gestao-escalas"
+                element={<Admin key="escalas" defaultTab="escalas" />}
+              />
+              <Route path="/admin" element={<Navigate to="/performance" replace />} />
               <Route path="/sectors" element={<Sectors />} />
               <Route path="/schedules/drafts" element={<DraftSchedules />} />
               <Route path="/settings" element={<Settings />} />
