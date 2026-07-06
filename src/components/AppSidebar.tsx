@@ -175,6 +175,7 @@ export function AppSidebar() {
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
+          <SidebarMenuItem>
             <SidebarMenuButton
               asChild
               isActive={location.pathname === '/settings'}
