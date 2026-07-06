@@ -1,18 +1,10 @@
-// @deps xlsx@0.18.5
 routerAdd(
   'POST',
   '/backend/v1/escala/import',
   (e) => {
-    const XLSX = require('xlsx')
-
     const body = e.requestInfo().body || {}
-    if (!body.file) return e.badRequestError('Nenhum arquivo enviado')
-
-    let workbook
-    try {
-      workbook = XLSX.read(body.file, { type: 'base64' })
-    } catch (err) {
-      return e.badRequestError('Falha ao ler arquivo Excel: ' + err.message)
+    if (!body.sheets || !Array.isArray(body.sheets)) {
+      return e.badRequestError('Nenhuma planilha enviada')
     }
 
     const summary = {
@@ -47,7 +39,7 @@ routerAdd(
       sectors = $app.findRecordsByFilter('hospital_sectors', "id != ''", 'name', 0, 0)
     } catch (_) {}
 
-    const skipNames = [
+    var skipNames = [
       'NOME',
       'LEGENDA',
       'SUPERVISÃO',
@@ -60,7 +52,7 @@ routerAdd(
     ]
 
     function getRank(funcName) {
-      const u = funcName.toUpperCase().trim()
+      var u = funcName.toUpperCase().trim()
       if (u.indexOf('GER') >= 0) return 5
       if (u.indexOf('SUP') >= 0) return 4
       if (u === 'ENF') return 3
@@ -70,43 +62,44 @@ routerAdd(
     }
 
     function requiresSupervision(funcName) {
-      const u = funcName.toUpperCase().trim()
+      var u = funcName.toUpperCase().trim()
       return u === 'TE' || u === 'AE' || u === 'MAQ'
     }
 
     function shouldSkip(name) {
-      const u = name.toUpperCase().trim()
+      var u = name.toUpperCase().trim()
       return skipNames.some(function (s) {
         return u.indexOf(s) >= 0
       })
     }
 
-    for (const sheetName of workbook.SheetNames) {
-      const sheet = workbook.Sheets[sheetName]
-      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: '' })
+    for (var si = 0; si < body.sheets.length; si++) {
+      var sheet = body.sheets[si]
+      var sheetName = sheet.name || ''
+      var rows = sheet.rows || []
+      var sheetInfo = { name: sheetName, rowsProcessed: 0, sectorMatched: null }
 
-      const sheetInfo = { name: sheetName, rowsProcessed: 0, sectorMatched: null }
-      const normName = sheetName
+      var normName = sheetName
         .replace(/^ESC\.?\s*/i, '')
         .replace(/^ESC\s*/i, '')
         .trim()
-      for (const s of sectors) {
-        const sn = s.getString('name').toUpperCase()
+      for (var s = 0; s < sectors.length; s++) {
+        var sn = sectors[s].getString('name').toUpperCase()
         if (sn.indexOf(normName.toUpperCase()) >= 0 || normName.toUpperCase().indexOf(sn) >= 0) {
-          sheetInfo.sectorMatched = s.getString('name')
+          sheetInfo.sectorMatched = sectors[s].getString('name')
           break
         }
       }
 
-      let headerIdx = -1,
+      var headerIdx = -1,
         nameCol = -1,
         corenCol = -1,
         funcCol = -1
-      for (let i = 0; i < Math.min(rows.length, 10); i++) {
-        const row = rows[i]
+      for (var i = 0; i < Math.min(rows.length, 10); i++) {
+        var row = rows[i]
         if (!row) continue
-        for (let j = 0; j < row.length; j++) {
-          const val = String(row[j] || '')
+        for (var j = 0; j < row.length; j++) {
+          var val = String(row[j] || '')
             .toUpperCase()
             .trim()
           if (val === 'NOME' && nameCol === -1) {
@@ -126,22 +119,22 @@ routerAdd(
       if (corenCol === -1) corenCol = nameCol + 1
       if (funcCol === -1) funcCol = nameCol + 2
 
-      for (let i = headerIdx + 1; i < rows.length; i++) {
-        const row = rows[i]
+      for (var i = headerIdx + 1; i < rows.length; i++) {
+        var row = rows[i]
         if (!row) continue
-        const name = String(row[nameCol] || '').trim()
+        var name = String(row[nameCol] || '').trim()
         if (!name || shouldSkip(name)) continue
 
-        const rawCoren = String(row[corenCol] || '').trim()
-        const coren = rawCoren === 'cursando' || rawCoren === '' ? '' : rawCoren
-        const funcName = String(row[funcCol] || '').trim()
+        var rawCoren = String(row[corenCol] || '').trim()
+        var coren = rawCoren === 'cursando' || rawCoren === '' ? '' : rawCoren
+        var funcName = String(row[funcCol] || '').trim()
         if (!funcName) continue
 
-        const funcKey = funcName.toUpperCase().trim()
+        var funcKey = funcName.toUpperCase().trim()
         if (!roleMap[funcKey]) {
           try {
-            const roleCol = $app.findCollectionByNameOrId('staff_roles')
-            const role = new Record(roleCol)
+            var roleCol = $app.findCollectionByNameOrId('staff_roles')
+            var role = new Record(roleCol)
             role.set('name', funcName)
             role.set('hierarchy_rank', getRank(funcName))
             role.set('requires_supervision', requiresSupervision(funcName))
@@ -156,7 +149,7 @@ routerAdd(
         if (coren) {
           if (profileMap[coren]) {
             try {
-              const profile = $app.findRecordById('staff_profiles', profileMap[coren])
+              var profile = $app.findRecordById('staff_profiles', profileMap[coren])
               if (profile.getString('name') !== name) {
                 profile.set('name', name)
                 $app.save(profile)
@@ -169,8 +162,8 @@ routerAdd(
             }
           } else {
             try {
-              const pCol = $app.findCollectionByNameOrId('staff_profiles')
-              const profile = new Record(pCol)
+              var pCol = $app.findCollectionByNameOrId('staff_profiles')
+              var profile = new Record(pCol)
               profile.set('name', name)
               profile.set('professional_id', coren)
               $app.save(profile)
@@ -181,15 +174,15 @@ routerAdd(
             }
           }
         } else {
-          let exists = false
+          var exists = false
           try {
             $app.findFirstRecordByData('staff_profiles', 'name', name)
             exists = true
           } catch (_) {}
           if (!exists) {
             try {
-              const pCol = $app.findCollectionByNameOrId('staff_profiles')
-              const profile = new Record(pCol)
+              var pCol = $app.findCollectionByNameOrId('staff_profiles')
+              var profile = new Record(pCol)
               profile.set('name', name)
               $app.save(profile)
               summary.profilesCreated++

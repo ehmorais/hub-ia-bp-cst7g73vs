@@ -1,176 +1,213 @@
 import { useState, useRef } from 'react'
+import { Upload, FileSpreadsheet, Loader2, CheckCircle2, AlertCircle, Users } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogFooter,
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Loader2, Upload, FileSpreadsheet, CheckCircle2, AlertCircle } from 'lucide-react'
-import { importCollaborators } from '@/services/escala'
-import { useToast } from '@/components/ui/use-toast'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import pb from '@/lib/pocketbase/client'
+import { parseXlsx, type ParsedSheet } from '@/lib/xlsx-parser'
 
-export function CollaboratorImportDialog() {
+interface ImportSummary {
+  sheets: { name: string; rowsProcessed: number; sectorMatched: string | null }[]
+  rolesCreated: number
+  profilesCreated: number
+  profilesUpdated: number
+  profilesSkipped: number
+  errors: string[]
+}
+
+export function CollaboratorImportDialog({ onImported }: { onImported?: () => void }) {
   const [open, setOpen] = useState(false)
-  const [file, setFile] = useState<File | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [result, setResult] = useState<any>(null)
-  const { toast } = useToast()
+  const [parsing, setParsing] = useState(false)
+  const [parsedSheets, setParsedSheets] = useState<ParsedSheet[]>([])
+  const [fileName, setFileName] = useState('')
+  const [importing, setImporting] = useState(false)
+  const [result, setResult] = useState<ImportSummary | null>(null)
+  const [error, setError] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const handleImport = async () => {
-    if (!file) return
-    setLoading(true)
+  const reset = () => {
+    setParsedSheets([])
+    setFileName('')
+    setResult(null)
+    setError('')
+    if (inputRef.current) inputRef.current.value = ''
+  }
+
+  const handleFile = async (file: File) => {
+    setParsing(true)
+    setError('')
     setResult(null)
     try {
-      const res = await importCollaborators(file)
-      setResult(res)
-      toast({
-        title: 'Importação concluída',
-        description: `${res.profilesCreated} perfil(is) criado(s), ${res.profilesUpdated} atualizado(s).`,
-      })
-    } catch (err: any) {
-      toast({
-        title: 'Erro na importação',
-        description: err?.message || 'Falha ao importar arquivo.',
-        variant: 'destructive',
-      })
+      const sheets = await parseXlsx(file)
+      setParsedSheets(sheets)
+      setFileName(file.name)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao processar o arquivo')
+      setParsedSheets([])
     } finally {
-      setLoading(false)
+      setParsing(false)
     }
   }
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0]
-    if (f) setFile(f)
-    setResult(null)
+  const handleImport = async () => {
+    setImporting(true)
+    setError('')
+    try {
+      const res = await pb.send('/backend/v1/escala/import', {
+        method: 'POST',
+        body: JSON.stringify({ sheets: parsedSheets }),
+        headers: { 'Content-Type': 'application/json' },
+      })
+      setResult(res as ImportSummary)
+      setParsedSheets([])
+      onImported?.()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao importar dados')
+    } finally {
+      setImporting(false)
+    }
   }
 
-  const handleClose = () => {
-    setOpen(false)
-    setFile(null)
-    setResult(null)
+  const handleOpenChange = (v: boolean) => {
+    setOpen(v)
+    if (!v) reset()
   }
+
+  const totalRows = parsedSheets.reduce((acc, s) => acc + s.rows.length, 0)
 
   return (
-    <Dialog open={open} onOpenChange={(v) => (v ? setOpen(true) : handleClose())}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
-        <Button variant="outline" className="gap-2">
-          <Upload className="h-4 w-4" />
-          Importar
+        <Button variant="outline">
+          <Upload className="h-4 w-4 mr-2" />
+          Importar Colaboradores
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[520px]">
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Importar Colaboradores</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <Users className="h-5 w-5" />
+            Importar Colaboradores
+          </DialogTitle>
           <DialogDescription>
-            Selecione um arquivo Excel (.xlsx) com os dados dos colaboradores. O sistema extrairá
-            nome, COREN e função de cada planilha automaticamente.
+            Selecione um arquivo Excel (.xlsx) para importar colaboradores e funções.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
-          <div className="space-y-2">
-            <Input
-              ref={inputRef}
-              type="file"
-              accept=".xlsx,.xls"
-              onChange={handleFileChange}
-              className="cursor-pointer"
-            />
-            {file && (
-              <div className="flex items-center gap-2 text-sm text-slate-600">
-                <FileSpreadsheet className="h-4 w-4 text-green-600" />
-                <span className="font-medium">{file.name}</span>
-                <span className="text-slate-400">({(file.size / 1024).toFixed(1)} KB)</span>
-              </div>
-            )}
-          </div>
+        {error && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
 
-          {result && (
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 space-y-3">
-              <div className="flex items-center gap-2 font-semibold text-slate-800">
-                <CheckCircle2 className="h-4 w-4 text-green-600" />
-                Resumo da Importação
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-sm text-slate-600">
-                <div>
-                  Perfis criados:{' '}
-                  <strong className="text-slate-900">{result.profilesCreated}</strong>
-                </div>
-                <div>
-                  Perfis atualizados:{' '}
-                  <strong className="text-slate-900">{result.profilesUpdated}</strong>
-                </div>
-                <div>
-                  Perfis ignorados:{' '}
-                  <strong className="text-slate-900">{result.profilesSkipped}</strong>
-                </div>
-                <div>
-                  Funções criadas: <strong className="text-slate-900">{result.rolesCreated}</strong>
-                </div>
-              </div>
-
-              {result.sheets?.length > 0 && (
-                <div>
-                  <div className="text-xs font-semibold text-slate-500 uppercase mb-1">
-                    Planilhas processadas:
-                  </div>
-                  {result.sheets.map((s: any, i: number) => (
-                    <div key={i} className="text-xs text-slate-600">
-                      • {s.name}: {s.rowsProcessed} registro(s)
-                      {s.sectorMatched && (
-                        <span className="text-slate-400"> → setor: {s.sectorMatched}</span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {result.errors?.length > 0 && (
-                <div>
-                  <div className="text-xs font-semibold text-red-500 uppercase mb-1">
-                    Avisos / Erros:
-                  </div>
-                  {result.errors.slice(0, 5).map((err: string, i: number) => (
-                    <div key={i} className="text-xs text-red-500 flex items-start gap-1">
-                      <AlertCircle className="h-3 w-3 mt-0.5 shrink-0" />
-                      {err}
-                    </div>
-                  ))}
-                  {result.errors.length > 5 && (
-                    <div className="text-xs text-slate-400">
-                      ... e mais {result.errors.length - 5} aviso(s)
-                    </div>
-                  )}
-                </div>
-              )}
+        {result ? (
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 text-green-600">
+              <CheckCircle2 className="h-5 w-5" />
+              <span className="font-medium">Importação concluída!</span>
             </div>
-          )}
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={handleClose}>
-            Fechar
-          </Button>
-          <Button onClick={handleImport} disabled={!file || loading}>
-            {loading ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Importando...
-              </>
-            ) : (
-              <>
-                <Upload className="h-4 w-4 mr-2" />
-                Importar Dados
-              </>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-lg border p-3">
+                <p className="text-2xl font-bold">{result.profilesCreated}</p>
+                <p className="text-sm text-muted-foreground">Perfis criados</p>
+              </div>
+              <div className="rounded-lg border p-3">
+                <p className="text-2xl font-bold">{result.profilesUpdated}</p>
+                <p className="text-sm text-muted-foreground">Perfis atualizados</p>
+              </div>
+              <div className="rounded-lg border p-3">
+                <p className="text-2xl font-bold">{result.rolesCreated}</p>
+                <p className="text-sm text-muted-foreground">Funções criadas</p>
+              </div>
+              <div className="rounded-lg border p-3">
+                <p className="text-2xl font-bold">{result.profilesSkipped}</p>
+                <p className="text-sm text-muted-foreground">Perfis ignorados</p>
+              </div>
+            </div>
+            {result.errors.length > 0 && (
+              <ScrollArea className="h-32 rounded-lg border p-3">
+                <div className="space-y-1">
+                  {result.errors.map((err, i) => (
+                    <p key={i} className="text-sm text-red-600">
+                      {err}
+                    </p>
+                  ))}
+                </div>
+              </ScrollArea>
             )}
-          </Button>
-        </DialogFooter>
+            <Button onClick={() => handleOpenChange(false)} className="w-full">
+              Concluir
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div
+              className="flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-muted-foreground/25 p-8 cursor-pointer hover:border-primary/50 transition-colors"
+              onClick={() => inputRef.current?.click()}
+            >
+              {parsing ? (
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              ) : (
+                <FileSpreadsheet className="h-8 w-8 text-muted-foreground" />
+              )}
+              <p className="text-sm text-muted-foreground">
+                {parsing ? 'Processando...' : fileName || 'Clique para selecionar um arquivo .xlsx'}
+              </p>
+              <input
+                ref={inputRef}
+                type="file"
+                accept=".xlsx"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0]
+                  if (f) handleFile(f)
+                }}
+              />
+            </div>
+
+            {parsedSheets.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium">
+                  {parsedSheets.length} planilha(s) encontrada(s) · {totalRows} linha(s)
+                </p>
+                <ScrollArea className="h-32 rounded-lg border p-2">
+                  <div className="space-y-1">
+                    {parsedSheets.map((s, i) => (
+                      <div key={i} className="flex justify-between text-sm py-1">
+                        <span className="truncate">{s.name}</span>
+                        <span className="text-muted-foreground">{s.rows.length} linhas</span>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </div>
+            )}
+
+            <Button
+              onClick={handleImport}
+              disabled={parsedSheets.length === 0 || importing}
+              className="w-full"
+            >
+              {importing ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Importando...
+                </>
+              ) : (
+                'Confirmar Importação'
+              )}
+            </Button>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   )
