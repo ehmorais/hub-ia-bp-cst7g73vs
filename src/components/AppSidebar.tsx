@@ -18,7 +18,6 @@ import {
   Menu,
   ChevronDown,
   Calendar,
-  Building2,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import pb from '@/lib/pocketbase/client'
