@@ -39,7 +39,17 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Badge } from '@/components/ui/badge'
-import { ShieldAlert, Trash2, Plus, Pencil, Building2, ArrowLeft, Loader2 } from 'lucide-react'
+import {
+  ShieldAlert,
+  Trash2,
+  Plus,
+  Pencil,
+  Building2,
+  ArrowLeft,
+  Loader2,
+  ChevronRight,
+  ShieldCheck,
+} from 'lucide-react'
 import { useToast } from '@/components/ui/use-toast'
 import {
   getHospitalSectors,
@@ -212,20 +222,33 @@ export default function Sectors() {
   return (
     <div className="space-y-6 animate-fade-in p-4 md:p-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" asChild>
-            <Link to="/admin">
-              <ArrowLeft className="h-5 w-5" />
-            </Link>
-          </Button>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-[#06402B] flex items-center gap-2">
-              <Building2 className="h-6 w-6" />
-              Setores Hospitalares
-            </h1>
-            <p className="text-sm text-slate-500 mt-1">
-              Gerencie áreas de trabalho, dimensionamento e criticidade.
-            </p>
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" size="icon" asChild>
+              <Link to="/admin">
+                <ArrowLeft className="h-5 w-5" />
+              </Link>
+            </Button>
+            <div>
+              <div className="flex items-center gap-2 text-sm text-slate-400 mb-1">
+                <Link
+                  to="/admin"
+                  className="flex items-center gap-1 hover:text-[#06402B] transition-colors"
+                >
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                  <span className="font-medium">Administração</span>
+                </Link>
+                <ChevronRight className="h-3.5 w-3.5" />
+                <span className="font-medium text-[#06402B]">Setores Hospitalares</span>
+              </div>
+              <h1 className="text-2xl font-bold tracking-tight text-[#06402B] flex items-center gap-2">
+                <Building2 className="h-6 w-6" />
+                Setores Hospitalares
+              </h1>
+              <p className="text-sm text-slate-500 mt-1">
+                Gerencie áreas de trabalho, dimensionamento e criticidade.
+              </p>
+            </div>
           </div>
         </div>
         <Button onClick={openCreate} className="bg-[#06402B] hover:bg-[#06402B]/90">
