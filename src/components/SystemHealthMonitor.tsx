@@ -10,12 +10,18 @@ export function SystemHealthMonitor() {
   useEffect(() => {
     async function checkHealth() {
       try {
-        const [tools, cycles] = await Promise.all([
+        const [tools, cycles, usersWithoutRole, totalUsers, totalContracts] = await Promise.all([
           pb.collection('ia_tools').getList(1, 1, { filter: 'status = "active"' }),
           pb.collection('shift_cycles').getList(1, 1, { filter: 'status = "active"' }),
+          pb.collection('users').getList(1, 1, { filter: 'staff_role = ""' }),
+          pb.collection('users').getList(1, 1),
+          pb.collection('staff_contracts').getList(1, 1),
         ])
 
-        if (tools.items.length > 0 && cycles.items.length > 0) {
+        const hasStaffGaps =
+          usersWithoutRole.totalItems > 0 || totalContracts.totalItems < totalUsers.totalItems
+
+        if (tools.items.length > 0 && cycles.items.length > 0 && !hasStaffGaps) {
           setStatus('go')
         } else {
           setStatus('check')

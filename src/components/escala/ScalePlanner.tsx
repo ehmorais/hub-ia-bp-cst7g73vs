@@ -15,6 +15,7 @@ import {
   getUsers,
   getStaffContracts,
   getTimeoffRequests,
+  generateShifts,
 } from '@/services/escala'
 import {
   AlertCircle,
@@ -839,7 +840,7 @@ export function ScalePlanner({
                               )}
                             </span>
                             <span className="text-[9px] text-slate-400">
-                              {user.expand?.staff_role?.name}{' '}
+                              {user.expand?.staff_role?.name || 'Sem cargo'}{' '}
                               {isCov && (
                                 <Badge variant="secondary" className="text-[8px] h-3 px-1 ml-1">
                                   Cobertura

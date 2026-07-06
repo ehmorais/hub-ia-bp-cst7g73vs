@@ -241,6 +241,16 @@ export default function SystemCheck() {
                   Alguns componentes do sistema estão inativos ou não configurados. Verifique os
                   itens marcados em laranja acima.
                 </p>
+                {items.find((i) => i.id === 'staff-data-check')?.checkStatus === 'error' && (
+                  <Button
+                    onClick={() => navigate('/admin')}
+                    variant="outline"
+                    className="mt-4 border-orange-300 text-orange-700 hover:bg-orange-50 gap-2"
+                  >
+                    <AlertCircle className="h-4 w-4" />
+                    Corrigir Dados de Colaboradores
+                  </Button>
+                )}
               </div>
             )}
           </div>
