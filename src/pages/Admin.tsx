@@ -554,31 +554,6 @@ function AdminContent({ defaultTab }: { defaultTab?: string }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-2">
-        <Card
-          className="shadow-soft border-slate-200/60 transition-all hover:shadow-elevation rounded-lg border-t-[6px] border-t-primary cursor-pointer group"
-          onClick={() => navigate('/sectors')}
-        >
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base flex items-center gap-3 font-heading text-primary">
-              <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-100 shadow-sm flex items-center justify-center">
-                <Building2 className="h-5 w-5" />
-              </div>
-              Setores
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-slate-500 font-interactive">
-              Gerencie áreas de trabalho, dimensionamento e criticidade.
-            </p>
-            <div className="mt-3 flex items-center gap-2 text-primary font-medium text-sm font-interactive group-hover:gap-3 transition-all">
-              Acessar gestão de setores
-              <ChevronRight className="h-4 w-4" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
       <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
         <TabsList className="flex flex-wrap w-full justify-start max-w-6xl mb-8 h-auto p-1.5 gap-1 bg-white/60 backdrop-blur-md border border-slate-200/60 shadow-sm rounded-lg font-interactive">
           <TabsTrigger
@@ -635,28 +610,6 @@ function AdminContent({ defaultTab }: { defaultTab?: string }) {
             </Button>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <Card
-              className="shadow-soft border-slate-200/60 transition-all hover:shadow-elevation rounded-lg border-t-[6px] border-t-primary cursor-pointer group"
-              onClick={() => navigate('/sectors')}
-            >
-              <CardHeader className="pb-2 flex-none">
-                <CardTitle className="text-lg flex items-center gap-3 font-heading text-primary">
-                  <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-100 shadow-sm flex items-center justify-center">
-                    <Building2 className="h-5 w-5" />
-                  </div>
-                  Setores
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="flex-1 flex flex-col justify-end">
-                <p className="text-sm text-slate-500 font-interactive mt-2">
-                  Gerencie áreas de trabalho, dimensionamento e criticidade dos setores.
-                </p>
-                <div className="mt-4 flex items-center gap-2 text-primary font-medium text-sm font-interactive group-hover:gap-3 transition-all">
-                  Acessar gestão de setores
-                  <ChevronRight className="h-4 w-4" />
-                </div>
-              </CardContent>
-            </Card>{' '}
             {departments.map((dep) => {
               const depProjs = projects.filter(
                 (p) => p.associated_departments?.includes(dep.id) || p.department === dep.id,

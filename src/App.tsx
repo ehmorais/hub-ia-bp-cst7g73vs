@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Outlet, useLocation } from 'react-router-dom'
 import { Toaster } from '@/components/ui/toaster'
 import { Toaster as Sonner } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -60,7 +60,6 @@ const App = () => (
                 path="/gestao-escalas"
                 element={<Admin key="escalas" defaultTab="escalas" />}
               />
-              <Route path="/admin" element={<Navigate to="/performance" replace />} />
               <Route path="/sectors" element={<Sectors />} />
               <Route path="/schedules/drafts" element={<DraftSchedules />} />
               <Route path="/settings" element={<Settings />} />
