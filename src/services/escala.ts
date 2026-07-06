@@ -128,3 +128,20 @@ export const getUsers = () =>
 export const createUser = (data: any) => pb.collection('users').create(data)
 export const updateUser = (id: string, data: any) => pb.collection('users').update(id, data)
 export const deleteUser = (id: string) => pb.collection('users').delete(id)
+
+// Collaborator Import (Excel)
+export const importCollaborators = async (file: File) => {
+  const arrayBuffer = await file.arrayBuffer()
+  const bytes = new Uint8Array(arrayBuffer)
+  let binary = ''
+  const chunkSize = 0x8000
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + chunkSize)))
+  }
+  const base64 = btoa(binary)
+  return pb.send('/backend/v1/escala/import', {
+    method: 'POST',
+    body: JSON.stringify({ file: base64, filename: file.name }),
+    headers: { 'Content-Type': 'application/json' },
+  })
+}

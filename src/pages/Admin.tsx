@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/hooks/use-auth'
 import { UserManagement } from '@/components/UserManagement'
+import { CollaboratorImportDialog } from '@/components/CollaboratorImportDialog'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
@@ -100,7 +101,23 @@ export default function Admin({ defaultTab }: { defaultTab?: string }) {
   }
 
   if (defaultTab === 'users') {
-    return <UserManagement />
+    return (
+      <div className="container mx-auto p-4 md:p-8 max-w-[1400px] animate-fade-in">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+          <div className="flex flex-col gap-2">
+            <h1 className="text-4xl font-bold tracking-tight text-primary flex items-center gap-3 font-heading">
+              <Users className="h-9 w-9 text-primary" />
+              Colaboradores
+            </h1>
+            <p className="text-muted-foreground text-lg max-w-3xl font-sans">
+              Gestão de acessos, perfis profissionais e importação de dados.
+            </p>
+          </div>
+          <CollaboratorImportDialog />
+        </div>
+        <UserManagement />
+      </div>
+    )
   }
 
   return (
