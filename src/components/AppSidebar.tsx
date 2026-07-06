@@ -17,6 +17,8 @@ import {
   Settings,
   Menu,
   ChevronDown,
+  Users,
+  CalendarClock,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import pb from '@/lib/pocketbase/client'
@@ -106,7 +108,7 @@ function NavButton({
 export function AppSidebar() {
   const location = useLocation()
   const navigate = useNavigate()
-  const { isAuthenticated, signOut } = useAuth()
+  const { isAuthenticated, signOut, user } = useAuth()
   const [departments, setDepartments] = useState<any[]>([])
   const [projects, setProjects] = useState<any[]>([])
 
@@ -156,9 +158,7 @@ export function AppSidebar() {
     location.pathname === '/dashboard' ||
     location.pathname.startsWith('/ai/') ||
     location.pathname === '/settings' ||
-    location.pathname === '/profile' ||
-    location.pathname === '/admin' ||
-    location.pathname === '/sectors'
+    location.pathname === '/profile'
 
   const isProjectsActive =
     location.pathname.startsWith('/project/') || location.pathname.startsWith('/schedules/')
@@ -198,42 +198,52 @@ export function AppSidebar() {
             />
           </SidebarMenuItem>
 
-          <Collapsible defaultOpen={isAdminActive} className="group/admin-collapsible mt-1">
-            <CollapsibleTrigger asChild>
-              <div
-                className={cn(
-                  'flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-all duration-300 rounded-lg border border-transparent select-none',
-                  isAdminActive
-                    ? 'bg-[#06402B]/10 text-[#06402B]'
-                    : 'text-slate-600 hover:bg-[#06402B]/5 hover:text-[#06402B]',
-                )}
-              >
-                <ShieldCheck className="h-[18px] w-[18px]" />
-                <span className="font-bold text-[13px] tracking-wide flex-1">Administração</span>
-                <ChevronDown className="w-4 h-4 transition-transform duration-200 group-data-[state=open]/admin-collapsible:rotate-180 opacity-50" />
-              </div>
-            </CollapsibleTrigger>
-            <CollapsibleContent className="overflow-hidden data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down">
-              <SidebarMenu className="mt-1 gap-1 pl-4 ml-3 border-l border-slate-200 py-1">
-                <SidebarMenuItem>
-                  <NavButton
-                    to="/admin"
-                    icon={ShieldCheck}
-                    label="Painel Admin"
-                    active={location.pathname === '/admin'}
-                  />
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <NavButton
-                    to="/sectors"
-                    icon={Building2}
-                    label="Setores Hospitalares"
-                    active={location.pathname === '/sectors'}
-                  />
-                </SidebarMenuItem>
-              </SidebarMenu>
-            </CollapsibleContent>
-          </Collapsible>
+          {user?.role === 'Admin' && (
+            <Collapsible defaultOpen={isAdminActive} className="group/admin-collapsible mt-1">
+              <CollapsibleTrigger asChild>
+                <div
+                  className={cn(
+                    'flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-all duration-300 rounded-lg border border-transparent select-none',
+                    isAdminActive
+                      ? 'bg-[#06402B]/10 text-[#06402B]'
+                      : 'text-slate-600 hover:bg-[#06402B]/5 hover:text-[#06402B]',
+                  )}
+                >
+                  <ShieldCheck className="h-[18px] w-[18px]" />
+                  <span className="font-bold text-[13px] tracking-wide flex-1">Administração</span>
+                  <ChevronDown className="w-4 h-4 transition-transform duration-200 group-data-[state=open]/admin-collapsible:rotate-180 opacity-50" />
+                </div>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="overflow-hidden data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down">
+                <SidebarMenu className="mt-1 gap-1 pl-4 ml-3 border-l border-slate-200 py-1">
+                  <SidebarMenuItem>
+                    <NavButton
+                      to="/sectors"
+                      icon={Building2}
+                      label="Setores"
+                      active={location.pathname === '/sectors'}
+                    />
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <NavButton
+                      to="/admin#users"
+                      icon={Users}
+                      label="Colaboradores"
+                      active={location.pathname === '/admin' && location.hash === '#users'}
+                    />
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <NavButton
+                      to="/admin#escalas"
+                      icon={CalendarClock}
+                      label="Escalas"
+                      active={location.pathname === '/admin' && location.hash === '#escalas'}
+                    />
+                  </SidebarMenuItem>
+                </SidebarMenu>
+              </CollapsibleContent>
+            </Collapsible>
+          )}
 
           <div className="h-px bg-[#06402B]/10 my-2 mx-2" />
 
