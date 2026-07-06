@@ -88,6 +88,8 @@ export function ScalePlanner({
   const [generatingUserId, setGeneratingUserId] = useState<string | null>(null)
 
   const [isEditMode, setIsEditMode] = useState(false)
+  const [isLoadingShifts, setIsLoadingShifts] = useState(false)
+  const [isSyncing, setIsSyncing] = useState(false)
   const [dragOverCell, setDragOverCell] = useState<{ userId: string; dateStr: string } | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
   const [generationError, setGenerationError] = useState<string | null>(null)
@@ -125,7 +127,7 @@ export function ScalePlanner({
         })
         const newShifts = await pb
           .collection('shifts')
-          .getFullList({ filter: `cycle="${selectedCycleId}"` })
+          .getFullList({ filter: `cycle="${selectedCycleId}"`, expand: 'user,sector' })
         setAllShifts(newShifts)
       }
     } catch (err: any) {
@@ -173,19 +175,24 @@ export function ScalePlanner({
   }, [projectDeps])
 
   useEffect(() => {
-    if (selectedCycleId)
+    if (selectedCycleId) {
+      setIsLoadingShifts(true)
       pb.collection('shifts')
-        .getFullList({ filter: `cycle="${selectedCycleId}"` })
+        .getFullList({ filter: `cycle="${selectedCycleId}"`, expand: 'user,sector' })
         .then(setAllShifts)
+        .finally(() => setIsLoadingShifts(false))
+    }
   }, [selectedCycleId])
 
   useRealtime(
     'shifts',
     () => {
       if (selectedCycleId) {
+        setIsSyncing(true)
         pb.collection('shifts')
-          .getFullList({ filter: `cycle="${selectedCycleId}"` })
+          .getFullList({ filter: `cycle="${selectedCycleId}"`, expand: 'user,sector' })
           .then(setAllShifts)
+          .finally(() => setTimeout(() => setIsSyncing(false), 1000))
       }
     },
     !!selectedCycleId,
@@ -204,8 +211,13 @@ export function ScalePlanner({
     })
 
     sectorShifts.forEach((s) => {
-      const u = users.find((x) => x.id === s.user)
-      if (u) newUsers.set(u.id, u)
+      const u = users.find((x) => x.id === s.user) ||
+        s.expand?.user || {
+          id: s.user,
+          name: `Colaborador ${s.user.substring(0, 6)}`,
+          expand: {},
+        }
+      newUsers.set(u.id, u)
       if (!newDraft[s.user]) newDraft[s.user] = {}
 
       const dateStr = s.start_time.split(' ')[0]
@@ -493,7 +505,7 @@ export function ScalePlanner({
       })
       const reloaded = await pb
         .collection('shifts')
-        .getFullList({ filter: `cycle="${selectedCycleId}"` })
+        .getFullList({ filter: `cycle="${selectedCycleId}"`, expand: 'user,sector' })
       setAllShifts(reloaded)
     }
   }
@@ -552,7 +564,7 @@ export function ScalePlanner({
       setDraft((prev) => ({ ...prev, [userId]: {} }))
       const newShifts = await pb
         .collection('shifts')
-        .getFullList({ filter: `cycle="${selectedCycleId}"` })
+        .getFullList({ filter: `cycle="${selectedCycleId}"`, expand: 'user,sector' })
       setAllShifts(newShifts)
     } catch (err: any) {
       toast({
@@ -623,7 +635,9 @@ export function ScalePlanner({
         toast({ title: 'Sucesso', description: 'Rascunho salvo localmente.' })
       }
       setAllShifts(
-        await pb.collection('shifts').getFullList({ filter: `cycle="${selectedCycleId}"` }),
+        await pb
+          .collection('shifts')
+          .getFullList({ filter: `cycle="${selectedCycleId}"`, expand: 'user,sector' }),
       )
     } catch (err: any) {
       toast({ title: 'Erro', description: err.message, variant: 'destructive' })
@@ -781,6 +795,20 @@ export function ScalePlanner({
         )}
 
         <div className="relative border rounded-xl bg-white shadow-sm overflow-hidden flex flex-col">
+          {isSyncing && (
+            <div className="absolute top-2 right-2 z-40 flex items-center gap-2 bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-full shadow-sm animate-fade-in">
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-600" />
+              <span className="text-xs font-medium text-blue-700">Sincronizando...</span>
+            </div>
+          )}
+          {isLoadingShifts && !isGenerating && (
+            <div className="absolute inset-0 bg-white/60 backdrop-blur-sm z-30 flex items-center justify-center rounded-xl">
+              <div className="flex items-center gap-3">
+                <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+                <span className="text-sm text-slate-500">Carregando plantões...</span>
+              </div>
+            </div>
+          )}
           {isGenerating && (
             <div className="absolute inset-0 bg-white/80 backdrop-blur-sm z-30 flex items-center justify-center rounded-xl">
               <div className="flex flex-col items-center gap-3">

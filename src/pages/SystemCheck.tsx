@@ -19,6 +19,8 @@ export default function SystemCheck() {
     'loading',
   )
   const [finished, setFinished] = useState(false)
+  const [repairing, setRepairing] = useState(false)
+  const [recheckCounter, setRecheckCounter] = useState(0)
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -104,7 +106,7 @@ export default function SystemCheck() {
       }
     }
     initCheck()
-  }, [])
+  }, [recheckCounter])
 
   useEffect(() => {
     if (globalStatus !== 'checking' || items.length === 0) return
@@ -153,6 +155,23 @@ export default function SystemCheck() {
       setGlobalStatus('all-go')
     }
   }, [finished, globalStatus])
+
+  async function handleRepair() {
+    setRepairing(true)
+    try {
+      await pb.send('/backend/v1/repair-staff-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
+      setRecheckCounter((c) => c + 1)
+      setGlobalStatus('loading')
+      setFinished(false)
+    } catch (err) {
+      // Error is surfaced by the re-check
+    } finally {
+      setRepairing(false)
+    }
+  }
 
   async function handleProceed() {
     try {
@@ -242,14 +261,27 @@ export default function SystemCheck() {
                   itens marcados em laranja acima.
                 </p>
                 {items.find((i) => i.id === 'staff-data-check')?.checkStatus === 'error' && (
-                  <Button
-                    onClick={() => navigate('/admin')}
-                    variant="outline"
-                    className="mt-4 border-orange-300 text-orange-700 hover:bg-orange-50 gap-2"
-                  >
-                    <AlertCircle className="h-4 w-4" />
-                    Corrigir Dados de Colaboradores
-                  </Button>
+                  <div className="flex flex-col sm:flex-row gap-2 mt-4">
+                    <Button
+                      onClick={handleRepair}
+                      disabled={repairing}
+                      className="bg-orange-600 hover:bg-orange-700 text-white gap-2"
+                    >
+                      {repairing ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <AlertCircle className="h-4 w-4" />
+                      )}
+                      {repairing ? 'Reparando...' : 'Reparar Vínculos'}
+                    </Button>
+                    <Button
+                      onClick={() => navigate('/admin')}
+                      variant="outline"
+                      className="border-orange-300 text-orange-700 hover:bg-orange-50 gap-2"
+                    >
+                      Ir para Admin
+                    </Button>
+                  </div>
                 )}
               </div>
             )}
