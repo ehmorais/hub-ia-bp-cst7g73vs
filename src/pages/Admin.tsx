@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/hooks/use-auth'
 import { UserManagement } from '@/components/UserManagement'
-import { CollaboratorImportDialog } from '@/components/CollaboratorImportDialog'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
@@ -107,13 +106,12 @@ export default function Admin({ defaultTab }: { defaultTab?: string }) {
           <div className="flex flex-col gap-2">
             <h1 className="text-4xl font-bold tracking-tight text-primary flex items-center gap-3 font-heading">
               <Users className="h-9 w-9 text-primary" />
-              Colaboradores
+              Usuários do Sistema
             </h1>
             <p className="text-muted-foreground text-lg max-w-3xl font-sans">
-              Gestão de acessos, perfis profissionais e importação de dados.
+              Gestão de acessos e usuários do sistema.
             </p>
           </div>
-          <CollaboratorImportDialog />
         </div>
         <UserManagement />
       </div>
@@ -589,7 +587,7 @@ function AdminContent({ defaultTab }: { defaultTab?: string }) {
             value="users"
             className="rounded-md px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all hover:bg-accent hover:text-accent-foreground"
           >
-            Usuários
+            Usuários do Sistema
           </TabsTrigger>
           <TabsTrigger
             value="ia_tools"

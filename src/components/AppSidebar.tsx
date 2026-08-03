@@ -251,7 +251,7 @@ export function AppSidebar() {
                     <NavButton
                       to="/colaboradores"
                       icon={Users}
-                      label="Colaboradores"
+                      label="Usuários do Sistema"
                       active={location.pathname === '/colaboradores'}
                     />
                   </SidebarMenuItem>

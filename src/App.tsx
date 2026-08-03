@@ -1,8 +1,8 @@
+import '@/lib/safe-styles'
 import { BrowserRouter, Routes, Route, Outlet, useLocation, Navigate } from 'react-router-dom'
 import { Toaster } from '@/components/ui/toaster'
 import { Toaster as Sonner } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import Index from './pages/Index'
 import NotFound from './pages/NotFound'
 import Layout from './components/Layout'
 
@@ -45,7 +45,7 @@ const App = () => (
           <Route element={<ProtectedRoute />}>
             <Route path="/all-systems-go" element={<SystemCheck />} />
             <Route element={<Layout />}>
-              <Route path="/" element={<Index />} />
+              <Route path="/" element={<Dashboard />} />
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/department/:id" element={<Department />} />
               <Route path="/project/:id" element={<Project />} />

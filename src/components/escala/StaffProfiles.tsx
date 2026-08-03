@@ -11,7 +11,8 @@ import {
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
-import { Trash2, Plus } from 'lucide-react'
+import { Trash2, Plus, Users } from 'lucide-react'
+import { CollaboratorImportDialog } from '@/components/CollaboratorImportDialog'
 import { useToast } from '@/components/ui/use-toast'
 import {
   getStaffProfiles,
@@ -94,6 +95,18 @@ export function StaffProfiles({ departmentId }: { departmentId?: string }) {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-semibold flex items-center gap-2">
+            <Users className="h-5 w-5" /> Colaboradores
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Cadastro de colaboradores para gestão de escalas. Colaboradores não são usuários do
+            sistema.
+          </p>
+        </div>
+        <CollaboratorImportDialog onImported={loadData} />
+      </div>
       <Card>
         <CardHeader>
           <CardTitle>Novo Perfil de Colaborador</CardTitle>
