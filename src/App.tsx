@@ -31,6 +31,13 @@ function ProtectedRoute() {
     return <Navigate to="/login" state={{ from: location }} replace />
   }
 
+  if (!sessionStorage.getItem('syscheck_visited')) {
+    sessionStorage.setItem('syscheck_visited', '1')
+    if (location.pathname !== '/all-systems-go') {
+      return <Navigate to="/all-systems-go" replace />
+    }
+  }
+
   return <Outlet />
 }
 
@@ -43,8 +50,8 @@ const App = () => (
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route element={<ProtectedRoute />}>
-            <Route path="/all-systems-go" element={<SystemCheck />} />
             <Route element={<Layout />}>
+              <Route path="/all-systems-go" element={<SystemCheck />} />
               <Route path="/" element={<Dashboard />} />
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/department/:id" element={<Department />} />

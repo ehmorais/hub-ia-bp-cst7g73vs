@@ -25,9 +25,7 @@ export default function Layout() {
               </div>
             </div>
             <div className="flex items-center gap-4 mr-2">
-              <div className="hidden sm:block">
-                <SystemHealthMonitor />
-              </div>
+              <SystemHealthMonitor />
               <div className="flex flex-col items-end border-l border-slate-200 pl-4">
                 <span className="text-sm font-semibold text-slate-800">
                   {user?.name || user?.email}

@@ -10,23 +10,37 @@ export function SystemHealthMonitor() {
   useEffect(() => {
     async function checkHealth() {
       try {
-        const [tools, cycles, usersWithoutRole, totalUsers, totalContracts] = await Promise.all([
+        const results = await Promise.allSettled([
           pb.collection('ia_tools').getList(1, 1, { filter: 'status = "active"' }),
           pb.collection('shift_cycles').getList(1, 1, { filter: 'status = "active"' }),
-          pb.collection('users').getList(1, 1, { filter: 'staff_role = ""' }),
           pb.collection('users').getList(1, 1),
           pb.collection('staff_contracts').getList(1, 1),
         ])
 
-        const hasStaffGaps =
-          usersWithoutRole.totalItems > 0 || totalContracts.totalItems < totalUsers.totalItems
+        const checkNames = ['ia_tools', 'shift_cycles', 'users', 'staff_contracts']
+        results.forEach((r, i) => {
+          if (r.status === 'rejected') {
+            console.error(`[SystemHealthMonitor] ${checkNames[i]} check failed:`, r.reason)
+          }
+        })
 
-        if (tools.items.length > 0 && cycles.items.length > 0 && !hasStaffGaps) {
+        const toolsOk = results[0].status === 'fulfilled' && results[0].value.items.length > 0
+        const cyclesOk = results[1].status === 'fulfilled' && results[1].value.items.length > 0
+        const usersAccessible = results[2].status === 'fulfilled'
+        const contractsAccessible = results[3].status === 'fulfilled'
+
+        const hasStaffGaps =
+          usersAccessible && contractsAccessible
+            ? results[3].value.totalItems < results[2].value.totalItems
+            : false
+
+        if (toolsOk && cyclesOk && usersAccessible && !hasStaffGaps) {
           setStatus('go')
         } else {
           setStatus('check')
         }
-      } catch (error) {
+      } catch (err) {
+        console.error('[SystemHealthMonitor] Health check failed:', err)
         setStatus('check')
       }
     }

@@ -30,7 +30,6 @@ import {
 import { useToast } from '@/components/ui/use-toast'
 import { useRealtime } from '@/hooks/use-realtime'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Search, Plus, Edit2, Trash2, ArrowLeft, ShieldCheck, User as UserIcon } from 'lucide-react'
 import { extractFieldErrors } from '@/lib/pocketbase/errors'
 import pb from '@/lib/pocketbase/client'
@@ -40,10 +39,6 @@ export function UserManagement() {
   const { toast } = useToast()
 
   const [users, setUsers] = useState<any[]>([])
-  const [sectors, setSectors] = useState<any[]>([])
-  const [roles, setRoles] = useState<any[]>([])
-  const [profiles, setProfiles] = useState<any[]>([])
-  const [rules, setRules] = useState<any[]>([])
 
   const [search, setSearch] = useState('')
   const [isFormOpen, setIsFormOpen] = useState(false)
@@ -55,11 +50,6 @@ export function UserManagement() {
     email: '',
     password: '',
     role: 'Operador',
-    staff_role: '',
-    default_sector: '',
-    staff_profile: '',
-    professional_id: '',
-    assigned_rules: [] as string[],
   })
 
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
@@ -68,21 +58,10 @@ export function UserManagement() {
   const loadData = async () => {
     if (user?.role !== 'Admin') return
     try {
-      const [u, s, r, p, sr] = await Promise.all([
-        pb.collection('users').getFullList({
-          sort: 'name',
-          expand: 'default_sector,staff_role,staff_profile',
-        }),
-        pb.collection('hospital_sectors').getFullList({ sort: 'name' }),
-        pb.collection('staff_roles').getFullList({ sort: 'name' }),
-        pb.collection('staff_profiles').getFullList({ sort: 'name' }),
-        pb.collection('shift_rules').getFullList({ sort: 'name' }),
-      ])
+      const u = await pb.collection('users').getFullList({
+        sort: 'name',
+      })
       setUsers(u)
-      setSectors(s)
-      setRoles(r)
-      setProfiles(p)
-      setRules(sr)
     } catch (err) {
       toast({ title: 'Erro ao carregar dados', variant: 'destructive' })
     }
@@ -116,11 +95,6 @@ export function UserManagement() {
         email: u.email || '',
         password: '',
         role: u.role || 'Operador',
-        staff_role: u.staff_role || '',
-        default_sector: u.default_sector || '',
-        staff_profile: u.staff_profile || '',
-        professional_id: u.expand?.staff_profile?.professional_id || '',
-        assigned_rules: u.assigned_rules || [],
       })
     } else {
       setSelectedUser(null)
@@ -129,11 +103,6 @@ export function UserManagement() {
         email: '',
         password: '',
         role: 'Operador',
-        staff_role: '',
-        default_sector: '',
-        staff_profile: '',
-        professional_id: '',
-        assigned_rules: [],
       })
     }
     setIsFormOpen(true)
@@ -160,10 +129,6 @@ export function UserManagement() {
         name: formData.name,
         email: formData.email,
         role: formData.role,
-        staff_role: formData.staff_role || null,
-        default_sector: formData.default_sector || null,
-        staff_profile: formData.staff_profile || null,
-        assigned_rules: formData.assigned_rules,
       }
 
       if (formData.password) {
@@ -177,16 +142,6 @@ export function UserManagement() {
       } else {
         await pb.collection('users').create(payload)
         toast({ title: 'Usuário criado com sucesso' })
-      }
-
-      if (formData.staff_profile) {
-        try {
-          await pb.collection('staff_profiles').update(formData.staff_profile, {
-            professional_id: formData.professional_id || '',
-          })
-        } catch (profileErr) {
-          console.error('Failed to update professional_id on staff_profile', profileErr)
-        }
       }
 
       setIsFormOpen(false)
@@ -268,16 +223,13 @@ export function UserManagement() {
                 <TableHead className="font-semibold text-gray-700">Nome</TableHead>
                 <TableHead className="font-semibold text-gray-700">Email</TableHead>
                 <TableHead className="font-semibold text-gray-700">Função</TableHead>
-                <TableHead className="font-semibold text-gray-700">Setor Padrão</TableHead>
-                <TableHead className="font-semibold text-gray-700">Cargo</TableHead>
-                <TableHead className="font-semibold text-gray-700">Registro Profissional</TableHead>
                 <TableHead className="text-right font-semibold text-gray-700">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredUsers.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-gray-500">
+                  <TableCell colSpan={4} className="text-center py-8 text-gray-500">
                     Nenhum usuário encontrado.
                   </TableCell>
                 </TableRow>
@@ -302,15 +254,6 @@ export function UserManagement() {
                         )}
                         {u.role || 'Operador'}
                       </Badge>
-                    </TableCell>
-                    <TableCell className="text-gray-600">
-                      {u.expand?.default_sector?.name || '-'}
-                    </TableCell>
-                    <TableCell className="text-gray-600">
-                      {u.expand?.staff_role?.name || '-'}
-                    </TableCell>
-                    <TableCell className="text-gray-600">
-                      {u.expand?.staff_profile?.professional_id || '-'}
                     </TableCell>
                     <TableCell className="text-right space-x-2">
                       <Button
@@ -342,13 +285,13 @@ export function UserManagement() {
       </div>
 
       <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
-        <DialogContent className="sm:max-w-[600px] bg-white border-gray-200">
+        <DialogContent className="sm:max-w-[500px] bg-white border-gray-200">
           <DialogHeader>
             <DialogTitle className="text-xl text-gray-900">
               {selectedUser ? 'Editar Usuário' : 'Novo Usuário'}
             </DialogTitle>
             <DialogDescription className="text-gray-500">
-              Preencha os dados do usuário e defina suas permissões e vínculos.
+              Preencha os dados de acesso do usuário no sistema.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4 py-4">
@@ -417,122 +360,6 @@ export function UserManagement() {
                   </SelectContent>
                 </Select>
               </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-gray-700">Cargo (Staff Role)</Label>
-                <Select
-                  value={formData.staff_role || 'none'}
-                  onValueChange={(val) =>
-                    setFormData({ ...formData, staff_role: val === 'none' ? '' : val })
-                  }
-                >
-                  <SelectTrigger className="border-gray-300 focus:ring-emerald-500">
-                    <SelectValue placeholder="Selecione..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Nenhum</SelectItem>
-                    {roles.map((r) => (
-                      <SelectItem key={r.id} value={r.id}>
-                        {r.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-gray-700">Setor Padrão</Label>
-                <Select
-                  value={formData.default_sector || 'none'}
-                  onValueChange={(val) =>
-                    setFormData({ ...formData, default_sector: val === 'none' ? '' : val })
-                  }
-                >
-                  <SelectTrigger className="border-gray-300 focus:ring-emerald-500">
-                    <SelectValue placeholder="Selecione..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Nenhum</SelectItem>
-                    {sectors.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-gray-700">Perfil de Escala</Label>
-                <Select
-                  value={formData.staff_profile || 'none'}
-                  onValueChange={(val) =>
-                    setFormData({ ...formData, staff_profile: val === 'none' ? '' : val })
-                  }
-                >
-                  <SelectTrigger className="border-gray-300 focus:ring-emerald-500">
-                    <SelectValue placeholder="Selecione..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Nenhum</SelectItem>
-                    {profiles.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        {p.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-gray-700">Registro Profissional (CRM/Coren)</Label>
-                <Input
-                  value={formData.professional_id}
-                  onChange={(e) => setFormData({ ...formData, professional_id: e.target.value })}
-                  placeholder="Ex: CRM/SP 123456"
-                  className="border-gray-300 focus-visible:ring-emerald-500"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-gray-700">Regras Específicas Atribuídas</Label>
-              <ScrollArea className="h-[100px] border border-gray-300 rounded-md p-2">
-                {rules.length === 0 ? (
-                  <p className="text-sm text-gray-500">Nenhuma regra disponível.</p>
-                ) : (
-                  rules.map((rule) => (
-                    <div key={rule.id} className="flex items-center space-x-2 py-1">
-                      <Checkbox
-                        id={`rule-${rule.id}`}
-                        checked={formData.assigned_rules.includes(rule.id)}
-                        onCheckedChange={(checked) => {
-                          if (checked)
-                            setFormData({
-                              ...formData,
-                              assigned_rules: [...formData.assigned_rules, rule.id],
-                            })
-                          else
-                            setFormData({
-                              ...formData,
-                              assigned_rules: formData.assigned_rules.filter(
-                                (id) => id !== rule.id,
-                              ),
-                            })
-                        }}
-                      />
-                      <label
-                        htmlFor={`rule-${rule.id}`}
-                        className="text-sm font-medium leading-none cursor-pointer text-gray-700"
-                      >
-                        {rule.name}
-                      </label>
-                    </div>
-                  ))
-                )}
-              </ScrollArea>
             </div>
 
             <DialogFooter className="pt-4 border-t border-gray-100">

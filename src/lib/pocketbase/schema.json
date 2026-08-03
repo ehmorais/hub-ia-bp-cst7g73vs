@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-03T13:16:11.048Z",
+  "generatedAt": "2026-08-03T14:08:43.128Z",
   "collections": [
     {
       "name": "users",
@@ -44,34 +44,6 @@
           "required": false,
           "system": false,
           "selectValues": ["Admin", "Operador"]
-        },
-        {
-          "name": "staff_role",
-          "type": "relation",
-          "required": false,
-          "system": false,
-          "collectionRef": "staff_roles"
-        },
-        {
-          "name": "default_sector",
-          "type": "relation",
-          "required": false,
-          "system": false,
-          "collectionRef": "hospital_sectors"
-        },
-        {
-          "name": "assigned_rules",
-          "type": "relation",
-          "required": false,
-          "system": false,
-          "collectionRef": "shift_rules"
-        },
-        {
-          "name": "staff_profile",
-          "type": "relation",
-          "required": false,
-          "system": false,
-          "collectionRef": "staff_profiles"
         }
       ],
       "indexes": [

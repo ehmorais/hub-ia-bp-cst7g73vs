@@ -1,341 +1,254 @@
-import { useEffect, useState } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
-import pb from '@/lib/pocketbase/client'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { CheckCircle2, Circle, Loader2, AlertCircle, Building2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { useEffect, useState, useCallback } from 'react'
 import { Link } from 'react-router-dom'
+import pb from '@/lib/pocketbase/client'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { CheckCircle2, XCircle, Loader2, RefreshCw, ArrowLeft, ShieldCheck } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
-interface SystemItem {
+interface CheckItem {
   id: string
-  name: string
-  type: 'project' | 'tool' | 'system'
-  checkStatus: 'pending' | 'checking' | 'success' | 'error'
-  shouldFail?: boolean
+  label: string
+  description: string
+  status: 'pass' | 'fail' | 'loading'
 }
 
+const INITIAL_CHECKS: CheckItem[] = [
+  {
+    id: 'db',
+    label: 'Conectividade do Banco de Dados',
+    description: 'Verifica se o banco de dados está acessível',
+    status: 'loading',
+  },
+  {
+    id: 'tools',
+    label: 'Ferramentas de IA Ativas',
+    description: 'Verifica se existem ferramentas de IA ativas no sistema',
+    status: 'loading',
+  },
+  {
+    id: 'cycles',
+    label: 'Ciclos de Escala Ativos',
+    description: 'Verifica se existem ciclos de escala ativos',
+    status: 'loading',
+  },
+  {
+    id: 'users',
+    label: 'Coleção de Usuários',
+    description: 'Verifica se a coleção de usuários está acessível',
+    status: 'loading',
+  },
+  {
+    id: 'contracts',
+    label: 'Contratos de Staff',
+    description: 'Verifica se a coleção de contratos está acessível',
+    status: 'loading',
+  },
+  {
+    id: 'departments',
+    label: 'Departamentos',
+    description: 'Verifica se a coleção de departamentos está acessível',
+    status: 'loading',
+  },
+  {
+    id: 'projects',
+    label: 'Projetos',
+    description: 'Verifica se a coleção de projetos está acessível',
+    status: 'loading',
+  },
+]
+
 export default function SystemCheck() {
-  const [items, setItems] = useState<SystemItem[]>([])
-  const [globalStatus, setGlobalStatus] = useState<'loading' | 'checking' | 'all-go' | 'error'>(
-    'loading',
-  )
-  const [finished, setFinished] = useState(false)
-  const [repairing, setRepairing] = useState(false)
-  const [recheckCounter, setRecheckCounter] = useState(0)
-  const navigate = useNavigate()
-  const location = useLocation()
+  const [checks, setChecks] = useState<CheckItem[]>(INITIAL_CHECKS)
+  const [isRunning, setIsRunning] = useState(false)
 
-  const from = location.state?.from || '/'
+  const updateCheck = useCallback((id: string, status: 'pass' | 'fail') => {
+    setChecks((prev) => prev.map((c) => (c.id === id ? { ...c, status } : c)))
+  }, [])
 
-  useEffect(() => {
-    async function initCheck() {
-      try {
-        const [toolsRecords, projectsRecords, cyclesRecords, usersRecords, contractsRecords] =
-          await Promise.all([
-            pb.collection('ia_tools').getFullList({ sort: 'name' }),
-            pb.collection('projects').getFullList({ sort: 'name' }),
-            pb.collection('shift_cycles').getFullList({ sort: 'name' }),
-            pb.collection('users').getFullList({ sort: 'name' }),
-            pb.collection('staff_contracts').getFullList(),
-          ])
+  const runChecks = useCallback(async () => {
+    setIsRunning(true)
+    setChecks(INITIAL_CHECKS.map((c) => ({ ...c, status: 'loading' as const })))
 
-        const userIdsWithContracts = new Set(contractsRecords.map((c) => c.user))
-        const usersMissingRole = usersRecords.filter((u) => !u.staff_role)
-        const usersMissingContract = usersRecords.filter((u) => !userIdsWithContracts.has(u.id))
-        const hasStaffDataGaps = usersMissingRole.length > 0 || usersMissingContract.length > 0
-
-        const systemChecks: SystemItem[] = [
-          {
-            id: 'db-conn',
-            name: 'Database Connectivity',
-            type: 'system',
-            checkStatus: 'pending',
-            shouldFail: false,
-          },
-          {
-            id: 'tools-check',
-            name: 'AI Tools Status',
-            type: 'system',
-            checkStatus: 'pending',
-            shouldFail: !toolsRecords.some((t) => t.status === 'active'),
-          },
-          {
-            id: 'shift-check',
-            name: 'Shift Configuration',
-            type: 'system',
-            checkStatus: 'pending',
-            shouldFail: !cyclesRecords.some((c) => c.status === 'active'),
-          },
-          {
-            id: 'staff-data-check',
-            name: `Staff Data Integrity${hasStaffDataGaps ? ` (${usersMissingRole.length + usersMissingContract.length} gaps)` : ''}`,
-            type: 'system',
-            checkStatus: 'pending',
-            shouldFail: hasStaffDataGaps,
-          },
-        ]
-
-        const mappedProjects = projectsRecords.map((r) => ({
-          id: r.id,
-          name: `Project: ${r.name}`,
-          type: 'project' as const,
-          checkStatus: 'pending' as const,
-          shouldFail: false,
-        }))
-
-        const mappedTools = toolsRecords.map((r) => ({
-          id: r.id,
-          name: `Tool: ${r.name}`,
-          type: 'tool' as const,
-          checkStatus: 'pending' as const,
-          shouldFail: false,
-        }))
-
-        const combined = [...systemChecks, ...mappedProjects, ...mappedTools]
-
-        if (combined.length === 0) {
-          setItems([])
-          setGlobalStatus('all-go')
-          setFinished(true)
-          return
-        }
-
-        setItems(combined)
-        setGlobalStatus('checking')
-      } catch (error) {
-        setGlobalStatus('error')
-      }
-    }
-    initCheck()
-  }, [recheckCounter])
-
-  useEffect(() => {
-    if (globalStatus !== 'checking' || items.length === 0) return
-
-    let currentIdx = 0
-
-    const interval = setInterval(() => {
-      setItems((prev) => {
-        const next = [...prev]
-        let anyFailed = false
-
-        if (currentIdx > 0 && currentIdx <= next.length) {
-          const prevItem = next[currentIdx - 1]
-          if (prevItem.shouldFail) {
-            prevItem.checkStatus = 'error'
-          } else {
-            prevItem.checkStatus = 'success'
-          }
-        }
-
-        anyFailed = next.some((item) => item.checkStatus === 'error')
-
-        if (currentIdx < next.length) {
-          next[currentIdx].checkStatus = 'checking'
-        }
-
-        if (currentIdx >= items.length) {
-          clearInterval(interval)
-          setFinished(true)
-          if (anyFailed) {
-            setGlobalStatus('error')
-          }
-        }
-
-        return next
-      })
-
-      currentIdx++
-    }, 300) // Delay for visual effect
-
-    return () => clearInterval(interval)
-  }, [globalStatus, items.length])
-
-  useEffect(() => {
-    if (finished && globalStatus !== 'error') {
-      setGlobalStatus('all-go')
-    }
-  }, [finished, globalStatus])
-
-  async function handleRepair() {
-    setRepairing(true)
     try {
-      await pb.send('/backend/v1/repair-staff-data', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      })
-      setRecheckCounter((c) => c + 1)
-      setGlobalStatus('loading')
-      setFinished(false)
+      await pb.health.check()
+      updateCheck('db', 'pass')
     } catch (err) {
-      // Error is surfaced by the re-check
-    } finally {
-      setRepairing(false)
+      console.error('[SystemCheck] DB health check failed:', err)
+      updateCheck('db', 'fail')
     }
-  }
 
-  async function handleProceed() {
     try {
-      if (from === '/') {
-        const depts = await pb.collection('departments').getFullList({
-          filter: 'name ~ "Projetos Gerais"',
-        })
-        if (depts.length > 0) {
-          navigate(`/department/${depts[0].id}`, { replace: true })
-          return
-        }
-      }
-      navigate(from, { replace: true })
-    } catch {
-      navigate('/', { replace: true })
+      const tools = await pb.collection('ia_tools').getList(1, 1, { filter: 'status = "active"' })
+      updateCheck('tools', tools.items.length > 0 ? 'pass' : 'fail')
+    } catch (err) {
+      console.error('[SystemCheck] IA tools check failed:', err)
+      updateCheck('tools', 'fail')
     }
-  }
+
+    try {
+      const cycles = await pb
+        .collection('shift_cycles')
+        .getList(1, 1, { filter: 'status = "active"' })
+      updateCheck('cycles', cycles.items.length > 0 ? 'pass' : 'fail')
+    } catch (err) {
+      console.error('[SystemCheck] Shift cycles check failed:', err)
+      updateCheck('cycles', 'fail')
+    }
+
+    try {
+      await pb.collection('users').getList(1, 1)
+      updateCheck('users', 'pass')
+    } catch (err) {
+      console.error('[SystemCheck] Users check failed:', err)
+      updateCheck('users', 'fail')
+    }
+
+    try {
+      await pb.collection('staff_contracts').getList(1, 1)
+      updateCheck('contracts', 'pass')
+    } catch (err) {
+      console.error('[SystemCheck] Staff contracts check failed:', err)
+      updateCheck('contracts', 'fail')
+    }
+
+    try {
+      await pb.collection('departments').getList(1, 1)
+      updateCheck('departments', 'pass')
+    } catch (err) {
+      console.error('[SystemCheck] Departments check failed:', err)
+      updateCheck('departments', 'fail')
+    }
+
+    try {
+      await pb.collection('projects').getList(1, 1)
+      updateCheck('projects', 'pass')
+    } catch (err) {
+      console.error('[SystemCheck] Projects check failed:', err)
+      updateCheck('projects', 'fail')
+    }
+
+    setIsRunning(false)
+  }, [updateCheck])
+
+  useEffect(() => {
+    runChecks()
+  }, [runChecks])
+
+  const allPassed = checks.every((c) => c.status === 'pass')
+  const anyLoading = checks.some((c) => c.status === 'loading')
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4 font-sans">
-      <Card className="w-full max-w-lg shadow-xl border-[#06402B]/10 rounded-xl overflow-hidden">
-        <CardHeader className="text-center pb-5 bg-white border-b border-slate-100">
-          <CardTitle className="text-2xl font-bold tracking-tight text-[#06402B]">
-            All Systems Go
-          </CardTitle>
-          <p className="text-sm text-slate-500 mt-1">Verificação de Integridade dos Sistemas</p>
-        </CardHeader>
-
-        <CardContent className="p-0">
-          <div className="p-6 max-h-[50vh] overflow-y-auto space-y-4 bg-slate-50/50">
-            {globalStatus === 'loading' && (
-              <div className="flex items-center space-x-2 text-slate-500 text-sm">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Estabelecendo conexão...</span>
-              </div>
-            )}
-
-            {items.map((item) => (
-              <div
-                key={`${item.type}-${item.id}`}
-                className={`flex justify-between items-center transition-all duration-300 ${
-                  item.checkStatus === 'pending' ? 'opacity-40' : 'opacity-100'
-                }`}
-              >
-                <div className="flex items-center space-x-3 overflow-hidden pr-2">
-                  {item.checkStatus === 'pending' && (
-                    <Circle className="w-4 h-4 text-slate-300 flex-shrink-0" />
-                  )}
-                  {item.checkStatus === 'checking' && (
-                    <Loader2 className="w-4 h-4 text-[#06402B] animate-spin flex-shrink-0" />
-                  )}
-                  {item.checkStatus === 'success' && (
-                    <CheckCircle2 className="w-4 h-4 text-[#06402B] flex-shrink-0" />
-                  )}
-                  {item.checkStatus === 'error' && (
-                    <AlertCircle className="w-4 h-4 text-orange-500 flex-shrink-0" />
-                  )}
-                  <span
-                    className={`text-sm font-medium truncate ${item.checkStatus === 'success' ? 'text-[#06402B]' : item.checkStatus === 'error' ? 'text-orange-600' : 'text-slate-600'}`}
-                  >
-                    {item.name}
-                  </span>
-                </div>
-
-                <div className="font-bold text-sm whitespace-nowrap flex-shrink-0">
-                  {item.checkStatus === 'checking' && (
-                    <span className="text-slate-400 animate-pulse">verificando</span>
-                  )}
-                  {item.checkStatus === 'success' && <span className="text-[#06402B]">... Go</span>}
-                  {item.checkStatus === 'error' && (
-                    <span className="text-orange-500">... Fail</span>
-                  )}
-                </div>
-              </div>
-            ))}
-
-            {globalStatus === 'error' && finished && (
-              <div className="mt-8 pt-6 border-t border-slate-200 flex flex-col items-center animate-in fade-in">
-                <div className="bg-orange-100 p-3 rounded-full mb-4">
-                  <AlertCircle className="w-8 h-8 text-orange-600" />
-                </div>
-                <p className="text-xl font-bold text-orange-600 tracking-tight">
-                  System Check Failed
-                </p>
-                <p className="text-sm text-slate-500 mt-2 text-center max-w-sm">
-                  Alguns componentes do sistema estão inativos ou não configurados. Verifique os
-                  itens marcados em laranja acima.
-                </p>
-                {items.find((i) => i.id === 'staff-data-check')?.checkStatus === 'error' && (
-                  <div className="flex flex-col sm:flex-row gap-2 mt-4">
-                    <Button
-                      onClick={handleRepair}
-                      disabled={repairing}
-                      className="bg-orange-600 hover:bg-orange-700 text-white gap-2"
-                    >
-                      {repairing ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <AlertCircle className="h-4 w-4" />
-                      )}
-                      {repairing ? 'Reparando...' : 'Reparar Vínculos'}
-                    </Button>
-                    <Button
-                      onClick={() => navigate('/admin')}
-                      variant="outline"
-                      className="border-orange-300 text-orange-700 hover:bg-orange-50 gap-2"
-                    >
-                      Ir para Admin
-                    </Button>
-                    <Button
-                      asChild
-                      variant="outline"
-                      className="border-orange-300 text-orange-700 hover:bg-orange-50 gap-2"
-                    >
-                      <Link to="/sectors">
-                        <Building2 className="h-4 w-4" />
-                        Gerenciar Setores
-                      </Link>
-                    </Button>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          <div className="p-6 bg-white flex flex-col items-center justify-center border-t border-slate-100 space-y-4">
-            {globalStatus === 'all-go' ? (
-              <div className="flex flex-col items-center w-full animate-in fade-in slide-in-from-bottom-2 duration-700">
-                <div className="bg-[#06402B]/10 p-3 rounded-full mb-4">
-                  <CheckCircle2 className="w-8 h-8 text-[#06402B]" />
-                </div>
-                <p className="text-xl font-bold text-[#06402B] tracking-tight mb-4 text-center">
-                  We are Go for Launch
-                </p>
-                <Button
-                  onClick={handleProceed}
-                  className="w-full bg-[#06402B] hover:bg-[#06402B]/90 text-white font-medium h-11 text-base transition-all shadow-sm"
-                >
-                  Proceed
-                </Button>
-              </div>
-            ) : globalStatus === 'error' ? (
-              <div className="flex flex-col items-center w-full animate-in fade-in slide-in-from-bottom-2 duration-700">
-                <Button
-                  onClick={handleProceed}
-                  variant="outline"
-                  className="w-full h-11 text-base text-orange-600 border-orange-200 hover:bg-orange-50"
-                >
-                  Continuar mesmo com falhas
-                </Button>
-              </div>
-            ) : (
-              <Button
-                disabled
-                variant="outline"
-                className="w-full h-11 text-base text-slate-400 border-slate-200"
-              >
-                Awaiting Go...
+    <div className="min-h-[calc(100vh-5rem)] bg-slate-50 p-4 md:p-8">
+      <div className="max-w-3xl mx-auto space-y-6 animate-fade-in">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Link to="/">
+              <Button variant="ghost" size="icon">
+                <ArrowLeft className="h-5 w-5" />
               </Button>
-            )}
+            </Link>
+            <div>
+              <h1 className="text-2xl font-bold text-primary flex items-center gap-2 font-heading">
+                <ShieldCheck className="h-7 w-7" />
+                All Systems Go
+              </h1>
+              <p className="text-sm text-muted-foreground">Verificação de integridade do sistema</p>
+            </div>
           </div>
-        </CardContent>
-      </Card>
+          <Button onClick={runChecks} disabled={isRunning} variant="outline" className="gap-2">
+            <RefreshCw className={cn('h-4 w-4', isRunning && 'animate-spin')} />
+            Atualizar
+          </Button>
+        </div>
+
+        <Card
+          className={cn(
+            'border-t-[6px]',
+            allPassed
+              ? 'border-t-green-500'
+              : anyLoading
+                ? 'border-t-slate-300'
+                : 'border-t-orange-500',
+          )}
+        >
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              {allPassed ? (
+                <CheckCircle2 className="h-6 w-6 text-green-500" />
+              ) : anyLoading ? (
+                <Loader2 className="h-6 w-6 text-slate-400 animate-spin" />
+              ) : (
+                <XCircle className="h-6 w-6 text-orange-500" />
+              )}
+              Status do Sistema
+            </CardTitle>
+            <CardDescription>
+              {allPassed
+                ? 'Todos os sistemas estão operacionais.'
+                : anyLoading
+                  ? 'Verificando sistemas...'
+                  : 'Alguns sistemas precisam de atenção.'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-2">
+              {checks.map((check) => (
+                <Badge
+                  key={check.id}
+                  variant="outline"
+                  className={cn(
+                    'text-xs',
+                    check.status === 'pass'
+                      ? 'text-green-600 border-green-200 bg-green-50'
+                      : check.status === 'fail'
+                        ? 'text-orange-600 border-orange-200 bg-orange-50'
+                        : 'text-slate-500 border-slate-200 bg-slate-50',
+                  )}
+                >
+                  {check.label}
+                </Badge>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="space-y-3">
+          {checks.map((check) => (
+            <Card key={check.id} className="p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  {check.status === 'pass' ? (
+                    <CheckCircle2 className="h-5 w-5 text-green-500 shrink-0" />
+                  ) : check.status === 'fail' ? (
+                    <XCircle className="h-5 w-5 text-orange-500 shrink-0" />
+                  ) : (
+                    <Loader2 className="h-5 w-5 text-slate-400 animate-spin shrink-0" />
+                  )}
+                  <div>
+                    <p className="font-medium text-slate-800">{check.label}</p>
+                    <p className="text-xs text-muted-foreground">{check.description}</p>
+                  </div>
+                </div>
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    'text-xs',
+                    check.status === 'pass'
+                      ? 'text-green-600 border-green-200 bg-green-50'
+                      : check.status === 'fail'
+                        ? 'text-orange-600 border-orange-200 bg-orange-50'
+                        : 'text-slate-500 border-slate-200 bg-slate-50',
+                  )}
+                >
+                  {check.status === 'pass' ? 'OK' : check.status === 'fail' ? 'Atenção' : '...'}
+                </Badge>
+              </div>
+            </Card>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }

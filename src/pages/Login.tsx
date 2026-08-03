@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/hooks/use-auth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -10,13 +10,10 @@ export default function Login() {
   const [password, setPassword] = useState('Skip@Pass')
   const { signIn } = useAuth()
   const navigate = useNavigate()
-  const location = useLocation()
 
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({})
   const [loading, setLoading] = useState(false)
-
-  const from = location.state?.from?.pathname || '/'
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -51,7 +48,7 @@ export default function Login() {
       setError('E-mail ou senha inválidos. Verifique suas credenciais e tente novamente.')
       setLoading(false)
     } else {
-      navigate(from, { replace: true })
+      navigate('/all-systems-go', { replace: true })
     }
   }
 
