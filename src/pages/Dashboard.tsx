@@ -6,7 +6,6 @@ import { Activity, Zap, FolderKanban, BrainCircuit } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '@/hooks/use-auth'
 import { getIcon } from '@/lib/icons'
-import { SystemChecklistModal } from '@/components/SystemChecklistModal'
 import { ToolUsageChart } from '@/components/ToolUsageChart'
 
 export default function Dashboard() {
@@ -65,8 +64,6 @@ export default function Dashboard() {
 
   return (
     <div className="container mx-auto p-4 md:p-8 space-y-10 max-w-7xl animate-fade-in-up bg-white">
-      <SystemChecklistModal tools={filteredTools} />
-
       <div className="flex flex-col gap-2">
         <h1 className="text-3xl font-bold tracking-tight text-slate-900 font-heading">
           Olá, {name}. Bem-vindo(a).

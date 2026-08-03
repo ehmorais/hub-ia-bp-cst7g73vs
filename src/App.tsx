@@ -6,7 +6,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import NotFound from './pages/NotFound'
 import Layout from './components/Layout'
 import { useState, useEffect } from 'react'
-import { isChecklistCompleted } from '@/lib/checklist-state'
+import { isChecklistCompleted, setChecklistCompleted } from '@/lib/checklist-state'
 import { SystemChecklistGate } from '@/components/SystemChecklistGate'
 
 // Pages
@@ -41,7 +41,14 @@ function ProtectedRoute() {
   }
 
   if (!checklistDone) {
-    return <SystemChecklistGate onComplete={() => setChecklistDone(true)} />
+    return (
+      <SystemChecklistGate
+        onComplete={() => {
+          setChecklistCompleted()
+          setChecklistDone(true)
+        }}
+      />
+    )
   }
 
   return <Outlet />
