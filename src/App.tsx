@@ -5,6 +5,7 @@ import { Toaster as Sonner } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import NotFound from './pages/NotFound'
 import Layout from './components/Layout'
+import { isChecklistCompleted } from '@/lib/checklist-state'
 
 // Pages
 import Dashboard from './pages/Dashboard'
@@ -31,11 +32,8 @@ function ProtectedRoute() {
     return <Navigate to="/login" state={{ from: location }} replace />
   }
 
-  if (!sessionStorage.getItem('syscheck_visited')) {
-    sessionStorage.setItem('syscheck_visited', '1')
-    if (location.pathname !== '/all-systems-go') {
-      return <Navigate to="/all-systems-go" replace />
-    }
+  if (!isChecklistCompleted() && location.pathname !== '/all-systems-go') {
+    return <Navigate to="/all-systems-go" state={{ autoRedirect: true }} replace />
   }
 
   return <Outlet />

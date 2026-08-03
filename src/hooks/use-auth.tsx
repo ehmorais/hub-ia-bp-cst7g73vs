@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
 import pb from '@/lib/pocketbase/client'
+import { resetChecklistCompleted } from '@/lib/checklist-state'
 
 interface AuthContextType {
   user: any
@@ -45,6 +46,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const signUp = async (email: string, password: string) => {
     try {
+      resetChecklistCompleted()
       await pb.collection('users').create({ email, password, passwordConfirm: password })
       await pb.collection('users').authWithPassword(email, password)
       return { error: null }
@@ -55,6 +57,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const signIn = async (email: string, password: string) => {
     try {
+      resetChecklistCompleted()
       await pb.collection('users').authWithPassword(email, password)
       return { error: null }
     } catch (error) {
@@ -63,6 +66,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }
 
   const signOut = () => {
+    resetChecklistCompleted()
     pb.authStore.clear()
   }
 

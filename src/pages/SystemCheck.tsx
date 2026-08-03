@@ -1,11 +1,12 @@
-import { useEffect, useState, useCallback } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useState, useCallback, useRef } from 'react'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import pb from '@/lib/pocketbase/client'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { CheckCircle2, XCircle, Loader2, RefreshCw, ArrowLeft, ShieldCheck } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { setChecklistCompleted } from '@/lib/checklist-state'
 
 interface CheckItem {
   id: string
@@ -62,6 +63,11 @@ const INITIAL_CHECKS: CheckItem[] = [
 export default function SystemCheck() {
   const [checks, setChecks] = useState<CheckItem[]>(INITIAL_CHECKS)
   const [isRunning, setIsRunning] = useState(false)
+  const [manualRefresh, setManualRefresh] = useState(false)
+  const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const navigate = useNavigate()
+  const location = useLocation()
+  const autoRedirect = location.state?.autoRedirect === true
 
   const updateCheck = useCallback((id: string, status: 'pass' | 'fail') => {
     setChecks((prev) => prev.map((c) => (c.id === id ? { ...c, status } : c)))
@@ -139,6 +145,30 @@ export default function SystemCheck() {
   const allPassed = checks.every((c) => c.status === 'pass')
   const anyLoading = checks.some((c) => c.status === 'loading')
 
+  useEffect(() => {
+    if (autoRedirect && !manualRefresh && !isRunning && !anyLoading) {
+      setChecklistCompleted()
+      redirectTimerRef.current = setTimeout(() => {
+        navigate('/', { replace: true })
+      }, 2000)
+      return () => {
+        if (redirectTimerRef.current) {
+          clearTimeout(redirectTimerRef.current)
+          redirectTimerRef.current = null
+        }
+      }
+    }
+  }, [autoRedirect, manualRefresh, isRunning, anyLoading, navigate])
+
+  const handleRefresh = () => {
+    setManualRefresh(true)
+    if (redirectTimerRef.current) {
+      clearTimeout(redirectTimerRef.current)
+      redirectTimerRef.current = null
+    }
+    runChecks()
+  }
+
   return (
     <div className="min-h-[calc(100vh-5rem)] bg-slate-50 p-4 md:p-8">
       <div className="max-w-3xl mx-auto space-y-6 animate-fade-in">
@@ -157,7 +187,7 @@ export default function SystemCheck() {
               <p className="text-sm text-muted-foreground">Verificação de integridade do sistema</p>
             </div>
           </div>
-          <Button onClick={runChecks} disabled={isRunning} variant="outline" className="gap-2">
+          <Button onClick={handleRefresh} disabled={isRunning} variant="outline" className="gap-2">
             <RefreshCw className={cn('h-4 w-4', isRunning && 'animate-spin')} />
             Atualizar
           </Button>
