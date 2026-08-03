@@ -66,7 +66,7 @@ export function SystemHealthMonitor() {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Link to="/all-systems-go" className="block focus:outline-none">
+        <Link to="/" className="block focus:outline-none">
           <div
             className={cn(
               'flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all duration-300 shadow-sm',

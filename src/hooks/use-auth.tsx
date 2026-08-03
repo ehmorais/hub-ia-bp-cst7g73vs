@@ -31,6 +31,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     })
 
     if (pb.authStore.isValid) {
+      resetChecklistCompleted()
       pb.collection('users')
         .authRefresh()
         .catch(() => pb.authStore.clear())

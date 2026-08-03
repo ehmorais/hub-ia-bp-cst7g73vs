@@ -1,10 +1,8 @@
-import { useEffect, useState, useCallback, useRef } from 'react'
-import { Link, useNavigate, useLocation } from 'react-router-dom'
+import { useEffect, useState, useCallback } from 'react'
 import pb from '@/lib/pocketbase/client'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { CheckCircle2, XCircle, Loader2, RefreshCw, ArrowLeft, ShieldCheck } from 'lucide-react'
+import { CheckCircle2, XCircle, Loader2, ShieldCheck } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { setChecklistCompleted } from '@/lib/checklist-state'
 
@@ -25,7 +23,7 @@ const INITIAL_CHECKS: CheckItem[] = [
   {
     id: 'tools',
     label: 'Ferramentas de IA Ativas',
-    description: 'Verifica se existem ferramentas de IA ativas no sistema',
+    description: 'Verifica se existem ferramentas de IA ativas',
     status: 'loading',
   },
   {
@@ -60,137 +58,113 @@ const INITIAL_CHECKS: CheckItem[] = [
   },
 ]
 
-export default function SystemCheck() {
+const CHECK_TIMEOUT_MS = 10000
+const GLOBAL_TIMEOUT_MS = 15000
+const REDIRECT_DELAY_MS = 1500
+
+export function SystemChecklistGate({ onComplete }: { onComplete: () => void }) {
   const [checks, setChecks] = useState<CheckItem[]>(INITIAL_CHECKS)
-  const [isRunning, setIsRunning] = useState(false)
-  const [manualRefresh, setManualRefresh] = useState(false)
-  const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const navigate = useNavigate()
-  const location = useLocation()
-  const autoRedirect = location.state?.autoRedirect === true
+  const [isRunning, setIsRunning] = useState(true)
 
   const updateCheck = useCallback((id: string, status: 'pass' | 'fail') => {
     setChecks((prev) => prev.map((c) => (c.id === id ? { ...c, status } : c)))
   }, [])
 
+  const runCheckWithFallback = useCallback(
+    async (id: string, checkFn: () => Promise<boolean>) => {
+      try {
+        const result = await Promise.race([
+          checkFn(),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('timeout')), CHECK_TIMEOUT_MS),
+          ),
+        ])
+        updateCheck(id, result ? 'pass' : 'fail')
+      } catch {
+        updateCheck(id, 'fail')
+      }
+    },
+    [updateCheck],
+  )
+
   const runChecks = useCallback(async () => {
     setIsRunning(true)
     setChecks(INITIAL_CHECKS.map((c) => ({ ...c, status: 'loading' as const })))
 
-    try {
-      await pb.health.check()
-      updateCheck('db', 'pass')
-    } catch (err) {
-      console.error('[SystemCheck] DB health check failed:', err)
-      updateCheck('db', 'fail')
-    }
-
-    try {
-      const tools = await pb.collection('ia_tools').getList(1, 1, { filter: 'status = "active"' })
-      updateCheck('tools', tools.items.length > 0 ? 'pass' : 'fail')
-    } catch (err) {
-      console.error('[SystemCheck] IA tools check failed:', err)
-      updateCheck('tools', 'fail')
-    }
-
-    try {
-      const cycles = await pb
-        .collection('shift_cycles')
-        .getList(1, 1, { filter: 'status = "active"' })
-      updateCheck('cycles', cycles.items.length > 0 ? 'pass' : 'fail')
-    } catch (err) {
-      console.error('[SystemCheck] Shift cycles check failed:', err)
-      updateCheck('cycles', 'fail')
-    }
-
-    try {
-      await pb.collection('users').getList(1, 1)
-      updateCheck('users', 'pass')
-    } catch (err) {
-      console.error('[SystemCheck] Users check failed:', err)
-      updateCheck('users', 'fail')
-    }
-
-    try {
-      await pb.collection('staff_contracts').getList(1, 1)
-      updateCheck('contracts', 'pass')
-    } catch (err) {
-      console.error('[SystemCheck] Staff contracts check failed:', err)
-      updateCheck('contracts', 'fail')
-    }
-
-    try {
-      await pb.collection('departments').getList(1, 1)
-      updateCheck('departments', 'pass')
-    } catch (err) {
-      console.error('[SystemCheck] Departments check failed:', err)
-      updateCheck('departments', 'fail')
-    }
-
-    try {
-      await pb.collection('projects').getList(1, 1)
-      updateCheck('projects', 'pass')
-    } catch (err) {
-      console.error('[SystemCheck] Projects check failed:', err)
-      updateCheck('projects', 'fail')
-    }
+    await Promise.allSettled([
+      runCheckWithFallback('db', async () => {
+        await pb.health.check()
+        return true
+      }),
+      runCheckWithFallback('tools', async () => {
+        const tools = await pb.collection('ia_tools').getList(1, 1, { filter: 'status = "active"' })
+        return tools.items.length > 0
+      }),
+      runCheckWithFallback('cycles', async () => {
+        const cycles = await pb
+          .collection('shift_cycles')
+          .getList(1, 1, { filter: 'status = "active"' })
+        return cycles.items.length > 0
+      }),
+      runCheckWithFallback('users', async () => {
+        await pb.collection('users').getList(1, 1)
+        return true
+      }),
+      runCheckWithFallback('contracts', async () => {
+        await pb.collection('staff_contracts').getList(1, 1)
+        return true
+      }),
+      runCheckWithFallback('departments', async () => {
+        await pb.collection('departments').getList(1, 1)
+        return true
+      }),
+      runCheckWithFallback('projects', async () => {
+        await pb.collection('projects').getList(1, 1)
+        return true
+      }),
+    ])
 
     setIsRunning(false)
-  }, [updateCheck])
+  }, [runCheckWithFallback])
 
   useEffect(() => {
     runChecks()
   }, [runChecks])
 
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setChecks((prev) =>
+        prev.map((c) => (c.status === 'loading' ? { ...c, status: 'fail' as const } : c)),
+      )
+      setIsRunning(false)
+    }, GLOBAL_TIMEOUT_MS)
+    return () => clearTimeout(timer)
+  }, [])
+
   const allPassed = checks.every((c) => c.status === 'pass')
   const anyLoading = checks.some((c) => c.status === 'loading')
 
   useEffect(() => {
-    if (autoRedirect && !manualRefresh && !isRunning && !anyLoading) {
+    if (!isRunning && !anyLoading) {
       setChecklistCompleted()
-      redirectTimerRef.current = setTimeout(() => {
-        navigate('/', { replace: true })
-      }, 2000)
-      return () => {
-        if (redirectTimerRef.current) {
-          clearTimeout(redirectTimerRef.current)
-          redirectTimerRef.current = null
-        }
-      }
+      const timer = setTimeout(() => {
+        onComplete()
+      }, REDIRECT_DELAY_MS)
+      return () => clearTimeout(timer)
     }
-  }, [autoRedirect, manualRefresh, isRunning, anyLoading, navigate])
-
-  const handleRefresh = () => {
-    setManualRefresh(true)
-    if (redirectTimerRef.current) {
-      clearTimeout(redirectTimerRef.current)
-      redirectTimerRef.current = null
-    }
-    runChecks()
-  }
+  }, [isRunning, anyLoading, onComplete])
 
   return (
-    <div className="min-h-[calc(100vh-5rem)] bg-slate-50 p-4 md:p-8">
-      <div className="max-w-3xl mx-auto space-y-6 animate-fade-in">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link to="/">
-              <Button variant="ghost" size="icon">
-                <ArrowLeft className="h-5 w-5" />
-              </Button>
-            </Link>
-            <div>
-              <h1 className="text-2xl font-bold text-primary flex items-center gap-2 font-heading">
-                <ShieldCheck className="h-7 w-7" />
-                All Systems Go
-              </h1>
-              <p className="text-sm text-muted-foreground">Verificação de integridade do sistema</p>
-            </div>
-          </div>
-          <Button onClick={handleRefresh} disabled={isRunning} variant="outline" className="gap-2">
-            <RefreshCw className={cn('h-4 w-4', isRunning && 'animate-spin')} />
-            Atualizar
-          </Button>
+    <div className="min-h-screen bg-slate-50 p-4 md:p-8 flex items-center justify-center">
+      <div className="max-w-3xl w-full space-y-6 animate-fade-in">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-primary flex items-center justify-center gap-2 font-heading">
+            <ShieldCheck className="h-7 w-7" />
+            All Systems Go
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Verificação de integridade do sistema
+          </p>
         </div>
 
         <Card

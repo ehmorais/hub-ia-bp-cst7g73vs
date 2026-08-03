@@ -5,7 +5,9 @@ import { Toaster as Sonner } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import NotFound from './pages/NotFound'
 import Layout from './components/Layout'
+import { useState, useEffect } from 'react'
 import { isChecklistCompleted } from '@/lib/checklist-state'
+import { SystemChecklistGate } from '@/components/SystemChecklistGate'
 
 // Pages
 import Dashboard from './pages/Dashboard'
@@ -17,13 +19,19 @@ import Settings from './pages/Settings'
 import DraftSchedules from './pages/DraftSchedules'
 import Login from './pages/Login'
 import Profile from './pages/Profile'
-import SystemCheck from './pages/SystemCheck'
 import Sectors from './pages/Sectors'
 import { AuthProvider, useAuth } from './hooks/use-auth'
 
 function ProtectedRoute() {
   const { isAuthenticated, loading } = useAuth()
   const location = useLocation()
+  const [checklistDone, setChecklistDone] = useState(isChecklistCompleted())
+
+  useEffect(() => {
+    if (!loading && isAuthenticated) {
+      setChecklistDone(isChecklistCompleted())
+    }
+  }, [loading, isAuthenticated])
 
   if (loading)
     return <div className="min-h-screen flex items-center justify-center">Carregando...</div>
@@ -32,8 +40,8 @@ function ProtectedRoute() {
     return <Navigate to="/login" state={{ from: location }} replace />
   }
 
-  if (!isChecklistCompleted() && location.pathname !== '/all-systems-go') {
-    return <Navigate to="/all-systems-go" state={{ autoRedirect: true }} replace />
+  if (!checklistDone) {
+    return <SystemChecklistGate onComplete={() => setChecklistDone(true)} />
   }
 
   return <Outlet />
@@ -49,7 +57,6 @@ const App = () => (
           <Route path="/login" element={<Login />} />
           <Route element={<ProtectedRoute />}>
             <Route element={<Layout />}>
-              <Route path="/all-systems-go" element={<SystemCheck />} />
               <Route path="/" element={<Dashboard />} />
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/department/:id" element={<Department />} />
