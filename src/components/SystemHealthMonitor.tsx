@@ -15,9 +15,18 @@ export function SystemHealthMonitor() {
           pb.collection('shift_cycles').getList(1, 1, { filter: 'status = "active"' }),
           pb.collection('users').getList(1, 1),
           pb.collection('staff_contracts').getList(1, 1),
+          pb.collection('departments').getList(1, 1),
+          pb.collection('hospital_sectors').getList(1, 1),
         ])
 
-        const checkNames = ['ia_tools', 'shift_cycles', 'users', 'staff_contracts']
+        const checkNames = [
+          'ia_tools',
+          'shift_cycles',
+          'users',
+          'staff_contracts',
+          'departments',
+          'hospital_sectors',
+        ]
         results.forEach((r, i) => {
           if (r.status === 'rejected') {
             console.error(`[SystemHealthMonitor] ${checkNames[i]} check failed:`, r.reason)
@@ -28,13 +37,17 @@ export function SystemHealthMonitor() {
         const cyclesOk = results[1].status === 'fulfilled' && results[1].value.items.length > 0
         const usersAccessible = results[2].status === 'fulfilled'
         const contractsAccessible = results[3].status === 'fulfilled'
+        const departmentsAccessible = results[4].status === 'fulfilled'
+        const sectorsAccessible = results[5].status === 'fulfilled'
 
         const hasStaffGaps =
           usersAccessible && contractsAccessible
             ? results[3].value.totalItems < results[2].value.totalItems
             : false
 
-        if (toolsOk && cyclesOk && usersAccessible && !hasStaffGaps) {
+        const dbIntact = usersAccessible && departmentsAccessible && sectorsAccessible
+
+        if (toolsOk && cyclesOk && usersAccessible && !hasStaffGaps && dbIntact) {
           setStatus('go')
         } else {
           setStatus('check')
