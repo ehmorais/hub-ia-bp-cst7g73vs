@@ -2,7 +2,7 @@ import { Component, ReactNode, useEffect, useState } from 'react'
 import pb from '@/lib/pocketbase/client'
 import { useParams, Link, Navigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, Blocks, AlertCircle } from 'lucide-react'
+import { ArrowLeft, Blocks, AlertCircle, FileText, ExternalLink } from 'lucide-react'
 import { useRealtime } from '@/hooks/use-realtime'
 import { EscalasManagement } from '@/components/EscalasManagement'
 
@@ -92,6 +92,27 @@ function ProjectContent() {
 
       {project.name === 'Gestão de Escalas' ? (
         <EscalasManagement projectId={id} departmentId={project.department} />
+      ) : project.name === 'Questionários de Exames' ? (
+        <div className="p-8 text-center border rounded-lg bg-white shadow-sm flex flex-col items-center justify-center min-h-[300px] animate-fade-in-up">
+          <div className="p-4 rounded-2xl bg-blue-100 text-blue-700 mb-4">
+            <FileText className="h-12 w-12" />
+          </div>
+          <h2 className="text-xl font-semibold mb-2 text-slate-900">Questionários de Exames</h2>
+          <p className="text-muted-foreground max-w-md mb-6">
+            Acesse o sistema de questionários de exames para visualizar e gerenciar históricos de
+            pacientes.
+          </p>
+          <Button asChild size="lg" className="gap-2">
+            <a
+              href="https://questionario-exames.goskip.app/login"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Acessar Questionários de Exames
+              <ExternalLink className="h-4 w-4" />
+            </a>
+          </Button>
+        </div>
       ) : (
         <div className="p-8 text-center border rounded-lg bg-white shadow-sm flex flex-col items-center justify-center min-h-[300px]">
           <Blocks className="h-12 w-12 text-slate-300 mb-4" />
