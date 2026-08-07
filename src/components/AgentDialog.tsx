@@ -26,11 +26,14 @@ export function AgentDialog() {
     setLoading(true)
 
     try {
-      const res = await fetch(`${import.meta.env.VITE_POCKETBASE_URL}/backend/v1/escala-agent`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: pb.authStore.token },
-        body: JSON.stringify({ message: msg, conversation_id: convId }),
-      })
+      const res = await fetch(
+        `${import.meta.env.VITE_POCKETBASE_URL}/backend/v1/escala-expert/chat`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: pb.authStore.token },
+          body: JSON.stringify({ message: msg, conversation_id: convId }),
+        },
+      )
       if (!res.ok) throw new Error('Falha na resposta')
       let finalContent = ''
       const result = await streamAgentChat(res, {
