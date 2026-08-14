@@ -21,12 +21,9 @@ import { getTimeoffRequests, updateTimeoffRequest } from '@/services/escala'
 import { useRealtime } from '@/hooks/use-realtime'
 import { format } from 'date-fns'
 import { TimeoffRequestDialog } from './TimeoffRequestDialog'
-import { useParams } from 'react-router-dom'
-
-export function Timeoff() {
+export function Timeoff({ departmentId }: { departmentId?: string }) {
   const [requests, setRequests] = useState<any[]>([])
   const { toast } = useToast()
-  const { id: departmentId } = useParams()
 
   const loadData = async () => {
     getTimeoffRequests().then(setRequests)

@@ -212,7 +212,7 @@ export function EscalasManagement({ departmentId, projectId }: EscalasManagement
             <StaffRoles />
           </TabsContent>
           <TabsContent value="folgas" className="mt-0">
-            <Timeoff />
+            <Timeoff departmentId={departmentId} />
           </TabsContent>
           <TabsContent value="regras" className="mt-0">
             <ShiftRules departmentId={departmentId} />

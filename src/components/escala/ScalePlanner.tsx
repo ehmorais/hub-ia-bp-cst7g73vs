@@ -125,12 +125,10 @@ export function ScalePlanner({
           title: 'Sucesso',
           description: `${res.count} plantões gerados com IA.`,
         })
-        const newShifts = await pb
-          .collection('shifts')
-          .getFullList({
-            filter: `cycle="${selectedCycleId}"`,
-            expand: 'staff_profile,staff_profile.staff_role,user,sector',
-          })
+        const newShifts = await pb.collection('shifts').getFullList({
+          filter: `cycle="${selectedCycleId}"`,
+          expand: 'staff_profile,staff_profile.staff_role,user,sector',
+        })
         setAllShifts(newShifts)
       }
     } catch (err: any) {
@@ -514,12 +512,10 @@ export function ScalePlanner({
         description: err.message || 'Falha ao mover turno',
         variant: 'destructive',
       })
-      const reloaded = await pb
-        .collection('shifts')
-        .getFullList({
-          filter: `cycle="${selectedCycleId}"`,
-          expand: 'staff_profile,staff_profile.staff_role,user,sector',
-        })
+      const reloaded = await pb.collection('shifts').getFullList({
+        filter: `cycle="${selectedCycleId}"`,
+        expand: 'staff_profile,staff_profile.staff_role,user,sector',
+      })
       setAllShifts(reloaded)
     }
   }
@@ -576,12 +572,10 @@ export function ScalePlanner({
       toast({ title: 'Sucesso', description: 'Escala individual gerada com sucesso.' })
 
       setDraft((prev) => ({ ...prev, [userId]: {} }))
-      const newShifts = await pb
-        .collection('shifts')
-        .getFullList({
-          filter: `cycle="${selectedCycleId}"`,
-          expand: 'staff_profile,staff_profile.staff_role,user,sector',
-        })
+      const newShifts = await pb.collection('shifts').getFullList({
+        filter: `cycle="${selectedCycleId}"`,
+        expand: 'staff_profile,staff_profile.staff_role,user,sector',
+      })
       setAllShifts(newShifts)
     } catch (err: any) {
       toast({
@@ -652,12 +646,10 @@ export function ScalePlanner({
         toast({ title: 'Sucesso', description: 'Rascunho salvo localmente.' })
       }
       setAllShifts(
-        await pb
-          .collection('shifts')
-          .getFullList({
-            filter: `cycle="${selectedCycleId}"`,
-            expand: 'staff_profile,staff_profile.staff_role,user,sector',
-          }),
+        await pb.collection('shifts').getFullList({
+          filter: `cycle="${selectedCycleId}"`,
+          expand: 'staff_profile,staff_profile.staff_role,user,sector',
+        }),
       )
     } catch (err: any) {
       toast({ title: 'Erro', description: err.message, variant: 'destructive' })
