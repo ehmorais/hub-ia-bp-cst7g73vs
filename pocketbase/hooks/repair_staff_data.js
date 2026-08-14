@@ -2,6 +2,10 @@ routerAdd(
   'POST',
   '/backend/v1/repair-staff-data',
   (e) => {
+    if (!e.auth || e.auth.getString('role') !== 'Admin') {
+      return e.forbiddenError('Apenas administradores podem reparar dados de colaboradores.')
+    }
+
     var staffRoleId = ''
     try {
       var existingRole = $app.findFirstRecordByData('staff_roles', 'name', 'Staff')

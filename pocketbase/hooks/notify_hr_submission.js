@@ -2,6 +2,10 @@ routerAdd(
   'POST',
   '/backend/v1/escala/submit-hr',
   (e) => {
+    if (!e.auth || e.auth.getString('role') !== 'Admin') {
+      return e.forbiddenError('Apenas administradores podem submeter escalas ao RH.')
+    }
+
     const body = e.requestInfo().body || {}
     const cycleId = body.cycle_id
     if (!cycleId) return e.badRequestError('Missing cycle_id')

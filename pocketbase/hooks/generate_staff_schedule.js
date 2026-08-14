@@ -2,6 +2,10 @@ routerAdd(
   'POST',
   '/backend/v1/generate-staff-schedule',
   (e) => {
+    if (!e.auth || e.auth.getString('role') !== 'Admin') {
+      return e.forbiddenError('Apenas administradores podem gerar escalas individuais.')
+    }
+
     const body = e.requestInfo().body || {}
     const userId = body.user_id
     const cycleId = body.cycle_id

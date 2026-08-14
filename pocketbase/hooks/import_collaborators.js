@@ -2,6 +2,10 @@ routerAdd(
   'POST',
   '/backend/v1/escala/import',
   (e) => {
+    if (!e.auth || e.auth.getString('role') !== 'Admin') {
+      return e.forbiddenError('Apenas administradores podem importar colaboradores.')
+    }
+
     const body = e.requestInfo().body || {}
     if (!body.sheets || !Array.isArray(body.sheets)) {
       return e.badRequestError('Nenhuma planilha enviada')

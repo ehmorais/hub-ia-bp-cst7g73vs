@@ -2,6 +2,10 @@ routerAdd(
   'POST',
   '/backend/v1/escala/generate',
   (e) => {
+    if (!e.auth || e.auth.getString('role') !== 'Admin') {
+      return e.forbiddenError('Apenas administradores podem gerar escalas.')
+    }
+
     const body = e.requestInfo().body || {}
     const cycleId = body.cycle_id
     const sectorIds = body.sector_ids || []

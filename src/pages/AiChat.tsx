@@ -53,12 +53,10 @@ export default function AiChat() {
     setLoading(true)
 
     try {
-      await pb.collection('audit_logs').create({
-        user: user?.id,
-        action: tool.id,
-        department: 'IA Chat',
-        details: `Uso da ferramenta ${tool.name}`,
-        token_usage: Math.floor(Math.random() * 50) + 10,
+      await pb.send('/backend/v1/audit/tool-usage', {
+        method: 'POST',
+        body: JSON.stringify({ tool_id: tool.id }),
+        headers: { 'Content-Type': 'application/json' },
       })
 
       setTimeout(() => {

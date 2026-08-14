@@ -2,6 +2,10 @@ routerAdd(
   'POST',
   '/backend/v1/escala/draft',
   (e) => {
+    if (!e.auth || e.auth.getString('role') !== 'Admin') {
+      return e.forbiddenError('Apenas administradores podem gerar rascunhos de escala.')
+    }
+
     const body = e.requestInfo().body || {}
     const {
       cycle_id,
