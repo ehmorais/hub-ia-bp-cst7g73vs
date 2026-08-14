@@ -73,6 +73,7 @@ export function DepartmentStaffList({ departmentId }: { departmentId?: string })
   // Form state
   const [formData, setFormData] = useState({
     name: '',
+    professional_id: '',
     role: 'Operador',
     staff_role: '',
     default_sector: '',
@@ -140,6 +141,7 @@ export function DepartmentStaffList({ departmentId }: { departmentId?: string })
     try {
       const dataToSave = {
         ...formData,
+        professional_id: formData.professional_id.trim(),
         default_sector: formData.default_sector === 'none' ? null : formData.default_sector,
         staff_profile: formData.staff_profile === 'none' ? null : formData.staff_profile,
         staff_role: formData.staff_role === 'none' ? null : formData.staff_role,
@@ -178,6 +180,7 @@ export function DepartmentStaffList({ departmentId }: { departmentId?: string })
   const openAdd = () => {
     setFormData({
       name: '',
+      professional_id: '',
       role: 'Operador',
       staff_role: 'none',
       default_sector: sectors[0]?.id || 'none',
@@ -191,6 +194,7 @@ export function DepartmentStaffList({ departmentId }: { departmentId?: string })
   const openEdit = (user: any) => {
     setFormData({
       name: user.name || '',
+      professional_id: user.professional_id || '',
       role: user.role || 'Operador',
       staff_role: user.staff_role || 'none',
       default_sector: user.default_sector || 'none',
@@ -205,9 +209,10 @@ export function DepartmentStaffList({ departmentId }: { departmentId?: string })
     if (!searchTerm) return true
     const searchLower = searchTerm.toLowerCase()
     const nameMatch = u.name?.toLowerCase().includes(searchLower)
+    const professionalIdMatch = u.professional_id?.toLowerCase().includes(searchLower)
     const sectorName = sectors.find((s) => s.id === u.default_sector)?.name || ''
     const sectorMatch = sectorName.toLowerCase().includes(searchLower)
-    return nameMatch || sectorMatch
+    return nameMatch || professionalIdMatch || sectorMatch
   })
 
   return (
@@ -218,7 +223,7 @@ export function DepartmentStaffList({ departmentId }: { departmentId?: string })
           <div className="relative flex-1 sm:w-64">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-500" />
             <Input
-              placeholder="Buscar por nome ou setor..."
+              placeholder="Buscar por nome, registro ou setor..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-9 h-9"
@@ -242,6 +247,19 @@ export function DepartmentStaffList({ departmentId }: { departmentId?: string })
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     placeholder="Nome do colaborador"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>
+                    Registro Profissional (CRM / COREN){' '}
+                    <span className="font-normal text-slate-400">(opcional)</span>
+                  </Label>
+                  <Input
+                    value={formData.professional_id}
+                    onChange={(e) => setFormData({ ...formData, professional_id: e.target.value })}
+                    placeholder="Ex.: CRM/SP 123456 ou COREN-SP 123456"
+                    maxLength={100}
                   />
                 </div>
 
@@ -383,6 +401,7 @@ export function DepartmentStaffList({ departmentId }: { departmentId?: string })
             <TableHeader>
               <TableRow className="bg-slate-50/80 hover:bg-slate-50/80">
                 <TableHead>Colaborador</TableHead>
+                <TableHead>Registro Profissional</TableHead>
                 <TableHead>Acesso</TableHead>
                 <TableHead>Cargo / Perfil</TableHead>
                 <TableHead>Regras</TableHead>
@@ -394,6 +413,9 @@ export function DepartmentStaffList({ departmentId }: { departmentId?: string })
               {filteredUsers.map((u) => (
                 <TableRow key={u.id}>
                   <TableCell className="font-medium text-slate-700">{u.name || u.email}</TableCell>
+                  <TableCell className="text-sm text-slate-600">
+                    {u.professional_id || '-'}
+                  </TableCell>
                   <TableCell>
                     <Badge
                       variant={u.role === 'Admin' ? 'default' : 'secondary'}
@@ -482,7 +504,7 @@ export function DepartmentStaffList({ departmentId }: { departmentId?: string })
               ))}
               {filteredUsers.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center py-6 text-muted-foreground">
                     Nenhum colaborador encontrado.
                   </TableCell>
                 </TableRow>

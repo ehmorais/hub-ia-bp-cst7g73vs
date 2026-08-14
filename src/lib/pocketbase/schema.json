@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-14T12:45:27.496Z",
+  "generatedAt": "2026-08-14T13:31:43.447Z",
   "collections": [
     {
       "name": "users",
@@ -8,7 +8,7 @@
         "list": "@request.auth.role = 'Admin' || id = @request.auth.id",
         "view": "@request.auth.role = 'Admin' || id = @request.auth.id",
         "create": "@request.auth.role = 'Admin'",
-        "update": "@request.auth.role = 'Admin' || (id = @request.auth.id && @request.body.role:changed = false && @request.body.email:changed = false && @request.body.verified:changed = false && @request.body.password:changed = false)",
+        "update": "@request.auth.role = 'Admin' || (id = @request.auth.id && @request.body.role:changed = false && @request.body.email:changed = false && @request.body.verified:changed = false && @request.body.password:changed = false && @request.body.professional_id:changed = false)",
         "delete": "@request.auth.role = 'Admin'"
       },
       "fields": [
@@ -52,6 +52,12 @@
             "Admin",
             "Operador"
           ]
+        },
+        {
+          "name": "professional_id",
+          "type": "text",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": [
