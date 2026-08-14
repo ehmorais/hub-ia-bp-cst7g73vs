@@ -11,6 +11,13 @@ import {
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Trash2, Plus, Users } from 'lucide-react'
 import { CollaboratorImportDialog } from '@/components/CollaboratorImportDialog'
 import { useToast } from '@/components/ui/use-toast'
@@ -19,6 +26,7 @@ import {
   createStaffProfile,
   deleteStaffProfile,
   getShiftRules,
+  getStaffRoles,
 } from '@/services/escala'
 import { useRealtime } from '@/hooks/use-realtime'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -27,20 +35,24 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 export function StaffProfiles({ departmentId }: { departmentId?: string }) {
   const [profiles, setProfiles] = useState<any[]>([])
   const [rules, setRules] = useState<any[]>([])
+  const [roles, setRoles] = useState<any[]>([])
   const [name, setName] = useState('')
   const [professionalId, setProfessionalId] = useState('')
+  const [selectedRole, setSelectedRole] = useState('none')
   const [selectedRules, setSelectedRules] = useState<string[]>([])
 
   const { toast } = useToast()
 
   const loadData = async () => {
     try {
-      const [p, r] = await Promise.all([
+      const [p, r, sr] = await Promise.all([
         getStaffProfiles().catch(() => []),
         departmentId ? getShiftRules(departmentId).catch(() => []) : Promise.resolve([]),
+        getStaffRoles().catch(() => []),
       ])
       setProfiles(p)
       setRules(r)
+      setRoles(sr)
     } catch (e) {
       console.error(e)
     }
@@ -65,9 +77,11 @@ export function StaffProfiles({ departmentId }: { departmentId?: string }) {
         name,
         rules: selectedRules,
         professional_id: professionalId,
+        staff_role: selectedRole === 'none' ? null : selectedRole,
       })
       setName('')
       setProfessionalId('')
+      setSelectedRole('none')
       setSelectedRules([])
 
       toast({ title: 'Perfil criado' })
@@ -154,13 +168,33 @@ export function StaffProfiles({ departmentId }: { departmentId?: string }) {
               </ScrollArea>
             </div>
           </div>
-          <div className="space-y-2 mt-4">
-            <Label>Registro Profissional (CRM/Coren)</Label>
-            <Input
-              value={professionalId}
-              onChange={(e) => setProfessionalId(e.target.value)}
-              placeholder="Ex: CRM/SP 123456"
-            />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+            <div className="space-y-2">
+              <Label>Registro Profissional (CRM/COREN)</Label>
+              <Input
+                value={professionalId}
+                onChange={(e) => setProfessionalId(e.target.value)}
+                placeholder="Ex: CRM/SP 123456"
+              />
+              <p className="text-xs text-muted-foreground">Campo opcional.</p>
+            </div>
+            <div className="space-y-2">
+              <Label>Cargo ou Função</Label>
+              <Select value={selectedRole} onValueChange={setSelectedRole}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione um cargo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Não informado</SelectItem>
+                  {roles.map((role) => (
+                    <SelectItem key={role.id} value={role.id}>
+                      {role.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">Campo opcional.</p>
+            </div>
           </div>
           <Button onClick={handleCreate} className="mt-4">
             <Plus className="h-4 w-4 mr-2" />
@@ -179,6 +213,7 @@ export function StaffProfiles({ departmentId }: { departmentId?: string }) {
               <TableRow>
                 <TableHead>Nome do Perfil</TableHead>
                 <TableHead>Registro Profissional</TableHead>
+                <TableHead>Cargo / Função</TableHead>
                 <TableHead>Total de Regras</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
@@ -188,6 +223,7 @@ export function StaffProfiles({ departmentId }: { departmentId?: string }) {
                 <TableRow key={p.id}>
                   <TableCell className="font-medium">{p.name}</TableCell>
                   <TableCell>{p.professional_id || '-'}</TableCell>
+                  <TableCell>{p.expand?.staff_role?.name || '-'}</TableCell>
                   <TableCell>{p.rules?.length || 0} regra(s)</TableCell>
                   <TableCell className="text-right">
                     <Button variant="ghost" size="icon" onClick={() => handleDelete(p.id)}>
@@ -198,7 +234,7 @@ export function StaffProfiles({ departmentId }: { departmentId?: string }) {
               ))}
               {profiles.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
                     Nenhum perfil cadastrado.
                   </TableCell>
                 </TableRow>

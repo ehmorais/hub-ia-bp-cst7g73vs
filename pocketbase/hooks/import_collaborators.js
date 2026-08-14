@@ -55,19 +55,36 @@ routerAdd(
       'AGOSTO',
     ]
 
+    function normalizeRoleName(funcName) {
+      var u = funcName
+        .toUpperCase()
+        .replace(/[^A-ZÀ-Ü]/g, '')
+        .trim()
+
+      if (u === 'ENF' || u === 'ENFERMEIRO') return 'Enfermeiro'
+      if (u === 'TE' || u === 'TÉCNICODEENFERMAGEM' || u === 'TECNICODEENFERMAGEM') {
+        return 'Técnico de Enfermagem'
+      }
+      if (u === 'AE' || u === 'AUXILIARDEENFERMAGEM') return 'Auxiliar de Enfermagem'
+      if (u === 'GERENF' || u === 'GERENTEDEENFERMAGEM') return 'Gerente de Enfermagem'
+      if (u === 'SUPENF' || u === 'SUPERVISORDEENFERMAGEM') return 'Supervisor de Enfermagem'
+
+      return funcName.trim()
+    }
+
     function getRank(funcName) {
       var u = funcName.toUpperCase().trim()
-      if (u.indexOf('GER') >= 0) return 5
-      if (u.indexOf('SUP') >= 0) return 4
-      if (u === 'ENF') return 3
-      if (u === 'TE') return 2
-      if (u === 'AE') return 1
+      if (u === 'GERENTE DE ENFERMAGEM') return 5
+      if (u === 'SUPERVISOR DE ENFERMAGEM') return 4
+      if (u === 'ENFERMEIRO') return 3
+      if (u === 'TÉCNICO DE ENFERMAGEM') return 2
+      if (u === 'AUXILIAR DE ENFERMAGEM') return 1
       return 0
     }
 
     function requiresSupervision(funcName) {
       var u = funcName.toUpperCase().trim()
-      return u === 'TE' || u === 'AE' || u === 'MAQ'
+      return u === 'TÉCNICO DE ENFERMAGEM' || u === 'AUXILIAR DE ENFERMAGEM'
     }
 
     function shouldSkip(name) {
@@ -131,7 +148,7 @@ routerAdd(
 
         var rawCoren = String(row[corenCol] || '').trim()
         var coren = rawCoren === 'cursando' || rawCoren === '' ? '' : rawCoren
-        var funcName = String(row[funcCol] || '').trim()
+        var funcName = normalizeRoleName(String(row[funcCol] || '').trim())
         if (!funcName) continue
 
         var funcKey = funcName.toUpperCase().trim()
@@ -150,12 +167,22 @@ routerAdd(
           }
         }
 
+        var roleId = roleMap[funcKey] || ''
+
         if (coren) {
           if (profileMap[coren]) {
             try {
               var profile = $app.findRecordById('staff_profiles', profileMap[coren])
+              var changed = false
               if (profile.getString('name') !== name) {
                 profile.set('name', name)
+                changed = true
+              }
+              if (roleId && profile.getString('staff_role') !== roleId) {
+                profile.set('staff_role', roleId)
+                changed = true
+              }
+              if (changed) {
                 $app.save(profile)
                 summary.profilesUpdated++
               } else {
@@ -170,6 +197,7 @@ routerAdd(
               var profile = new Record(pCol)
               profile.set('name', name)
               profile.set('professional_id', coren)
+              if (roleId) profile.set('staff_role', roleId)
               $app.save(profile)
               profileMap[coren] = profile.id
               summary.profilesCreated++
@@ -178,20 +206,28 @@ routerAdd(
             }
           }
         } else {
-          var exists = false
+          var existingProfile = null
           try {
-            $app.findFirstRecordByData('staff_profiles', 'name', name)
-            exists = true
+            existingProfile = $app.findFirstRecordByData('staff_profiles', 'name', name)
           } catch (_) {}
-          if (!exists) {
+          if (!existingProfile) {
             try {
               var pCol = $app.findCollectionByNameOrId('staff_profiles')
               var profile = new Record(pCol)
               profile.set('name', name)
+              if (roleId) profile.set('staff_role', roleId)
               $app.save(profile)
               summary.profilesCreated++
             } catch (err) {
               summary.errors.push("Erro ao criar '" + name + "': " + err.message)
+            }
+          } else if (roleId && existingProfile.getString('staff_role') !== roleId) {
+            try {
+              existingProfile.set('staff_role', roleId)
+              $app.save(existingProfile)
+              summary.profilesUpdated++
+            } catch (err) {
+              summary.errors.push("Erro ao atualizar '" + name + "': " + err.message)
             }
           } else {
             summary.profilesSkipped++

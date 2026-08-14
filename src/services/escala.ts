@@ -43,7 +43,8 @@ export const updateStaffRole = (id: string, data: any) =>
 export const deleteStaffRole = (id: string) => pb.collection('staff_roles').delete(id)
 
 // Staff Profiles
-export const getStaffProfiles = () => pb.collection('staff_profiles').getFullList({ sort: 'name' })
+export const getStaffProfiles = () =>
+  pb.collection('staff_profiles').getFullList({ sort: 'name', expand: 'staff_role' })
 export const createStaffProfile = (data: any) => pb.collection('staff_profiles').create(data)
 export const updateStaffProfile = (id: string, data: any) =>
   pb.collection('staff_profiles').update(id, data)

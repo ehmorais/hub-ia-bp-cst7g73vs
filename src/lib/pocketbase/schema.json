@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-14T13:31:43.447Z",
+  "generatedAt": "2026-08-14T14:02:04.011Z",
   "collections": [
     {
       "name": "users",
@@ -961,6 +961,13 @@
           "type": "text",
           "required": false,
           "system": false
+        },
+        {
+          "name": "staff_role",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "staff_roles"
         }
       ],
       "indexes": []
