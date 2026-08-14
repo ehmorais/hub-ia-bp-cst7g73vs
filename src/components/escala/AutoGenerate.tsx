@@ -14,6 +14,7 @@ import {
   generateDraftShifts,
   getStaffContracts,
   getTimeoffRequests,
+  commitShiftSchedule,
 } from '@/services/escala'
 import { useRealtime } from '@/hooks/use-realtime'
 import {
@@ -307,7 +308,7 @@ function AutoGenerateInner({
       let users: any[] = []
       if (sector) {
         users = await pb.collection('staff_profiles').getFullList({
-          filter: `default_sector="${sector.id}"`,
+          filter: `default_sector="${sector.id}" && active=true`,
           expand: 'staff_role,default_sector,rules',
           sort: 'name',
         })
@@ -450,6 +451,7 @@ function AutoGenerateInner({
     cycles,
     sectors,
     contracts,
+    timeoffsList,
     toast,
   ])
 
@@ -524,16 +526,25 @@ function AutoGenerateInner({
       users: usersList.map((u) => {
         const contract = contracts.find((c) => c.staff_profile === u.id)
         const timeoffs = timeoffsList.filter(
-          (t) => t.staff_profile === u.id && t.cycle === selectedCycle && t.status === 'fulfilled',
+          (t) =>
+            t.staff_profile === u.id &&
+            t.cycle === selectedCycle &&
+            (t.status === 'fulfilled' || t.status === 'pending'),
         )
         return {
           id: u.id,
           name: u.name,
           role: u.expand?.staff_role?.name,
+          hierarchy_rank: u.expand?.staff_role?.hierarchy_rank || 0,
+          requires_supervision: u.expand?.staff_role?.requires_supervision === true,
           contract_hours: contract?.monthly_hour_limit,
           shift_type: contract?.expand?.shift_type?.name,
           work_hours: contract?.expand?.shift_type?.work_hours,
-          timeoffs: timeoffs.map((t) => t.date.substring(0, 10)),
+          timeoffs: timeoffs.map((t) => ({
+            start_date: t.date.substring(0, 10),
+            end_date: (t.end_date || t.date).substring(0, 10),
+            status: t.status,
+          })),
         }
       }),
     }
@@ -597,32 +608,39 @@ function AutoGenerateInner({
     if (!draftShifts.length) return
     setSaving(true)
     try {
-      // Clear previous shifts for this sector and cycle
-      const existing = await pb
-        .collection('shifts')
-        .getFullList({ filter: `cycle="${selectedCycle}" && sector="${selectedSector}"` })
-      for (const s of existing) await pb.collection('shifts').delete(s.id)
-
-      // Save new shifts
-      for (const ds of draftShifts) {
-        await pb.collection('shifts').create({
+      const result = await commitShiftSchedule(
+        selectedCycle,
+        selectedSector,
+        draftShifts.map((ds) => ({
           staff_profile: ds.staff_profile,
           sector: ds.sector,
           cycle: ds.cycle,
           start_time: ds.start_time,
           end_time: ds.end_time,
-        })
-      }
+        })),
+      )
       toast({
         title: 'Escala Salva',
-        description: 'Os plantões foram persistidos no banco de dados com sucesso.',
+        description:
+          result?.warnings?.length > 0
+            ? `Escala salva com ${result.warnings.length} aviso(s) de efetivo ideal.`
+            : 'Os plantões foram validados e persistidos em uma única transação.',
       })
       setIsDraftMode(false)
       setDraftShifts([])
       setRawDraft([])
       setDraftIteration(1)
     } catch (err: any) {
-      toast({ title: 'Erro ao salvar', description: err.message, variant: 'destructive' })
+      const response = err?.response
+      const details = response?.violations
+      toast({
+        title: 'Escala não salva',
+        description:
+          Array.isArray(details) && details.length
+            ? details.slice(0, 4).join(' • ')
+            : response?.error || err.message,
+        variant: 'destructive',
+      })
     } finally {
       setSaving(false)
     }

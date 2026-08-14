@@ -99,6 +99,7 @@ routerAdd(
       var sheetName = sheet.name || ''
       var rows = sheet.rows || []
       var sheetInfo = { name: sheetName, rowsProcessed: 0, sectorMatched: null }
+      var matchedSectorId = ''
 
       var normName = sheetName
         .replace(/^ESC\.?\s*/i, '')
@@ -108,6 +109,7 @@ routerAdd(
         var sn = sectors[s].getString('name').toUpperCase()
         if (sn.indexOf(normName.toUpperCase()) >= 0 || normName.toUpperCase().indexOf(sn) >= 0) {
           sheetInfo.sectorMatched = sectors[s].getString('name')
+          matchedSectorId = sectors[s].id
           break
         }
       }
@@ -182,6 +184,14 @@ routerAdd(
                 profile.set('staff_role', roleId)
                 changed = true
               }
+              if (matchedSectorId && profile.getString('default_sector') !== matchedSectorId) {
+                profile.set('default_sector', matchedSectorId)
+                changed = true
+              }
+              if (profile.get('active') === false) {
+                profile.set('active', true)
+                changed = true
+              }
               if (changed) {
                 $app.save(profile)
                 summary.profilesUpdated++
@@ -198,6 +208,8 @@ routerAdd(
               profile.set('name', name)
               profile.set('professional_id', coren)
               if (roleId) profile.set('staff_role', roleId)
+              if (matchedSectorId) profile.set('default_sector', matchedSectorId)
+              profile.set('active', true)
               $app.save(profile)
               profileMap[coren] = profile.id
               summary.profilesCreated++
@@ -216,14 +228,22 @@ routerAdd(
               var profile = new Record(pCol)
               profile.set('name', name)
               if (roleId) profile.set('staff_role', roleId)
+              if (matchedSectorId) profile.set('default_sector', matchedSectorId)
+              profile.set('active', true)
               $app.save(profile)
               summary.profilesCreated++
             } catch (err) {
               summary.errors.push("Erro ao criar '" + name + "': " + err.message)
             }
-          } else if (roleId && existingProfile.getString('staff_role') !== roleId) {
+          } else if (
+            (roleId && existingProfile.getString('staff_role') !== roleId) ||
+            (matchedSectorId && existingProfile.getString('default_sector') !== matchedSectorId) ||
+            existingProfile.get('active') === false
+          ) {
             try {
-              existingProfile.set('staff_role', roleId)
+              if (roleId) existingProfile.set('staff_role', roleId)
+              if (matchedSectorId) existingProfile.set('default_sector', matchedSectorId)
+              existingProfile.set('active', true)
               $app.save(existingProfile)
               summary.profilesUpdated++
             } catch (err) {

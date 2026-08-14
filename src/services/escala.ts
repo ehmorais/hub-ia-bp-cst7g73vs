@@ -120,6 +120,23 @@ export const generateDraftShifts = (
     headers: { 'Content-Type': 'application/json' },
   })
 
+export const commitShiftSchedule = (
+  cycleId: string,
+  sectorId: string,
+  shifts: any[],
+  publish = false,
+) =>
+  pb.send('/backend/v1/escala/commit', {
+    method: 'POST',
+    body: JSON.stringify({
+      cycle_id: cycleId,
+      sector_id: sectorId,
+      shifts,
+      publish,
+    }),
+    headers: { 'Content-Type': 'application/json' },
+  })
+
 // Timeoff Requests
 export const getTimeoffRequests = () =>
   pb

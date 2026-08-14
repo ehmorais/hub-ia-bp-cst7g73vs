@@ -48,8 +48,12 @@ import {
   deleteStaffProfile,
   getHospitalSectors,
   getShiftRules,
+  getShiftTypes,
+  getStaffContracts,
   getStaffProfiles,
   getStaffRoles,
+  createStaffContract,
+  updateStaffContract,
   updateStaffProfile,
 } from '@/services/escala'
 import { useRealtime } from '@/hooks/use-realtime'
@@ -60,6 +64,7 @@ type ProfileForm = {
   staff_role: string
   default_sector: string
   rules: string[]
+  active: boolean
 }
 
 const emptyForm: ProfileForm = {
@@ -68,6 +73,7 @@ const emptyForm: ProfileForm = {
   staff_role: 'none',
   default_sector: 'none',
   rules: [],
+  active: true,
 }
 
 export function StaffProfiles({ departmentId }: { departmentId?: string; projectId?: string }) {
@@ -75,6 +81,15 @@ export function StaffProfiles({ departmentId }: { departmentId?: string; project
   const [roles, setRoles] = useState<any[]>([])
   const [sectors, setSectors] = useState<any[]>([])
   const [rules, setRules] = useState<any[]>([])
+  const [contracts, setContracts] = useState<any[]>([])
+  const [shiftTypes, setShiftTypes] = useState<any[]>([])
+  const [selectedProfiles, setSelectedProfiles] = useState<string[]>([])
+  const [isBulkOpen, setIsBulkOpen] = useState(false)
+  const [bulkSector, setBulkSector] = useState('none')
+  const [bulkShiftType, setBulkShiftType] = useState('none')
+  const [bulkContractType, setBulkContractType] = useState('CLT 180h')
+  const [bulkHourLimit, setBulkHourLimit] = useState('180')
+  const [isBulkSaving, setIsBulkSaving] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [editingProfile, setEditingProfile] = useState<any>(null)
@@ -83,18 +98,23 @@ export function StaffProfiles({ departmentId }: { departmentId?: string; project
 
   const loadData = async () => {
     try {
-      const [profileList, roleList, sectorList, ruleList] = await Promise.all([
-        getStaffProfiles().catch(() => []),
-        getStaffRoles().catch(() => []),
-        getHospitalSectors(departmentId).catch(() => []),
-        departmentId
-          ? getShiftRules(departmentId).catch(() => [])
-          : getShiftRules().catch(() => []),
-      ])
+      const [profileList, roleList, sectorList, ruleList, contractList, shiftTypeList] =
+        await Promise.all([
+          getStaffProfiles().catch(() => []),
+          getStaffRoles().catch(() => []),
+          getHospitalSectors(departmentId).catch(() => []),
+          departmentId
+            ? getShiftRules(departmentId).catch(() => [])
+            : getShiftRules().catch(() => []),
+          getStaffContracts().catch(() => []),
+          getShiftTypes().catch(() => []),
+        ])
       setProfiles(profileList)
       setRoles(roleList)
       setSectors(sectorList)
       setRules(ruleList)
+      setContracts(contractList)
+      setShiftTypes(shiftTypeList)
     } catch (error) {
       console.error('Failed to load collaborator profiles', error)
     }
@@ -120,6 +140,7 @@ export function StaffProfiles({ departmentId }: { departmentId?: string; project
       staff_role: profile.staff_role || 'none',
       default_sector: profile.default_sector || 'none',
       rules: profile.rules || [],
+      active: profile.active !== false,
     })
     setIsFormOpen(true)
   }
@@ -147,6 +168,7 @@ export function StaffProfiles({ departmentId }: { departmentId?: string; project
       staff_role: formData.staff_role === 'none' ? null : formData.staff_role,
       default_sector: formData.default_sector === 'none' ? null : formData.default_sector,
       rules: formData.rules,
+      active: formData.active,
     }
 
     try {
@@ -181,6 +203,59 @@ export function StaffProfiles({ departmentId }: { departmentId?: string; project
         description: error.message,
         variant: 'destructive',
       })
+    }
+  }
+
+  const handleBulkSave = async () => {
+    if (
+      selectedProfiles.length === 0 ||
+      bulkSector === 'none' ||
+      bulkShiftType === 'none' ||
+      Number(bulkHourLimit) <= 0
+    ) {
+      toast({
+        title: 'Configuração incompleta',
+        description: 'Selecione colaboradores, setor, tipo de turno e carga horária.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    setIsBulkSaving(true)
+    try {
+      for (const profileId of selectedProfiles) {
+        await updateStaffProfile(profileId, {
+          default_sector: bulkSector,
+          active: true,
+        })
+        const currentContract = contracts.find((contract) => contract.staff_profile === profileId)
+        const contractPayload = {
+          staff_profile: profileId,
+          contract_type: bulkContractType,
+          monthly_hour_limit: Number(bulkHourLimit),
+          shift_type: bulkShiftType,
+        }
+        if (currentContract) {
+          await updateStaffContract(currentContract.id, contractPayload)
+        } else {
+          await createStaffContract(contractPayload)
+        }
+      }
+      toast({
+        title: 'Configuração concluída',
+        description: `${selectedProfiles.length} colaborador(es) integrados ao setor e aos contratos.`,
+      })
+      setSelectedProfiles([])
+      setIsBulkOpen(false)
+      await loadData()
+    } catch (error: any) {
+      toast({
+        title: 'Erro na configuração em lote',
+        description: error.message,
+        variant: 'destructive',
+      })
+    } finally {
+      setIsBulkSaving(false)
     }
   }
 
@@ -219,6 +294,14 @@ export function StaffProfiles({ departmentId }: { departmentId?: string; project
                 className="pl-9 h-9"
               />
             </div>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setIsBulkOpen(true)}
+              disabled={selectedProfiles.length === 0}
+            >
+              Configurar em lote ({selectedProfiles.length})
+            </Button>
             <CollaboratorImportDialog onImported={loadData} />
             <Button size="sm" onClick={openAdd} className="gap-2">
               <Plus className="h-4 w-4" />
@@ -230,6 +313,29 @@ export function StaffProfiles({ departmentId }: { departmentId?: string; project
           <Table>
             <TableHeader>
               <TableRow className="bg-slate-50/80 hover:bg-slate-50/80">
+                <TableHead className="w-10">
+                  <Checkbox
+                    aria-label="Selecionar colaboradores exibidos"
+                    checked={
+                      filteredProfiles.length > 0 &&
+                      filteredProfiles.every((profile) => selectedProfiles.includes(profile.id))
+                    }
+                    onCheckedChange={(checked) =>
+                      setSelectedProfiles((current) =>
+                        checked === true
+                          ? Array.from(
+                              new Set([
+                                ...current,
+                                ...filteredProfiles.map((profile) => profile.id),
+                              ]),
+                            )
+                          : current.filter(
+                              (id) => !filteredProfiles.some((profile) => profile.id === id),
+                            ),
+                      )
+                    }
+                  />
+                </TableHead>
                 <TableHead>Colaborador</TableHead>
                 <TableHead>Registro Profissional</TableHead>
                 <TableHead>Cargo / Função</TableHead>
@@ -241,7 +347,29 @@ export function StaffProfiles({ departmentId }: { departmentId?: string; project
             <TableBody>
               {filteredProfiles.map((profile) => (
                 <TableRow key={profile.id}>
-                  <TableCell className="font-medium text-slate-700">{profile.name}</TableCell>
+                  <TableCell>
+                    <Checkbox
+                      aria-label={`Selecionar ${profile.name}`}
+                      checked={selectedProfiles.includes(profile.id)}
+                      onCheckedChange={(checked) =>
+                        setSelectedProfiles((current) =>
+                          checked === true
+                            ? [...current, profile.id]
+                            : current.filter((id) => id !== profile.id),
+                        )
+                      }
+                    />
+                  </TableCell>
+                  <TableCell className="font-medium text-slate-700">
+                    <div className="flex items-center gap-2">
+                      <span>{profile.name}</span>
+                      {profile.active === false && (
+                        <Badge variant="outline" className="text-slate-500">
+                          Inativo
+                        </Badge>
+                      )}
+                    </div>
+                  </TableCell>
                   <TableCell className="text-sm text-slate-600">
                     {profile.professional_id || '-'}
                   </TableCell>
@@ -291,8 +419,9 @@ export function StaffProfiles({ departmentId }: { departmentId?: string; project
                           <AlertDialogHeader>
                             <AlertDialogTitle>Excluir Colaborador</AlertDialogTitle>
                             <AlertDialogDescription>
-                              Tem certeza que deseja excluir o cadastro de {profile.name}?
-                              Contratos, folgas e plantões vinculados também poderão ser removidos.
+                              Tem certeza que deseja excluir o cadastro de {profile.name}? Cadastros
+                              com contratos, folgas ou plantões vinculados não podem ser excluídos.
+                              Para preservar o histórico, prefira desativar o colaborador.
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
@@ -312,7 +441,7 @@ export function StaffProfiles({ departmentId }: { departmentId?: string; project
               ))}
               {filteredProfiles.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground py-10">
+                  <TableCell colSpan={7} className="text-center text-muted-foreground py-10">
                     Nenhum colaborador encontrado.
                   </TableCell>
                 </TableRow>
@@ -321,6 +450,82 @@ export function StaffProfiles({ departmentId }: { departmentId?: string; project
           </Table>
         </CardContent>
       </Card>
+
+      <Dialog open={isBulkOpen} onOpenChange={setIsBulkOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Configuração Operacional em Lote</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Aplique setor e contrato aos {selectedProfiles.length} colaboradores selecionados. Esta
+            configuração os torna elegíveis para a geração automática.
+          </p>
+          <div className="space-y-4 py-3">
+            <div className="space-y-2">
+              <Label>Setor</Label>
+              <Select value={bulkSector} onValueChange={setBulkSector}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o setor" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Selecione...</SelectItem>
+                  {sectors.map((sector) => (
+                    <SelectItem key={sector.id} value={sector.id}>
+                      {sector.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Tipo de contrato</Label>
+              <Select value={bulkContractType} onValueChange={setBulkContractType}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="CLT 180h">CLT 180h</SelectItem>
+                  <SelectItem value="PJ">PJ</SelectItem>
+                  <SelectItem value="Autônomo">Autônomo</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Limite mensal de horas</Label>
+              <Input
+                type="number"
+                min="1"
+                value={bulkHourLimit}
+                onChange={(event) => setBulkHourLimit(event.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Tipo de turno</Label>
+              <Select value={bulkShiftType} onValueChange={setBulkShiftType}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o tipo de turno" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Selecione...</SelectItem>
+                  {shiftTypes.map((shiftType) => (
+                    <SelectItem key={shiftType.id} value={shiftType.id}>
+                      {shiftType.name} ({shiftType.work_hours}h/{shiftType.rest_hours}h)
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsBulkOpen(false)} disabled={isBulkSaving}>
+              Cancelar
+            </Button>
+            <Button onClick={handleBulkSave} disabled={isBulkSaving}>
+              {isBulkSaving ? 'Configurando...' : 'Aplicar configuração'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
@@ -389,6 +594,18 @@ export function StaffProfiles({ departmentId }: { departmentId?: string; project
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="flex items-center gap-2 rounded-md border p-3 bg-slate-50">
+              <Checkbox
+                id="profile-active"
+                checked={formData.active}
+                onCheckedChange={(checked) =>
+                  setFormData({ ...formData, active: checked === true })
+                }
+              />
+              <Label htmlFor="profile-active" className="cursor-pointer">
+                Ativo para geração de escalas
+              </Label>
             </div>
             <div className="space-y-2">
               <Label>Regras Associadas</Label>

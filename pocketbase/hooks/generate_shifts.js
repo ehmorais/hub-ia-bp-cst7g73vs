@@ -81,6 +81,7 @@ routerAdd(
         var profileId = c.getString('staff_profile')
         if (!profileId) return
         var u = $app.findRecordById('staff_profiles', profileId)
+        if (u.get('active') === false) return
         if (sectorIds.indexOf(u.getString('default_sector')) === -1) return
 
         var rId = u.getString('staff_role')
@@ -184,6 +185,7 @@ routerAdd(
       return {
         user: t.getString('staff_profile') || t.getString('user'),
         date: (t.getString('date') || '').split(' ')[0],
+        end_date: (t.getString('end_date') || t.getString('date') || '').split(' ')[0],
         weight: t.getInt('priority_weight') || 0,
       }
     })
@@ -223,7 +225,7 @@ routerAdd(
       '2. Safety Ratios: Non-critical floors must have at least 1 professional per "staffing_ratio" beds (default 10), and a minimum of 2 professionals.',
       '3. Predictive & Critical: Sectors marked is_critical should prioritize reaching their ideal_staff.',
       '4. Hierarchical Supervision: A professional requiring supervision cannot work alone. Pair with at least one higher hierarchy_rank professional.',
-      '5. Time-off Requests: You MUST NOT schedule a user on a day where they have a time-off request.',
+      '5. Time-off Requests: You MUST NOT schedule a user on any day from date through end_date, inclusive.',
       '6. Hours & Shifts: Respect shift_type work hours and rest hours. Total hours must not exceed hour_limit.',
       '7. Individual Rules: assigned_rules override general department rules for this specific professional.',
       '8. Custom AI Rules: Apply all rules of type "custom_prompt" by following their prompt field precisely.',
@@ -295,7 +297,12 @@ routerAdd(
       var timeoffMap = {}
       timeoffData.forEach(function (t) {
         if (!timeoffMap[t.user]) timeoffMap[t.user] = []
-        timeoffMap[t.user].push(t.date)
+        var cursor = new Date(t.date + 'T00:00:00Z')
+        var end = new Date((t.end_date || t.date) + 'T00:00:00Z')
+        while (cursor <= end) {
+          timeoffMap[t.user].push(cursor.toISOString().split('T')[0])
+          cursor = new Date(cursor.getTime() + 86400000)
+        }
       })
 
       var userHourMap = {}
@@ -306,7 +313,10 @@ routerAdd(
       })
 
       var userShiftDates = {}
+      var dayAssignments = {}
       var violations = []
+      var cycleStart = (cycle.getString('start_date') || '').split(' ')[0]
+      var cycleEnd = (cycle.getString('end_date') || '').split(' ')[0]
 
       // Sort generated shifts by user and start_time for rest-hour validation
       var sortedShifts = generatedShifts.slice().sort(function (a, b) {
@@ -334,7 +344,22 @@ routerAdd(
           return
         }
 
+        var uInfo = userContractMap[gs.user_id]
+        if (!uInfo) {
+          violations.push('Colaborador inválido ou sem contrato no plantão: ' + gs.user_id)
+          return
+        }
+
         var dateStr = gs.start_time.split(' ')[0]
+        if (dateStr < cycleStart || dateStr > cycleEnd) {
+          violations.push(
+            'Plantão de ' + uInfo.name + ' em ' + dateStr + ' está fora do período do ciclo.',
+          )
+        }
+
+        var dayKey = gs.sector_id + '|' + dateStr
+        if (!dayAssignments[dayKey]) dayAssignments[dayKey] = []
+        dayAssignments[dayKey].push(uInfo)
 
         // Check timeoff
         var userTimeoffs = timeoffMap[gs.user_id] || []
@@ -350,7 +375,6 @@ routerAdd(
         }
 
         // Check hour limit
-        var uInfo = userContractMap[gs.user_id]
         if (uInfo) {
           var shiftStart = new Date(gs.start_time.replace(' ', 'T'))
           var shiftEnd = new Date(gs.end_time.replace(' ', 'T'))
@@ -374,7 +398,9 @@ routerAdd(
             var prevEnd = userShiftDates[gs.user_id].end
             var currStart = shiftStart
             var gapHours = (currStart.getTime() - prevEnd.getTime()) / 3600000
-            if (gapHours < uInfo.shift_rest_hours && gapHours >= 0) {
+            if (gapHours < 0) {
+              violations.push('Sobreposição de plantões: ' + uInfo.name)
+            } else if (gapHours < uInfo.shift_rest_hours) {
               violations.push(
                 'Violação de Descanso: ' +
                   uInfo.name +
@@ -388,6 +414,58 @@ routerAdd(
           }
           userShiftDates[gs.user_id] = { end: shiftEnd }
         }
+      })
+
+      sectors.forEach(function (sectorRecord) {
+        var minStaffing = sectorRecord.getInt('min_staffing') || 0
+        var idealStaffing = sectorRecord.getInt('ideal_staffing') || minStaffing
+        var requiredStaffing = minStaffing
+        var bedCapacity = sectorRecord.getInt('bed_capacity') || 0
+        var staffingRatio = sectorRecord.getInt('staffing_ratio') || 0
+        if (!sectorRecord.getBool('is_critical') && bedCapacity > 0 && staffingRatio > 0) {
+          requiredStaffing = Math.max(requiredStaffing, Math.ceil(bedCapacity / staffingRatio), 2)
+        }
+
+        var dayCursor = new Date(cycleStart + 'T00:00:00Z')
+        var cycleLastDay = new Date(cycleEnd + 'T00:00:00Z')
+        while (dayCursor <= cycleLastDay) {
+          var dayStr = dayCursor.toISOString().split('T')[0]
+          var assignments = dayAssignments[sectorRecord.id + '|' + dayStr] || []
+          if (assignments.length < requiredStaffing) {
+            violations.push(
+              'Efetivo insuficiente em ' +
+                sectorRecord.getString('name') +
+                ' no dia ' +
+                dayStr +
+                ': ' +
+                assignments.length +
+                '/' +
+                requiredStaffing,
+            )
+          }
+
+          assignments.forEach(function (assignment) {
+            if (!assignment.requires_supervision) return
+            var hasSupervisor = assignments.some(function (candidate) {
+              return candidate.id !== assignment.id && candidate.rank > assignment.rank
+            })
+            if (!hasSupervisor) {
+              violations.push(
+                'Supervisão ausente em ' +
+                  sectorRecord.getString('name') +
+                  ' no dia ' +
+                  dayStr +
+                  ' para ' +
+                  assignment.name,
+              )
+            }
+          })
+          dayCursor = new Date(dayCursor.getTime() + 86400000)
+        }
+      })
+
+      violations = violations.filter(function (item, index, all) {
+        return all.indexOf(item) === index
       })
 
       if (violations.length > 0) {
@@ -433,49 +511,57 @@ routerAdd(
         return e.json(400, { error: bottleneck, violations: violations })
       }
 
-      // Delete existing shifts for selected sectors
+      // Replace the validated schedule atomically, preserving the previous version on any failure.
       var validSectorIds = sectors.map(function (s) {
         return s.id
       })
-      var existingShifts = $app.findRecordsByFilter(
-        'shifts',
-        'cycle = {:cyc}',
-        '-created',
-        10000,
-        0,
-        { cyc: cycleId },
-      )
-      existingShifts.forEach(function (s) {
-        if (validSectorIds.indexOf(s.getString('sector')) !== -1) {
-          $app.delete(s)
+      var savedCount = 0
+      $app.runInTransaction((txApp) => {
+        var existingShifts = txApp.findRecordsByFilter(
+          'shifts',
+          'cycle = {:cyc}',
+          '-created',
+          10000,
+          0,
+          { cyc: cycleId },
+        )
+        existingShifts.forEach(function (shiftRecord) {
+          if (validSectorIds.indexOf(shiftRecord.getString('sector')) !== -1) {
+            txApp.delete(shiftRecord)
+          }
+        })
+
+        var shiftsCol = txApp.findCollectionByNameOrId('shifts')
+        for (var gi = 0; gi < generatedShifts.length; gi++) {
+          var generated = generatedShifts[gi]
+          if (
+            !generated.user_id ||
+            !generated.sector_id ||
+            !generated.start_time ||
+            !generated.end_time
+          ) {
+            continue
+          }
+
+          var sectorValid = false
+          for (var sj = 0; sj < sectors.length; sj++) {
+            if (sectors[sj].id === generated.sector_id) {
+              sectorValid = true
+              break
+            }
+          }
+          if (!sectorValid) continue
+
+          var record = new Record(shiftsCol)
+          record.set('staff_profile', generated.user_id)
+          record.set('sector', generated.sector_id)
+          record.set('cycle', cycleId)
+          record.set('start_time', generated.start_time)
+          record.set('end_time', generated.end_time)
+          txApp.save(record)
+          savedCount++
         }
       })
-
-      // Save new shifts
-      var shiftsCol = $app.findCollectionByNameOrId('shifts')
-      var savedCount = 0
-      for (var gi = 0; gi < generatedShifts.length; gi++) {
-        var gs = generatedShifts[gi]
-        if (!gs.user_id || !gs.sector_id || !gs.start_time || !gs.end_time) continue
-
-        var sectorValid = false
-        for (var sj = 0; sj < sectors.length; sj++) {
-          if (sectors[sj].id === gs.sector_id) {
-            sectorValid = true
-            break
-          }
-        }
-        if (!sectorValid) continue
-
-        var record = new Record(shiftsCol)
-        record.set('staff_profile', gs.user_id)
-        record.set('sector', gs.sector_id)
-        record.set('cycle', cycleId)
-        record.set('start_time', gs.start_time)
-        record.set('end_time', gs.end_time)
-        $app.save(record)
-        savedCount++
-      }
 
       logAudit(
         'AI_SHIFT_GENERATION',

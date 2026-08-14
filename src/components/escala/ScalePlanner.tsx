@@ -16,6 +16,7 @@ import {
   getStaffContracts,
   getTimeoffRequests,
   generateShifts,
+  commitShiftSchedule,
 } from '@/services/escala'
 import {
   AlertCircle,
@@ -164,7 +165,7 @@ export function ScalePlanner({
       }
       setSectors(s)
 
-      setUsers(u)
+      setUsers(u.filter((profile: any) => profile.active !== false))
       setContracts(cont)
       setTimeoffs(to)
       if (c.length > 0)
@@ -346,15 +347,17 @@ export function ScalePlanner({
       days.forEach((day) => {
         const dateStr = format(day, 'yyyy-MM-dd')
         const cell = draft[user.id]?.[dateStr]
-        const isTO = timeoffsForCycle.some(
-          (t) => (t.staff_profile || t.user) === user.id && t.date.substring(0, 10) === dateStr,
-        )
+        const matchingTimeoff = timeoffsForCycle.find((t) => {
+          if ((t.staff_profile || t.user) !== user.id) return false
+          const start = t.date.substring(0, 10)
+          const end = (t.end_date || t.date).substring(0, 10)
+          return dateStr >= start && dateStr <= end
+        })
+        const isTO = !!matchingTimeoff
 
         if (cell && cell !== 'F') {
           if (isTO) {
-            const reqStatus = timeoffsForCycle.find(
-              (t) => (t.staff_profile || t.user) === user.id && t.date.substring(0, 10) === dateStr,
-            )?.status
+            const reqStatus = matchingTimeoff?.status
             alerts.push(
               `${user.name} alocado em dia de folga ${reqStatus === 'pending' ? '(pendente)' : ''} (${format(day, 'dd/MM')})`,
             )
@@ -446,66 +449,10 @@ export function ScalePlanner({
         return next
       })
 
-      // Backend sync
-      const sourceShift = allShifts.find(
-        (s) =>
-          (s.staff_profile || s.user) === sourceUserId &&
-          s.start_time.startsWith(sourceDateStr) &&
-          s.sector === selectedSectorId,
-      )
-      const targetShift = allShifts.find(
-        (s) =>
-          (s.staff_profile || s.user) === targetUserId &&
-          s.start_time.startsWith(targetDateStr) &&
-          s.sector === selectedSectorId,
-      )
-
-      const contract = contracts.find((c) => (c.staff_profile || c.user) === targetUserId)
-      const wh = contract?.expand?.shift_type?.work_hours
-      let st = '07:00:00'
-      let duration = 12
-
-      if (shiftVal === 'D') {
-        st = '07:00:00'
-        duration = wh || 12
-      } else if (shiftVal === 'N') {
-        st = '19:00:00'
-        duration = wh || 12
-      } else if (shiftVal === 'M') {
-        st = '07:00:00'
-        duration = wh || 6
-      } else if (shiftVal === 'T') {
-        st = '13:00:00'
-        duration = wh || 6
-      }
-
-      const startDate = new Date(`${targetDateStr}T${st}.000Z`)
-      const endDate = new Date(startDate.getTime() + duration * 3600000)
-      const formattedEnd = endDate.toISOString().replace('T', ' ').substring(0, 23) + 'Z'
-
-      if (sourceShift) {
-        if (targetShift) {
-          await pb.collection('shifts').delete(targetShift.id)
-        }
-        await pb.collection('shifts').update(sourceShift.id, {
-          staff_profile: targetUserId,
-          start_time: `${targetDateStr} ${st}.000Z`,
-          end_time: formattedEnd,
-        })
-      } else {
-        if (targetShift) {
-          await pb.collection('shifts').delete(targetShift.id)
-        }
-        await pb.collection('shifts').create({
-          staff_profile: targetUserId,
-          sector: selectedSectorId,
-          cycle: selectedCycleId,
-          start_time: `${targetDateStr} ${st}.000Z`,
-          end_time: formattedEnd,
-        })
-      }
-
-      toast({ title: 'Sucesso', description: 'Turno movido com sucesso.' })
+      toast({
+        title: 'Alteração no rascunho',
+        description: 'O turno foi movido localmente. Use Salvar para validar e gravar a escala.',
+      })
     } catch (err: any) {
       toast({
         title: 'Erro',
@@ -592,9 +539,6 @@ export function ScalePlanner({
     if (!selectedCycleId || !selectedSectorId) return
     setIsSaving(true)
     try {
-      const existing = allShifts.filter((s) => s.sector === selectedSectorId)
-      for (const s of existing) await pb.collection('shifts').delete(s.id)
-
       const toCreate: any[] = []
       draftUsers.forEach((u) =>
         days.forEach((d) => {
@@ -636,14 +580,19 @@ export function ScalePlanner({
           }
         }),
       )
-      for (const s of toCreate) await pb.collection('shifts').create(s)
+      const result = await commitShiftSchedule(selectedCycleId, selectedSectorId, toCreate, publish)
 
       if (publish && selectedCycle?.status === 'draft') {
-        await pb.collection('shift_cycles').update(selectedCycleId, { status: 'active' })
         setCycles((c) => c.map((x) => (x.id === selectedCycleId ? { ...x, status: 'active' } : x)))
         toast({ title: 'Sucesso', description: 'Escala publicada e ativa!' })
       } else {
-        toast({ title: 'Sucesso', description: 'Rascunho salvo localmente.' })
+        toast({
+          title: 'Sucesso',
+          description:
+            result?.warnings?.length > 0
+              ? `Escala validada e salva com ${result.warnings.length} aviso(s) de efetivo ideal.`
+              : 'Escala validada e salva com segurança.',
+        })
       }
       setAllShifts(
         await pb.collection('shifts').getFullList({
@@ -652,7 +601,16 @@ export function ScalePlanner({
         }),
       )
     } catch (err: any) {
-      toast({ title: 'Erro', description: err.message, variant: 'destructive' })
+      const response = err?.response
+      const details = response?.violations
+      toast({
+        title: 'Escala não salva',
+        description:
+          Array.isArray(details) && details.length
+            ? details.slice(0, 4).join(' • ')
+            : response?.error || err.message,
+        variant: 'destructive',
+      })
     } finally {
       setIsSaving(false)
     }

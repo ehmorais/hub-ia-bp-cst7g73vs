@@ -25,6 +25,106 @@ routerAdd(
       $app.saveNoValidate(audit)
     }
 
+    var sectorRecord = $app.findRecordById('hospital_sectors', targetSector)
+    var requiredStaffing = sectorRecord.getInt('min_staffing') || 0
+    var bedCapacity = sectorRecord.getInt('bed_capacity') || 0
+    var staffingRatio = sectorRecord.getInt('staffing_ratio') || 0
+    if (!sectorRecord.getBool('is_critical') && bedCapacity > 0 && staffingRatio > 0) {
+      requiredStaffing = Math.max(requiredStaffing, Math.ceil(bedCapacity / staffingRatio), 2)
+    }
+
+    var assignmentsByDay = {}
+    var addAssignment = function (profile, day) {
+      if (!assignmentsByDay[day]) assignmentsByDay[day] = []
+      var roleId = profile.getString('staff_role')
+      var rank = 0
+      var requires = true
+      if (roleId) {
+        try {
+          var role = $app.findRecordById('staff_roles', roleId)
+          rank = role.getInt('hierarchy_rank') || 0
+          requires = role.getBool('requires_supervision')
+        } catch (_) {}
+      }
+      assignmentsByDay[day].push({
+        id: profile.id,
+        name: profile.getString('name') || profile.id,
+        rank: rank,
+        requires_supervision: requires,
+      })
+    }
+
+    allSectorShifts.forEach(function (shift) {
+      var existingProfileId = shift.getString('staff_profile')
+      if (!existingProfileId || existingProfileId === profileId) return
+      try {
+        addAssignment(
+          $app.findRecordById('staff_profiles', existingProfileId),
+          shift.getString('start_time').split(' ')[0],
+        )
+      } catch (_) {}
+    })
+    createdShifts.forEach(function (shift) {
+      addAssignment(user, shift.start_time.split(' ')[0])
+    })
+
+    var scheduleViolations = []
+    var validationDay = new Date(startDateRaw + 'T00:00:00Z')
+    while (validationDay <= endObj) {
+      var validationDate = validationDay.toISOString().split('T')[0]
+      var dayAssignments = assignmentsByDay[validationDate] || []
+      if (dayAssignments.length < requiredStaffing) {
+        scheduleViolations.push(
+          validationDate + ': efetivo ' + dayAssignments.length + '/' + requiredStaffing + '.',
+        )
+      }
+      dayAssignments.forEach(function (assignment) {
+        if (!assignment.requires_supervision) return
+        var hasSupervisor = dayAssignments.some(function (candidate) {
+          return candidate.id !== assignment.id && candidate.rank > assignment.rank
+        })
+        if (!hasSupervisor) {
+          scheduleViolations.push(
+            validationDate + ': supervisão ausente para ' + assignment.name + '.',
+          )
+        }
+      })
+      validationDay = new Date(validationDay.getTime() + 86400000)
+    }
+
+    if (scheduleViolations.length > 0) {
+      return e.json(400, {
+        error: 'A escala individual deixaria o setor em condição inválida.',
+        violations: scheduleViolations.filter(function (item, index, all) {
+          return all.indexOf(item) === index
+        }),
+      })
+    }
+
+    $app.runInTransaction((txApp) => {
+      var previous = txApp.findRecordsByFilter(
+        'shifts',
+        "staff_profile='" + profileId + "' && cycle='" + cycleId + "'",
+        '',
+        10000,
+        0,
+      )
+      previous.forEach(function (record) {
+        txApp.delete(record)
+      })
+
+      var shiftsCol = txApp.findCollectionByNameOrId('shifts')
+      createdShifts.forEach(function (shift) {
+        var record = new Record(shiftsCol)
+        record.set('staff_profile', profileId)
+        record.set('sector', targetSector)
+        record.set('cycle', cycleId)
+        record.set('start_time', shift.start_time)
+        record.set('end_time', shift.end_time)
+        txApp.save(record)
+      })
+    })
+
     logAudit('AI_STAFF_SCHEDULE_GENERATION', {
       status: 'started',
       target_user: profileId,
@@ -63,6 +163,13 @@ routerAdd(
       return e.json(400, {
         error: 'STAFF_PROFILE_NOT_FOUND',
         message: 'O colaborador informado não foi encontrado.',
+      })
+    }
+
+    if (user.get('active') === false) {
+      return e.json(400, {
+        error: 'INACTIVE_STAFF_PROFILE',
+        message: 'O colaborador está inativo para geração de escalas.',
       })
     }
 
@@ -183,27 +290,29 @@ routerAdd(
 
     const timeoffs = $app.findRecordsByFilter(
       'timeoff_requests',
-      "staff_profile='" + profileId + "' && cycle='" + cycleId + "' && status='fulfilled'",
-      '',
+      "staff_profile='" +
+        profileId +
+        "' && cycle='" +
+        cycleId +
+        "' && (status='fulfilled' || status='pending')",
+      'date',
       1000,
       0,
     )
-    const timeoffDays = timeoffs.map(function (t) {
-      return t.getString('date').split(' ')[0]
+    const timeoffDays = []
+    timeoffs.forEach(function (request) {
+      var start = (request.getString('date') || '').split(' ')[0]
+      var end = (request.getString('end_date') || request.getString('date') || '').split(' ')[0]
+      if (!start) return
+      var cursor = new Date(start + 'T00:00:00Z')
+      var last = new Date((end || start) + 'T00:00:00Z')
+      while (cursor <= last) {
+        timeoffDays.push(cursor.toISOString().split('T')[0])
+        cursor = new Date(cursor.getTime() + 86400000)
+      }
     })
 
     const monthlyLimit = contract.getInt('monthly_hour_limit') || 180
-
-    const pendingTimeoffs = $app.findRecordsByFilter(
-      'timeoff_requests',
-      "staff_profile='" + profileId + "' && cycle='" + cycleId + "' && status='pending'",
-      '',
-      1000,
-      0,
-    )
-    pendingTimeoffs.forEach(function (t) {
-      timeoffDays.push(t.getString('date').split(' ')[0])
-    })
 
     const existingUserShifts = $app.findRecordsByFilter(
       'shifts',
@@ -212,10 +321,6 @@ routerAdd(
       10000,
       0,
     )
-    existingUserShifts.forEach(function (s) {
-      $app.delete(s)
-    })
-
     const allSectorShifts = $app.findRecordsByFilter(
       'shifts',
       "sector='" + targetSector + "' && cycle='" + cycleId + "'",
@@ -233,11 +338,11 @@ routerAdd(
     }
 
     allSectorShifts.forEach(function (s) {
+      if (s.getString('staff_profile') === profileId) return
       var d = s.getString('start_time').split(' ')[0]
       if (staffingCount[d] !== undefined) staffingCount[d]++
     })
 
-    const shiftsCol = $app.findCollectionByNameOrId('shifts')
     const createdShifts = []
 
     let bestStartOffset = 0
@@ -269,22 +374,16 @@ routerAdd(
       const dateStr = current.toISOString().split('T')[0]
 
       if (timeoffDays.indexOf(dateStr) === -1) {
-        const record = new Record(shiftsCol)
-        record.set('staff_profile', profileId)
-        record.set('sector', targetSector)
-        record.set('cycle', cycleId)
-
         let st = startTimeStr
         if (st.length === 5) st += ':00'
 
         const shiftStart = new Date(dateStr + 'T' + st + '.000Z')
         const shiftEnd = new Date(shiftStart.getTime() + workHours * 3600000)
 
-        record.set('start_time', shiftStart.toISOString().replace('T', ' ').substring(0, 23) + 'Z')
-        record.set('end_time', shiftEnd.toISOString().replace('T', ' ').substring(0, 23) + 'Z')
-
-        $app.save(record)
-        createdShifts.push(record)
+        createdShifts.push({
+          start_time: shiftStart.toISOString().replace('T', ' ').substring(0, 23) + 'Z',
+          end_time: shiftEnd.toISOString().replace('T', ' ').substring(0, 23) + 'Z',
+        })
         totalHours += workHours
       } else {
         skippedTimeoff++
