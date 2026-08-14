@@ -303,18 +303,13 @@ function AutoGenerateInner({
         details: sectorDetails,
       })
 
-      // Staff & Default Sector
-      const sfParts = []
-      if (sector) sfParts.push(`default_sector="${sector.id}"`)
-      if (projectMembers.length > 0)
-        sfParts.push(`(${projectMembers.map((m) => `id="${m}"`).join(' || ')})`)
-      const staffFilter = sfParts.join(' || ')
-
+      // Staff profiles are the operational collaborators used by scheduling.
       let users: any[] = []
-      if (staffFilter) {
-        users = await pb.collection('users').getFullList({
-          filter: `(${staffFilter}) && role!="Admin"`,
-          expand: 'staff_role,staff_profile',
+      if (sector) {
+        users = await pb.collection('staff_profiles').getFullList({
+          filter: `default_sector="${sector.id}"`,
+          expand: 'staff_role,default_sector,rules',
+          sort: 'name',
         })
       }
       setUsersList(users)
@@ -327,7 +322,6 @@ function AutoGenerateInner({
         staffDetails.push('Nenhum colaborador associado ao setor selecionado ou ao projeto.')
       } else {
         const usersWithoutRole = users.filter((u) => !u.staff_role)
-        const usersWithoutProfile = users.filter((u) => !u.staff_profile)
         const usersWrongSector = users.filter((u) => u.default_sector !== selectedSector)
 
         if (usersWithoutRole.length > 0) {
@@ -335,15 +329,6 @@ function AutoGenerateInner({
           usersWithoutRole.forEach((u) =>
             staffDetails.push(
               `⚠️ Colaborador(a) ${u.name || u.email} está sem cargo (staff_role) atribuído.`,
-            ),
-          )
-        }
-
-        if (usersWithoutProfile.length > 0) {
-          staffStatus = 'error'
-          usersWithoutProfile.forEach((u) =>
-            staffDetails.push(
-              `⚠️ Colaborador(a) ${u.name || u.email} está sem perfil (staff_profile) configurado.`,
             ),
           )
         }
@@ -381,9 +366,9 @@ function AutoGenerateInner({
       let contractStatus: 'success' | 'error' = 'success'
       if (users.length > 0) {
         const userIds = users.map((u) => u.id)
-        const contractsList = contracts.filter((c) => userIds.includes(c.user))
+        const contractsList = contracts.filter((c) => userIds.includes(c.staff_profile))
         const usersWithoutContract = users.filter(
-          (u) => !contractsList.some((c) => c.user === u.id),
+          (u) => !contractsList.some((c) => c.staff_profile === u.id),
         )
         const invalidContracts = contractsList.filter(
           (c) => !c.contract_type || !c.monthly_hour_limit || !c.shift_type,
@@ -397,7 +382,7 @@ function AutoGenerateInner({
             ),
           )
           invalidContracts.forEach((c) => {
-            const u = users.find((x) => x.id === c.user)
+            const u = users.find((x) => x.id === c.staff_profile)
             contractDetails.push(
               `⚠️ Contrato de ${u?.name || u?.email || 'Desconhecido'} possui dados incompletos (tipo, carga horária ou tipo de turno).`,
             )
@@ -423,7 +408,7 @@ function AutoGenerateInner({
       const timeoffDetails = []
       let timeoffStatus: 'success' | 'warning' = 'success'
       const timeoffsInCycle = timeoffsList.filter(
-        (t) => t.cycle === selectedCycle && users.some((u) => u.id === t.user),
+        (t) => t.cycle === selectedCycle && users.some((u) => u.id === t.staff_profile),
       )
 
       if (timeoffsInCycle.length === 0) {
@@ -480,7 +465,7 @@ function AutoGenerateInner({
 
   const mapDraftToShifts = (draftArray: any[]) => {
     return draftArray.map((d: any, index: number) => {
-      const contract = contracts.find((c) => c.user === d.user_id)
+      const contract = contracts.find((c) => c.staff_profile === d.user_id)
       const wh = contract?.expand?.shift_type?.work_hours || 12
 
       let st = '07:00:00'
@@ -504,13 +489,13 @@ function AutoGenerateInner({
 
       return {
         id: `draft_${index}_${Math.random().toString(36).substring(2, 9)}`,
-        user: d.user_id,
+        staff_profile: d.user_id,
         sector: selectedSector,
         cycle: selectedCycle,
         start_time: startDate.toISOString().replace('T', ' ').substring(0, 23) + 'Z',
         end_time: endDate.toISOString().replace('T', ' ').substring(0, 23) + 'Z',
         expand: {
-          user: usersList.find((u) => u.id === d.user_id),
+          staff_profile: usersList.find((u) => u.id === d.user_id),
           sector: sectors.find((s) => s.id === selectedSector),
         },
       }
@@ -537,9 +522,9 @@ function AutoGenerateInner({
         ideal_staffing: sector?.ideal_staffing,
       },
       users: usersList.map((u) => {
-        const contract = contracts.find((c) => c.user === u.id)
+        const contract = contracts.find((c) => c.staff_profile === u.id)
         const timeoffs = timeoffsList.filter(
-          (t) => t.user === u.id && t.cycle === selectedCycle && t.status === 'fulfilled',
+          (t) => t.staff_profile === u.id && t.cycle === selectedCycle && t.status === 'fulfilled',
         )
         return {
           id: u.id,
@@ -621,7 +606,7 @@ function AutoGenerateInner({
       // Save new shifts
       for (const ds of draftShifts) {
         await pb.collection('shifts').create({
-          user: ds.user,
+          staff_profile: ds.staff_profile,
           sector: ds.sector,
           cycle: ds.cycle,
           start_time: ds.start_time,

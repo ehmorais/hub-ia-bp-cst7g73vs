@@ -7,12 +7,12 @@ routerAdd(
     }
 
     const body = e.requestInfo().body || {}
-    const userId = body.user_id
+    const profileId = body.staff_profile_id || body.user_id
     const cycleId = body.cycle_id
     const sectorId = body.sector_id
 
-    if (!userId || !cycleId) {
-      return e.badRequestError('user_id and cycle_id are required')
+    if (!profileId || !cycleId) {
+      return e.badRequestError('staff_profile_id and cycle_id are required')
     }
 
     var auditCol = $app.findCollectionByNameOrId('audit_logs')
@@ -27,7 +27,7 @@ routerAdd(
 
     logAudit('AI_STAFF_SCHEDULE_GENERATION', {
       status: 'started',
-      target_user: userId,
+      target_user: profileId,
       cycle_id: cycleId,
       sector_id: sectorId,
     })
@@ -38,7 +38,7 @@ routerAdd(
     } catch (_) {
       logAudit('AI_STAFF_SCHEDULE_GENERATION', {
         status: 'error',
-        target_user: userId,
+        target_user: profileId,
         cycle_id: cycleId,
         error: 'Cycle not found',
         staff_processed: 0,
@@ -51,18 +51,18 @@ routerAdd(
 
     var user
     try {
-      user = $app.findRecordById('users', userId)
+      user = $app.findRecordById('staff_profiles', profileId)
     } catch (_) {
       logAudit('AI_STAFF_SCHEDULE_GENERATION', {
         status: 'error',
-        target_user: userId,
+        target_user: profileId,
         cycle_id: cycleId,
-        error: 'User not found',
+        error: 'Staff profile not found',
         staff_processed: 0,
       })
       return e.json(400, {
-        error: 'USER_NOT_FOUND',
-        message: 'O usuário informado não foi encontrado.',
+        error: 'STAFF_PROFILE_NOT_FOUND',
+        message: 'O colaborador informado não foi encontrado.',
       })
     }
 
@@ -71,20 +71,20 @@ routerAdd(
     if (!targetSector) {
       logAudit('AI_STAFF_SCHEDULE_GENERATION', {
         status: 'error',
-        target_user: userId,
+        target_user: profileId,
         cycle_id: cycleId,
         error: 'No sector selected',
         staff_processed: 0,
       })
       return e.json(400, {
         error: 'MISSING_SECTOR',
-        message: 'Nenhum setor selecionado e o usuário não possui setor padrão.',
+        message: 'Nenhum setor selecionado e o colaborador não possui setor padrão.',
       })
     }
 
     // Pre-check: verify the target sector has users with both staff_role and staff_contract
     var sectorUsers = $app.findRecordsByFilter(
-      'users',
+      'staff_profiles',
       "default_sector='" + targetSector + "'",
       '',
       10000,
@@ -97,7 +97,7 @@ routerAdd(
       var hasContract = false
       if (hasRole) {
         try {
-          $app.findFirstRecordByFilter('staff_contracts', "user='" + su.id + "'")
+          $app.findFirstRecordByFilter('staff_contracts', "staff_profile='" + su.id + "'")
           hasContract = true
         } catch (_) {}
       }
@@ -109,7 +109,7 @@ routerAdd(
     var targetHasContract = false
     if (targetHasRole) {
       try {
-        $app.findFirstRecordByFilter('staff_contracts', "user='" + userId + "'")
+        $app.findFirstRecordByFilter('staff_contracts', "staff_profile='" + profileId + "'")
         targetHasContract = true
       } catch (_) {}
     }
@@ -117,7 +117,7 @@ routerAdd(
     if (!targetHasRole || !targetHasContract) {
       logAudit('AI_STAFF_SCHEDULE_GENERATION', {
         status: 'error',
-        target_user: userId,
+        target_user: profileId,
         cycle_id: cycleId,
         sector_id: targetSector,
         error: 'MISSING_STAFF_DATA',
@@ -134,7 +134,7 @@ routerAdd(
     if (eligibleStaffCount === 0) {
       logAudit('AI_STAFF_SCHEDULE_GENERATION', {
         status: 'error',
-        target_user: userId,
+        target_user: profileId,
         cycle_id: cycleId,
         sector_id: targetSector,
         error: 'MISSING_STAFF_DATA',
@@ -148,14 +148,17 @@ routerAdd(
 
     let contract
     try {
-      contract = $app.findFirstRecordByFilter('staff_contracts', "user='" + userId + "'")
+      contract = $app.findFirstRecordByFilter(
+        'staff_contracts',
+        "staff_profile='" + profileId + "'",
+      )
     } catch (_) {
       logAudit('AI_STAFF_SCHEDULE_GENERATION', {
         status: 'error',
-        target_user: userId,
+        target_user: profileId,
         cycle_id: cycleId,
         sector_id: targetSector,
-        error: 'User has no contract',
+        error: 'Staff profile has no contract',
         staff_processed: eligibleStaffCount,
       })
       return e.json(400, {
@@ -180,7 +183,7 @@ routerAdd(
 
     const timeoffs = $app.findRecordsByFilter(
       'timeoff_requests',
-      "user='" + userId + "' && cycle='" + cycleId + "' && status='fulfilled'",
+      "staff_profile='" + profileId + "' && cycle='" + cycleId + "' && status='fulfilled'",
       '',
       1000,
       0,
@@ -193,7 +196,7 @@ routerAdd(
 
     const pendingTimeoffs = $app.findRecordsByFilter(
       'timeoff_requests',
-      "user='" + userId + "' && cycle='" + cycleId + "' && status='pending'",
+      "staff_profile='" + profileId + "' && cycle='" + cycleId + "' && status='pending'",
       '',
       1000,
       0,
@@ -204,7 +207,7 @@ routerAdd(
 
     const existingUserShifts = $app.findRecordsByFilter(
       'shifts',
-      "user='" + userId + "' && cycle='" + cycleId + "'",
+      "staff_profile='" + profileId + "' && cycle='" + cycleId + "'",
       '',
       10000,
       0,
@@ -267,7 +270,7 @@ routerAdd(
 
       if (timeoffDays.indexOf(dateStr) === -1) {
         const record = new Record(shiftsCol)
-        record.set('user', userId)
+        record.set('staff_profile', profileId)
         record.set('sector', targetSector)
         record.set('cycle', cycleId)
 
@@ -292,7 +295,7 @@ routerAdd(
 
     logAudit('AI_STAFF_SCHEDULE_GENERATION', {
       status: 'success',
-      target_user: userId,
+      target_user: profileId,
       cycle_id: cycleId,
       sector_id: targetSector,
       shifts_created: createdShifts.length,

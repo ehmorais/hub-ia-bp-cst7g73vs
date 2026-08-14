@@ -13,7 +13,7 @@ import {
   getTimeoffRequests,
   createTimeoffRequest,
   deleteTimeoffRequest,
-  getUsers,
+  getStaffProfiles,
   getHospitalSectors,
 } from '@/services/escala'
 import {
@@ -34,13 +34,19 @@ import { DateRange } from 'react-day-picker'
 import { cn } from '@/lib/utils'
 import { useRealtime } from '@/hooks/use-realtime'
 
-export function TimeoffRequestDialog({ user, departmentId }: { user?: any; departmentId: string }) {
+export function TimeoffRequestDialog({
+  staffProfile,
+  departmentId,
+}: {
+  staffProfile?: any
+  departmentId?: string
+}) {
   const [open, setOpen] = useState(false)
   const [cycles, setCycles] = useState<any[]>([])
   const [selectedCycleId, setSelectedCycleId] = useState<string>('')
   const [requests, setRequests] = useState<any[]>([])
-  const [departmentUsers, setDepartmentUsers] = useState<any[]>([])
-  const [selectedUserId, setSelectedUserId] = useState<string>(user?.id || '')
+  const [departmentProfiles, setDepartmentProfiles] = useState<any[]>([])
+  const [selectedProfileId, setSelectedProfileId] = useState<string>(staffProfile?.id || '')
   const [dateRange, setDateRange] = useState<DateRange | undefined>()
   const [priority, setPriority] = useState('5')
   const { toast } = useToast()
@@ -54,13 +60,19 @@ export function TimeoffRequestDialog({ user, departmentId }: { user?: any; depar
         setSelectedCycleId(c[0].id)
       }
 
-      if (!user) {
-        const [u, s] = await Promise.all([getUsers(), getHospitalSectors(departmentId)])
-        const sectorIds = s.map((sec: any) => sec.id)
-        const deptUsers = u.filter(
-          (usr: any) => !usr.default_sector || sectorIds.includes(usr.default_sector),
-        )
-        setDepartmentUsers(deptUsers)
+      if (!staffProfile) {
+        const [profiles, sectors] = await Promise.all([
+          getStaffProfiles(),
+          getHospitalSectors(departmentId),
+        ])
+        const sectorIds = sectors.map((sector: any) => sector.id)
+        const filteredProfiles = departmentId
+          ? profiles.filter(
+              (profile: any) =>
+                !profile.default_sector || sectorIds.includes(profile.default_sector),
+            )
+          : profiles
+        setDepartmentProfiles(filteredProfiles)
       }
     } catch (error) {
       console.error('Failed to load data:', error)
@@ -78,15 +90,17 @@ export function TimeoffRequestDialog({ user, departmentId }: { user?: any; depar
 
   useEffect(() => {
     if (!open) {
-      if (!user) setSelectedUserId('')
+      if (!staffProfile) setSelectedProfileId('')
       setDateRange(undefined)
       setPriority('5')
     }
-  }, [open, user])
+  }, [open, staffProfile])
 
-  const targetUser = user?.id || selectedUserId
+  const targetProfile = staffProfile?.id || selectedProfileId
   const selectedCycle = cycles.find((c) => c.id === selectedCycleId)
-  const cycleRequests = requests.filter((r) => r.cycle === selectedCycleId && r.user === targetUser)
+  const cycleRequests = requests.filter(
+    (request) => request.cycle === selectedCycleId && request.staff_profile === targetProfile,
+  )
 
   const handleAdd = async () => {
     if (!selectedCycleId || !dateRange?.from || !dateRange?.to) {
@@ -101,7 +115,7 @@ export function TimeoffRequestDialog({ user, departmentId }: { user?: any; depar
       return
     }
 
-    if (!targetUser) {
+    if (!targetProfile) {
       toast({
         title: 'Atenção',
         description: 'Selecione um colaborador primeiro.',
@@ -136,7 +150,7 @@ export function TimeoffRequestDialog({ user, departmentId }: { user?: any; depar
 
     try {
       await createTimeoffRequest({
-        user: targetUser,
+        staff_profile: targetProfile,
         cycle: selectedCycleId,
         date: format(dateRange.from, 'yyyy-MM-dd') + ' 12:00:00.000Z',
         end_date: format(dateRange.to, 'yyyy-MM-dd') + ' 12:00:00.000Z',
@@ -168,34 +182,36 @@ export function TimeoffRequestDialog({ user, departmentId }: { user?: any; depar
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        {user ? (
+        {staffProfile ? (
           <Button variant="outline" size="sm" className="gap-2 bg-white hover:bg-slate-50">
             <Clock className="h-4 w-4 text-slate-500" />
-            <span>Solicitar Folga</span>
+            <span>Solicitação de Folga</span>
           </Button>
         ) : (
           <Button size="sm" className="gap-2">
             <Plus className="h-4 w-4" />
-            <span>Solicitar Folga</span>
+            <span>Solicitação de Folga</span>
           </Button>
         )}
       </DialogTrigger>
       <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{user ? `Gerenciar Folgas: ${user.name}` : 'Solicitar Folga'}</DialogTitle>
+          <DialogTitle>
+            {staffProfile ? `Solicitação de Folga: ${staffProfile.name}` : 'Solicitação de Folga'}
+          </DialogTitle>
         </DialogHeader>
         <div className="space-y-6">
-          {!user && (
+          {!staffProfile && (
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-700">Colaborador</label>
-              <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+              <Select value={selectedProfileId} onValueChange={setSelectedProfileId}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Selecione um colaborador..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {departmentUsers.map((u) => (
-                    <SelectItem key={u.id} value={u.id}>
-                      {u.name}
+                  {departmentProfiles.map((profile) => (
+                    <SelectItem key={profile.id} value={profile.id}>
+                      {profile.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -233,7 +249,7 @@ export function TimeoffRequestDialog({ user, departmentId }: { user?: any; depar
               </Badge>
             </h4>
 
-            {!targetUser ? (
+            {!targetProfile ? (
               <p className="text-sm text-muted-foreground p-4 bg-slate-50 rounded-md border border-dashed text-center">
                 Selecione um colaborador para ver as folgas.
               </p>
@@ -286,7 +302,7 @@ export function TimeoffRequestDialog({ user, departmentId }: { user?: any; depar
             )}
           </div>
 
-          {!targetUser ? null : cycleRequests.length < 2 ? (
+          {!targetProfile ? null : cycleRequests.length < 2 ? (
             <div className="flex flex-col gap-4 pt-4 border-t">
               <div className="flex flex-col sm:flex-row gap-3 items-end">
                 <div className="flex-1 space-y-2 w-full">

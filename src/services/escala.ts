@@ -44,7 +44,9 @@ export const deleteStaffRole = (id: string) => pb.collection('staff_roles').dele
 
 // Staff Profiles
 export const getStaffProfiles = () =>
-  pb.collection('staff_profiles').getFullList({ sort: 'name', expand: 'staff_role' })
+  pb
+    .collection('staff_profiles')
+    .getFullList({ sort: 'name', expand: 'staff_role,default_sector,rules' })
 export const createStaffProfile = (data: any) => pb.collection('staff_profiles').create(data)
 export const updateStaffProfile = (id: string, data: any) =>
   pb.collection('staff_profiles').update(id, data)
@@ -52,7 +54,9 @@ export const deleteStaffProfile = (id: string) => pb.collection('staff_profiles'
 
 // Staff Contracts
 export const getStaffContracts = () =>
-  pb.collection('staff_contracts').getFullList({ expand: 'user,shift_type' })
+  pb
+    .collection('staff_contracts')
+    .getFullList({ expand: 'staff_profile,staff_profile.default_sector,user,shift_type' })
 export const createStaffContract = (data: any) => pb.collection('staff_contracts').create(data)
 export const updateStaffContract = (id: string, data: any) =>
   pb.collection('staff_contracts').update(id, data)
@@ -71,7 +75,10 @@ export const deleteShiftRule = (id: string) => pb.collection('shift_rules').dele
 
 // Shifts
 export const getShifts = (cycleId?: string) => {
-  const opts: any = { sort: 'start_time', expand: 'user,sector' }
+  const opts: any = {
+    sort: 'start_time',
+    expand: 'staff_profile,staff_profile.staff_role,user,sector',
+  }
   if (cycleId) opts.filter = `cycle="${cycleId}"`
   return pb.collection('shifts').getFullList(opts)
 }
@@ -115,7 +122,9 @@ export const generateDraftShifts = (
 
 // Timeoff Requests
 export const getTimeoffRequests = () =>
-  pb.collection('timeoff_requests').getFullList({ expand: 'user,cycle', sort: '-created' })
+  pb
+    .collection('timeoff_requests')
+    .getFullList({ expand: 'staff_profile,user,cycle', sort: '-created' })
 export const createTimeoffRequest = (data: any) => pb.collection('timeoff_requests').create(data)
 export const updateTimeoffRequest = (id: string, data: any) =>
   pb.collection('timeoff_requests').update(id, data)

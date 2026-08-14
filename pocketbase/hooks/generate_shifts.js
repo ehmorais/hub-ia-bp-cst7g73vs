@@ -78,10 +78,10 @@ routerAdd(
     var usersWithContracts = []
     contracts.forEach(function (c) {
       try {
-        var userId = c.getString('user')
-        if (!userId) return
-        var u = $app.findRecordById('users', userId)
-        if (u.getString('role') === 'Admin') return
+        var profileId = c.getString('staff_profile')
+        if (!profileId) return
+        var u = $app.findRecordById('staff_profiles', profileId)
+        if (sectorIds.indexOf(u.getString('default_sector')) === -1) return
 
         var rId = u.getString('staff_role')
         var rName = 'N/A',
@@ -113,7 +113,7 @@ routerAdd(
           }
         }
 
-        var assignedRulesIds = u.getStringSlice('assigned_rules') || []
+        var assignedRulesIds = u.getStringSlice('rules') || []
         var userRules = []
         assignedRulesIds.forEach(function (rid) {
           var rule = null
@@ -182,7 +182,7 @@ routerAdd(
 
     var timeoffData = timeoffs.map(function (t) {
       return {
-        user: t.getString('user'),
+        user: t.getString('staff_profile') || t.getString('user'),
         date: (t.getString('date') || '').split(' ')[0],
         weight: t.getInt('priority_weight') || 0,
       }
@@ -468,7 +468,7 @@ routerAdd(
         if (!sectorValid) continue
 
         var record = new Record(shiftsCol)
-        record.set('user', gs.user_id)
+        record.set('staff_profile', gs.user_id)
         record.set('sector', gs.sector_id)
         record.set('cycle', cycleId)
         record.set('start_time', gs.start_time)

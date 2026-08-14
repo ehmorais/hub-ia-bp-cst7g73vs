@@ -25,7 +25,7 @@ import { ShiftRules } from './escala/ShiftRules'
 import { StaffProfiles } from './escala/StaffProfiles'
 import { AutoGenerate } from './escala/AutoGenerate'
 import { ScalePlanner } from './escala/ScalePlanner'
-import { DepartmentStaffList } from './escala/DepartmentStaffList'
+
 import { cn } from '@/lib/utils'
 import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
@@ -153,13 +153,7 @@ export function EscalasManagement({ departmentId, projectId }: EscalasManagement
             <Building2 className="h-4 w-4 mr-1 sm:mr-2 hidden sm:block" />
             <span className="inline">Setores</span>
           </TabsTrigger>
-          <TabsTrigger
-            value="colaboradores"
-            className="h-10 text-xs sm:text-sm flex-1 sm:flex-none"
-          >
-            <Users className="h-4 w-4 mr-1 sm:mr-2 hidden sm:block" />
-            <span className="inline">Colaboradores</span>
-          </TabsTrigger>
+
           <TabsTrigger value="contratos" className="h-10 text-xs sm:text-sm flex-1 sm:flex-none">
             <FileSignature className="h-4 w-4 mr-1 sm:mr-2 hidden sm:block" />
             <span className="inline">Contratos</span>
@@ -178,7 +172,7 @@ export function EscalasManagement({ departmentId, projectId }: EscalasManagement
           </TabsTrigger>
           <TabsTrigger value="perfis" className="h-10 text-xs sm:text-sm flex-1 sm:flex-none">
             <Users className="h-4 w-4 mr-1 sm:mr-2 hidden sm:block" />
-            <span className="inline">Perfis</span>
+            <span className="inline">Colaboradores</span>
           </TabsTrigger>
           <TabsTrigger
             value="planejamento"
@@ -210,9 +204,7 @@ export function EscalasManagement({ departmentId, projectId }: EscalasManagement
           <TabsContent value="setores" className="mt-0">
             <Sectors departmentId={departmentId} projectId={projectId} />
           </TabsContent>
-          <TabsContent value="colaboradores" className="mt-0">
-            <DepartmentStaffList departmentId={departmentId} projectId={projectId} />
-          </TabsContent>
+
           <TabsContent value="contratos" className="mt-0">
             <StaffContracts departmentId={departmentId} projectId={projectId} />
           </TabsContent>

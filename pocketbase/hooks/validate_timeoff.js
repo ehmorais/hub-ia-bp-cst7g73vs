@@ -1,11 +1,15 @@
 onRecordValidate((e) => {
+  const staffProfileId = e.record.get('staff_profile')
   const userId = e.record.get('user')
   const cycleId = e.record.get('cycle')
-  if (!userId || !cycleId) return e.next()
+  const collaboratorId = staffProfileId || userId
 
+  if (!collaboratorId || !cycleId) return e.next()
+
+  const relationField = staffProfileId ? 'staff_profile' : 'user'
   const existing = $app.findRecordsByFilter(
     'timeoff_requests',
-    `user = '${userId}' && cycle = '${cycleId}'`,
+    relationField + " = '" + collaboratorId + "' && cycle = '" + cycleId + "'",
     '',
     3,
     0,
@@ -13,9 +17,7 @@ onRecordValidate((e) => {
 
   let count = 0
   for (const rec of existing) {
-    if (rec.id !== e.record.id) {
-      count++
-    }
+    if (rec.id !== e.record.id) count++
   }
 
   if (count >= 2) {

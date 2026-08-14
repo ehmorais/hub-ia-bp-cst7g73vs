@@ -12,7 +12,7 @@ import { useToast } from '@/components/ui/use-toast'
 import {
   getShiftCycles,
   getHospitalSectors,
-  getUsers,
+  getStaffProfiles,
   getStaffContracts,
   getTimeoffRequests,
   generateShifts,
@@ -127,7 +127,10 @@ export function ScalePlanner({
         })
         const newShifts = await pb
           .collection('shifts')
-          .getFullList({ filter: `cycle="${selectedCycleId}"`, expand: 'user,sector' })
+          .getFullList({
+            filter: `cycle="${selectedCycleId}"`,
+            expand: 'staff_profile,staff_profile.staff_role,user,sector',
+          })
         setAllShifts(newShifts)
       }
     } catch (err: any) {
@@ -151,7 +154,7 @@ export function ScalePlanner({
     Promise.all([
       getShiftCycles(),
       pb.collection('hospital_sectors').getFullList({ expand: 'department', sort: 'name' }),
-      getUsers(),
+      getStaffProfiles(),
       getStaffContracts(),
       getTimeoffRequests(),
     ]).then(([c, sRaw, u, cont, to]) => {
@@ -178,7 +181,10 @@ export function ScalePlanner({
     if (selectedCycleId) {
       setIsLoadingShifts(true)
       pb.collection('shifts')
-        .getFullList({ filter: `cycle="${selectedCycleId}"`, expand: 'user,sector' })
+        .getFullList({
+          filter: `cycle="${selectedCycleId}"`,
+          expand: 'staff_profile,staff_profile.staff_role,user,sector',
+        })
         .then(setAllShifts)
         .finally(() => setIsLoadingShifts(false))
     }
@@ -190,7 +196,10 @@ export function ScalePlanner({
       if (selectedCycleId) {
         setIsSyncing(true)
         pb.collection('shifts')
-          .getFullList({ filter: `cycle="${selectedCycleId}"`, expand: 'user,sector' })
+          .getFullList({
+            filter: `cycle="${selectedCycleId}"`,
+            expand: 'staff_profile,staff_profile.staff_role,user,sector',
+          })
           .then(setAllShifts)
           .finally(() => setTimeout(() => setIsSyncing(false), 1000))
       }
@@ -211,14 +220,16 @@ export function ScalePlanner({
     })
 
     sectorShifts.forEach((s) => {
-      const u = users.find((x) => x.id === s.user) ||
+      const collaboratorId = s.staff_profile || s.user
+      const u = users.find((x) => x.id === collaboratorId) ||
+        s.expand?.staff_profile ||
         s.expand?.user || {
-          id: s.user,
-          name: `Colaborador ${s.user.substring(0, 6)}`,
+          id: collaboratorId,
+          name: `Colaborador ${collaboratorId.substring(0, 6)}`,
           expand: {},
         }
       newUsers.set(u.id, u)
-      if (!newDraft[s.user]) newDraft[s.user] = {}
+      if (!newDraft[collaboratorId]) newDraft[collaboratorId] = {}
 
       const dateStr = s.start_time.split(' ')[0]
       const sh = s.start_time.split(' ')[1]?.substring(0, 8)
@@ -230,7 +241,7 @@ export function ScalePlanner({
       else if (sh === '07:00:00' && eh === '13:00:00') val = 'M'
       else if (sh === '13:00:00' && eh === '19:00:00') val = 'T'
 
-      if (val) newDraft[s.user][dateStr] = val
+      if (val) newDraft[collaboratorId][dateStr] = val
     })
 
     setDraftUsers(Array.from(newUsers.values()))
@@ -328,7 +339,7 @@ export function ScalePlanner({
     })
 
     draftUsers.forEach((user) => {
-      const contract = contracts.find((c) => c.user === user.id)
+      const contract = contracts.find((c) => (c.staff_profile || c.user) === user.id)
       const maxH = contract?.monthly_hour_limit || 180
       const stName = contract?.expand?.shift_type?.name || ''
       let uh = 0,
@@ -338,13 +349,13 @@ export function ScalePlanner({
         const dateStr = format(day, 'yyyy-MM-dd')
         const cell = draft[user.id]?.[dateStr]
         const isTO = timeoffsForCycle.some(
-          (t) => t.user === user.id && t.date.substring(0, 10) === dateStr,
+          (t) => (t.staff_profile || t.user) === user.id && t.date.substring(0, 10) === dateStr,
         )
 
         if (cell && cell !== 'F') {
           if (isTO) {
             const reqStatus = timeoffsForCycle.find(
-              (t) => t.user === user.id && t.date.substring(0, 10) === dateStr,
+              (t) => (t.staff_profile || t.user) === user.id && t.date.substring(0, 10) === dateStr,
             )?.status
             alerts.push(
               `${user.name} alocado em dia de folga ${reqStatus === 'pending' ? '(pendente)' : ''} (${format(day, 'dd/MM')})`,
@@ -440,18 +451,18 @@ export function ScalePlanner({
       // Backend sync
       const sourceShift = allShifts.find(
         (s) =>
-          s.user === sourceUserId &&
+          (s.staff_profile || s.user) === sourceUserId &&
           s.start_time.startsWith(sourceDateStr) &&
           s.sector === selectedSectorId,
       )
       const targetShift = allShifts.find(
         (s) =>
-          s.user === targetUserId &&
+          (s.staff_profile || s.user) === targetUserId &&
           s.start_time.startsWith(targetDateStr) &&
           s.sector === selectedSectorId,
       )
 
-      const contract = contracts.find((c) => c.user === targetUserId)
+      const contract = contracts.find((c) => (c.staff_profile || c.user) === targetUserId)
       const wh = contract?.expand?.shift_type?.work_hours
       let st = '07:00:00'
       let duration = 12
@@ -479,7 +490,7 @@ export function ScalePlanner({
           await pb.collection('shifts').delete(targetShift.id)
         }
         await pb.collection('shifts').update(sourceShift.id, {
-          user: targetUserId,
+          staff_profile: targetUserId,
           start_time: `${targetDateStr} ${st}.000Z`,
           end_time: formattedEnd,
         })
@@ -488,7 +499,7 @@ export function ScalePlanner({
           await pb.collection('shifts').delete(targetShift.id)
         }
         await pb.collection('shifts').create({
-          user: targetUserId,
+          staff_profile: targetUserId,
           sector: selectedSectorId,
           cycle: selectedCycleId,
           start_time: `${targetDateStr} ${st}.000Z`,
@@ -505,7 +516,10 @@ export function ScalePlanner({
       })
       const reloaded = await pb
         .collection('shifts')
-        .getFullList({ filter: `cycle="${selectedCycleId}"`, expand: 'user,sector' })
+        .getFullList({
+          filter: `cycle="${selectedCycleId}"`,
+          expand: 'staff_profile,staff_profile.staff_role,user,sector',
+        })
       setAllShifts(reloaded)
     }
   }
@@ -553,7 +567,7 @@ export function ScalePlanner({
       await pb.send('/backend/v1/generate-staff-schedule', {
         method: 'POST',
         body: JSON.stringify({
-          user_id: userId,
+          staff_profile_id: userId,
           cycle_id: selectedCycleId,
           sector_id: selectedSectorId,
         }),
@@ -564,7 +578,10 @@ export function ScalePlanner({
       setDraft((prev) => ({ ...prev, [userId]: {} }))
       const newShifts = await pb
         .collection('shifts')
-        .getFullList({ filter: `cycle="${selectedCycleId}"`, expand: 'user,sector' })
+        .getFullList({
+          filter: `cycle="${selectedCycleId}"`,
+          expand: 'staff_profile,staff_profile.staff_role,user,sector',
+        })
       setAllShifts(newShifts)
     } catch (err: any) {
       toast({
@@ -593,7 +610,7 @@ export function ScalePlanner({
             let st = '07:00:00'
             let duration = 12
 
-            const contract = contracts.find((c) => c.user === u.id)
+            const contract = contracts.find((c) => (c.staff_profile || c.user) === u.id)
             const wh = contract?.expand?.shift_type?.work_hours
 
             if (cell === 'D') {
@@ -616,7 +633,7 @@ export function ScalePlanner({
             const formattedEnd = endDate.toISOString().replace('T', ' ').substring(0, 23) + 'Z'
 
             toCreate.push({
-              user: u.id,
+              staff_profile: u.id,
               sector: selectedSectorId,
               cycle: selectedCycleId,
               start_time: `${dateStr} ${st}.000Z`,
@@ -637,7 +654,10 @@ export function ScalePlanner({
       setAllShifts(
         await pb
           .collection('shifts')
-          .getFullList({ filter: `cycle="${selectedCycleId}"`, expand: 'user,sector' }),
+          .getFullList({
+            filter: `cycle="${selectedCycleId}"`,
+            expand: 'staff_profile,staff_profile.staff_role,user,sector',
+          }),
       )
     } catch (err: any) {
       toast({ title: 'Erro', description: err.message, variant: 'destructive' })
@@ -850,8 +870,10 @@ export function ScalePlanner({
               <tbody>
                 {draftUsers.map((user) => {
                   const isCov =
-                    !allShifts.some((s) => s.user === user.id && s.sector === selectedSectorId) &&
-                    allShifts.some((s) => s.user === user.id)
+                    !allShifts.some(
+                      (s) =>
+                        (s.staff_profile || s.user) === user.id && s.sector === selectedSectorId,
+                    ) && allShifts.some((s) => (s.staff_profile || s.user) === user.id)
                   return (
                     <tr key={user.id} className="hover:bg-slate-50 group">
                       <td
@@ -891,7 +913,9 @@ export function ScalePlanner({
                         const ds = format(day, 'yyyy-MM-dd')
                         const val = draft[user.id]?.[ds] || ''
                         const toReq = timeoffsForCycle.find(
-                          (t) => t.user === user.id && t.date.substring(0, 10) === ds,
+                          (t) =>
+                            (t.staff_profile || t.user) === user.id &&
+                            t.date.substring(0, 10) === ds,
                         )
                         const isTO = !!toReq
                         const isPendingTO = toReq?.status === 'pending'

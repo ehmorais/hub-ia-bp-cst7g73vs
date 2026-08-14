@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/table'
 import {
   getStaffContracts,
-  getUsers,
+  getStaffProfiles,
   getShiftTypes,
   createStaffContract,
   updateStaffContract,
@@ -52,14 +52,14 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 
 export function StaffContracts({ departmentId }: { departmentId?: string }) {
   const [contracts, setContracts] = useState<any[]>([])
-  const [users, setUsers] = useState<any[]>([])
+  const [profiles, setProfiles] = useState<any[]>([])
   const [shiftTypes, setShiftTypes] = useState<any[]>([])
   const [isOpen, setIsOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [userHours, setUserHours] = useState<Record<string, number>>({})
 
   const [formData, setFormData] = useState({
-    user: '',
+    staff_profile: '',
     contract_type: 'CLT 180h',
     monthly_hour_limit: 180,
     shift_type: '',
@@ -69,36 +69,31 @@ export function StaffContracts({ departmentId }: { departmentId?: string }) {
 
   const loadData = async () => {
     try {
-      const [c, u, st, cycles] = await Promise.all([
+      const [c, profileList, st, cycles] = await Promise.all([
         getStaffContracts(),
-        getUsers(),
+        getStaffProfiles(),
         getShiftTypes(),
         import('@/services/escala').then((m) => m.getShiftCycles()),
       ])
 
       let filteredContracts = c
-      let filteredUsers = u
+      let filteredProfiles = profileList
 
       if (departmentId) {
         filteredContracts = c.filter((contract: any) => {
-          const userSector = contract.expand?.user?.expand?.default_sector
-          if (userSector?.department) {
-            return userSector.department === departmentId
-          }
-          return true
+          const profileSector = contract.expand?.staff_profile?.expand?.default_sector
+          return !profileSector?.department || profileSector.department === departmentId
         })
 
-        filteredUsers = u.filter((user: any) => {
-          const userSector = user.expand?.default_sector
-          if (userSector?.department) {
-            return userSector.department === departmentId
-          }
-          return true
-        })
+        filteredProfiles = profileList.filter(
+          (profile: any) =>
+            !profile.expand?.default_sector ||
+            profile.expand.default_sector.department === departmentId,
+        )
       }
 
       setContracts(filteredContracts)
-      setUsers(filteredUsers)
+      setProfiles(filteredProfiles)
       setShiftTypes(st)
 
       const activeCycle = cycles.find((cy: any) => cy.status === 'active') || cycles[0]
@@ -110,7 +105,8 @@ export function StaffContracts({ departmentId }: { departmentId?: string }) {
           const start = new Date(s.start_time)
           const end = new Date(s.end_time)
           const hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60)
-          hoursMap[s.user] = (hoursMap[s.user] || 0) + hours
+          const profileId = s.staff_profile || s.user
+          if (profileId) hoursMap[profileId] = (hoursMap[profileId] || 0) + hours
         })
         setUserHours(hoursMap)
       }
@@ -173,7 +169,7 @@ export function StaffContracts({ departmentId }: { departmentId?: string }) {
               onClick={() => {
                 setEditingId(null)
                 setFormData({
-                  user: '',
+                  staff_profile: '',
                   contract_type: 'CLT 180h',
                   monthly_hour_limit: 180,
                   shift_type: '',
@@ -191,16 +187,16 @@ export function StaffContracts({ departmentId }: { departmentId?: string }) {
               <div className="space-y-2">
                 <label className="text-sm font-medium">Colaborador</label>
                 <Select
-                  value={formData.user}
-                  onValueChange={(v) => setFormData({ ...formData, user: v })}
+                  value={formData.staff_profile}
+                  onValueChange={(v) => setFormData({ ...formData, staff_profile: v })}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {users.map((u) => (
-                      <SelectItem key={u.id} value={u.id}>
-                        {u.name}
+                    {profiles.map((profile) => (
+                      <SelectItem key={profile.id} value={profile.id}>
+                        {profile.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -272,20 +268,23 @@ export function StaffContracts({ departmentId }: { departmentId?: string }) {
           <TableBody>
             {contracts.map((c) => (
               <TableRow key={c.id}>
-                <TableCell className="font-medium">{c.expand?.user?.name}</TableCell>
+                <TableCell className="font-medium">
+                  {c.expand?.staff_profile?.name || c.expand?.user?.name || 'Colaborador'}
+                </TableCell>
                 <TableCell>{c.contract_type}</TableCell>
                 <TableCell>
                   <div className="flex items-center gap-2">
                     <span>{c.monthly_hour_limit}h</span>
-                    {(userHours[c.user] || 0) > c.monthly_hour_limit && (
+                    {(userHours[c.staff_profile || c.user] || 0) > c.monthly_hour_limit && (
                       <Tooltip>
                         <TooltipTrigger>
                           <AlertCircle className="h-4 w-4 text-amber-500" />
                         </TooltipTrigger>
                         <TooltipContent className="bg-white text-slate-800 border-amber-200">
                           <p>
-                            Atenção: Colaborador com {(userHours[c.user] || 0).toFixed(1)}h
-                            agendadas (excede o limite de {c.monthly_hour_limit}h).
+                            Atenção: Colaborador com{' '}
+                            {(userHours[c.staff_profile || c.user] || 0).toFixed(1)}h agendadas
+                            (excede o limite de {c.monthly_hour_limit}h).
                           </p>
                         </TooltipContent>
                       </Tooltip>
@@ -306,7 +305,7 @@ export function StaffContracts({ departmentId }: { departmentId?: string }) {
                     size="sm"
                     onClick={() => {
                       setFormData({
-                        user: c.user,
+                        staff_profile: c.staff_profile,
                         contract_type: c.contract_type,
                         monthly_hour_limit: c.monthly_hour_limit,
                         shift_type: c.shift_type || '',

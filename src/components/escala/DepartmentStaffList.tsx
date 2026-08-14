@@ -461,7 +461,7 @@ export function DepartmentStaffList({ departmentId }: { departmentId?: string })
                     </span>
                   </TableCell>
                   <TableCell className="text-right flex items-center justify-end gap-1">
-                    <TimeoffRequestDialog user={u} departmentId={departmentId} />
+                    <TimeoffRequestDialog staffProfile={u} departmentId={departmentId} />
                     <Button
                       variant="ghost"
                       size="icon"

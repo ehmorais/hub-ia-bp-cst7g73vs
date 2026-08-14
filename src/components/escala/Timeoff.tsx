@@ -72,7 +72,9 @@ export function Timeoff() {
             <TableBody>
               {requests.map((r) => (
                 <TableRow key={r.id}>
-                  <TableCell className="font-medium">{r.expand?.user?.name}</TableCell>
+                  <TableCell className="font-medium">
+                    {r.expand?.staff_profile?.name || r.expand?.user?.name || 'Colaborador'}
+                  </TableCell>
                   <TableCell>{format(new Date(r.date), 'dd/MM/yyyy')}</TableCell>
                   <TableCell>{r.expand?.cycle?.name}</TableCell>
                   <TableCell>

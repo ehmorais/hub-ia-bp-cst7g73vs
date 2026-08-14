@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-14T14:02:04.011Z",
+  "generatedAt": "2026-08-14T18:44:58.415Z",
   "collections": [
     {
       "name": "users",
@@ -617,6 +617,13 @@
           "required": false,
           "system": false,
           "collectionRef": "shift_types"
+        },
+        {
+          "name": "staff_profile",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "staff_profiles"
         }
       ],
       "indexes": []
@@ -693,6 +700,13 @@
           "type": "date",
           "required": false,
           "system": false
+        },
+        {
+          "name": "staff_profile",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "staff_profiles"
         }
       ],
       "indexes": []
@@ -784,7 +798,7 @@
         {
           "name": "user",
           "type": "relation",
-          "required": true,
+          "required": false,
           "system": false,
           "collectionRef": "users"
         },
@@ -832,6 +846,13 @@
             "onCreate",
             "onUpdate"
           ]
+        },
+        {
+          "name": "staff_profile",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "staff_profiles"
         }
       ],
       "indexes": []
@@ -968,6 +989,13 @@
           "required": false,
           "system": false,
           "collectionRef": "staff_roles"
+        },
+        {
+          "name": "default_sector",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "hospital_sectors"
         }
       ],
       "indexes": []

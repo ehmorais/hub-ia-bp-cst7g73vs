@@ -139,13 +139,15 @@ export function ShiftCalendar({
     })
 
     // Compute user specific alerts (rest hours, overlaps) for users in this sector
-    const usersInSector = Array.from(new Set(visibleShifts.map((s) => s.user)))
+    const usersInSector = Array.from(
+      new Set(visibleShifts.map((shift) => shift.staff_profile || shift.user)),
+    ).filter(Boolean)
 
-    usersInSector.forEach((userId) => {
+    usersInSector.forEach((profileId) => {
       const userShifts = shifts
-        .filter((s) => s.user === userId)
+        .filter((shift) => (shift.staff_profile || shift.user) === profileId)
         .sort((a, b) => a.start_time.localeCompare(b.start_time))
-      const contract = contracts.find((c) => c.user === userId)
+      const contract = contracts.find((item) => (item.staff_profile || item.user) === profileId)
       const baseRestHours = contract?.expand?.shift_type?.rest_hours || 11
       const minRestRule = sectorRules.find((r) => r.rule_type === 'min_rest_hours')
       const restHours = minRestRule ? minRestRule.value : baseRestHours
@@ -153,7 +155,10 @@ export function ShiftCalendar({
       const maxHoursRule = sectorRules.find((r) => r.rule_type === 'max_hours')
       const maxConsecutiveRule = sectorRules.find((r) => r.rule_type === 'max_consecutive')
 
-      const userName = userShifts[0]?.expand?.user?.name || 'Colaborador'
+      const userName =
+        userShifts[0]?.expand?.staff_profile?.name ||
+        userShifts[0]?.expand?.user?.name ||
+        'Colaborador'
 
       let consecutiveDays = 0
       let previousShiftDate: Date | null = null
@@ -277,9 +282,12 @@ export function ShiftCalendar({
     }
 
     // Check rest rules (Validation)
-    const userShifts = shifts.filter((s) => s.user === shift.user && s.id !== shift.id)
+    const collaboratorId = shift.staff_profile || shift.user
+    const userShifts = shifts.filter(
+      (item) => (item.staff_profile || item.user) === collaboratorId && item.id !== shift.id,
+    )
     let warning = ''
-    const contract = contracts.find((c) => c.user === shift.user)
+    const contract = contracts.find((item) => (item.staff_profile || item.user) === collaboratorId)
     const restHours = contract?.expand?.shift_type?.rest_hours || 11
 
     for (const us of userShifts) {
@@ -425,7 +433,9 @@ export function ShiftCalendar({
                     )}
                   >
                     {dayShifts.map((s) => {
-                      const contract = contracts.find((c) => c.user === s.user)
+                      const contract = contracts.find(
+                        (item) => (item.staff_profile || item.user) === (s.staff_profile || s.user),
+                      )
                       const shiftType = contract?.expand?.shift_type?.name || 'Padrão'
                       return (
                         <div
@@ -436,9 +446,9 @@ export function ShiftCalendar({
                         >
                           <div
                             className="font-semibold text-slate-800 truncate"
-                            title={s.expand?.user?.name}
+                            title={s.expand?.staff_profile?.name || s.expand?.user?.name}
                           >
-                            {s.expand?.user?.name || 'Sem nome'}
+                            {s.expand?.staff_profile?.name || s.expand?.user?.name || 'Sem nome'}
                           </div>
                           <div className="flex justify-between items-center text-slate-500 text-[10px]">
                             <span className="flex items-center gap-1">
