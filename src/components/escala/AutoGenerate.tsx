@@ -9,13 +9,7 @@ import {
 } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/use-toast'
-import {
-  getShiftCycles,
-  generateDraftShifts,
-  getStaffContracts,
-  getTimeoffRequests,
-  commitShiftSchedule,
-} from '@/services/escala'
+import { getShiftCycles, generateDraftShifts, commitShiftSchedule } from '@/services/escala'
 import { useRealtime } from '@/hooks/use-realtime'
 import {
   Wand2,
@@ -28,6 +22,8 @@ import {
   Send,
   Save,
   MessageSquare,
+  RefreshCw,
+  FileText,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -45,6 +41,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
 } from '@/components/ui/dialog'
 import pb from '@/lib/pocketbase/client'
 import { cn } from '@/lib/utils'
@@ -58,10 +55,13 @@ const formatDateSafely = (dateStr: string, fmt: string) => {
     const date = new Date(dateStr)
     if (isNaN(date.getTime())) return 'Data inválida'
     return format(date, fmt, { locale: ptBR })
-  } catch (e) {
+  } catch {
     return 'Data inválida'
   }
 }
+
+type LoadStatus = 'idle' | 'loading' | 'success' | 'error'
+type GenStatus = 'idle' | 'validating' | 'generating' | 'saving' | 'success' | 'error'
 
 class ErrorBoundary extends Component<
   { children: ReactNode; fallback: (error: Error, reset: () => void) => ReactNode },
@@ -90,69 +90,87 @@ class ErrorBoundary extends Component<
   }
 }
 
-type ValidationCheck = {
-  id: string
-  label: string
-  status: 'loading' | 'success' | 'warning' | 'error'
-  message: string
-  details?: string[]
+type Diagnostics = {
+  eligible_count?: number
+  excluded?: Array<{ name: string; reason: string }>
+  orphan_contracts_ignored?: number
+  hard_rules?: any[]
+  preferred_rules?: any[]
+  contradictions?: string[]
+  effective_rest_hours?: number
+  effective_min_staffing?: number
+  cycle_start?: string
+  cycle_end?: string
 }
 
-function CheckItemIcon({ status }: { status: ValidationCheck['status'] }) {
-  const Icon =
-    status === 'success'
-      ? CheckCircle2
-      : status === 'warning'
-        ? AlertCircle
-        : status === 'error'
-          ? XCircle
-          : Loader2
-
-  const color =
-    status === 'success'
-      ? 'text-green-600'
-      : status === 'warning'
-        ? 'text-amber-600'
-        : status === 'error'
-          ? 'text-red-600'
-          : 'text-slate-500'
-
-  return <Icon className={`h-5 w-5 ${color}`} />
-}
-
-function CheckItem({ check }: { check: ValidationCheck }) {
-  const bgColor =
-    check.status === 'success'
-      ? 'bg-green-50'
-      : check.status === 'warning'
-        ? 'bg-amber-50'
-        : check.status === 'error'
-          ? 'bg-red-50'
-          : 'bg-slate-50'
-
-  const color =
-    check.status === 'success'
-      ? 'text-green-600'
-      : check.status === 'warning'
-        ? 'text-amber-600'
-        : check.status === 'error'
-          ? 'text-red-600'
-          : 'text-slate-500'
-
+function DiagnosticsPanel({ diagnostics }: { diagnostics: Diagnostics }) {
+  if (!diagnostics) return null
   return (
-    <div
-      className={cn(
-        'flex items-start gap-3 p-3 rounded-md border transition-colors',
-        bgColor,
-        check.status === 'error' ? 'border-red-200' : 'border-transparent',
-      )}
-    >
-      <div className="mt-0.5 shrink-0">
-        <CheckItemIcon status={check.status} />
+    <div className="space-y-3 bg-white p-4 rounded-lg border">
+      <h4 className="font-semibold text-sm text-slate-700 flex items-center gap-2">
+        <Info className="h-4 w-4 text-slate-500" />
+        Diagnóstico de Elegibilidade e Regras
+      </h4>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+        <div className="bg-emerald-50 p-2 rounded border border-emerald-100">
+          <p className="text-emerald-700 font-medium">Elegíveis</p>
+          <p className="text-lg font-bold text-emerald-800">{diagnostics.eligible_count ?? '-'}</p>
+        </div>
+        <div className="bg-red-50 p-2 rounded border border-red-100">
+          <p className="text-red-700 font-medium">Excluídos</p>
+          <p className="text-lg font-bold text-red-800">{diagnostics.excluded?.length ?? 0}</p>
+        </div>
+        <div className="bg-amber-50 p-2 rounded border border-amber-100">
+          <p className="text-amber-700 font-medium">Contratos órfãos</p>
+          <p className="text-lg font-bold text-amber-800">
+            {diagnostics.orphan_contracts_ignored ?? 0}
+          </p>
+        </div>
+        <div className="bg-blue-50 p-2 rounded border border-blue-100">
+          <p className="text-blue-700 font-medium">Regras duras</p>
+          <p className="text-lg font-bold text-blue-800">{diagnostics.hard_rules?.length ?? 0}</p>
+        </div>
       </div>
-      <div>
-        <p className={cn('text-sm font-medium', color)}>{check.label}</p>
-        <p className="text-xs text-slate-600 mt-0.5">{check.message}</p>
+
+      {diagnostics.excluded && diagnostics.excluded.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold text-slate-600 mb-1">Colaboradores excluídos:</p>
+          <ul className="text-xs text-slate-500 space-y-1 max-h-32 overflow-y-auto">
+            {diagnostics.excluded.map((ex, i) => (
+              <li key={i}>
+                • {ex.name}: <span className="text-red-600">{ex.reason}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {diagnostics.contradictions && diagnostics.contradictions.length > 0 && (
+        <div className="bg-amber-50 p-3 rounded border border-amber-200">
+          <p className="text-xs font-semibold text-amber-800 mb-1">
+            Regras potencialmente conflitantes:
+          </p>
+          <ul className="text-xs text-amber-700 space-y-1">
+            {diagnostics.contradictions.map((c, i) => (
+              <li key={i}>• {c}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div className="text-xs text-slate-500 space-y-1">
+        <p>
+          <strong>Descanso mínimo efetivo:</strong> {diagnostics.effective_rest_hours ?? '-'}h
+        </p>
+        <p>
+          <strong>Efetivo mínimo diário:</strong> {diagnostics.effective_min_staffing ?? '-'}
+        </p>
+        {diagnostics.preferred_rules && diagnostics.preferred_rules.length > 0 && (
+          <p>
+            <strong>Regras preferenciais:</strong>{' '}
+            {diagnostics.preferred_rules.map((r) => r.name).join(', ')}
+          </p>
+        )}
       </div>
     </div>
   )
@@ -167,22 +185,26 @@ function AutoGenerateInner({
 }) {
   const [cycles, setCycles] = useState<any[]>([])
   const [selectedCycle, setSelectedCycle] = useState<string>('')
+  const [cyclesStatus, setCyclesStatus] = useState<LoadStatus>('idle')
+  const [cyclesError, setCyclesError] = useState<string>('')
+
   const [sectors, setSectors] = useState<any[]>([])
   const [selectedSector, setSelectedSector] = useState<string>('')
+  const [sectorsStatus, setSectorsStatus] = useState<LoadStatus>('idle')
+  const [sectorsError, setSectorsError] = useState<string>('')
 
-  const [loading, setLoading] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [isSectorsLoading, setIsSectorsLoading] = useState(false)
   const [contracts, setContracts] = useState<any[]>([])
-  const [usersList, setUsersList] = useState<any[]>([])
-  const [timeoffsList, setTimeoffsList] = useState<any[]>([])
 
-  const [projectDeps, setProjectDeps] = useState<string[]>([])
-  const [projectMembers, setProjectMembers] = useState<string[]>([])
-  const [validations, setValidations] = useState<ValidationCheck[]>([])
-  const [isReady, setIsReady] = useState(false)
-  const [isValidating, setIsValidating] = useState(false)
-  const [showPendencyModal, setShowPendencyModal] = useState(false)
+  const [genStatus, setGenStatus] = useState<GenStatus>('idle')
+  const [genError, setGenError] = useState<string>('')
+  const [genDiagnostics, setGenDiagnostics] = useState<Diagnostics | null>(null)
+  const [genSuggestion, setGenSuggestion] = useState<string>('')
+
+  const [draftExists, setDraftExists] = useState<{
+    cycle_id: string
+    sector_id: string
+    existing_count: number
+  } | null>(null)
 
   const [draftShifts, setDraftShifts] = useState<any[]>([])
   const [rawDraft, setRawDraft] = useState<any[]>([])
@@ -192,362 +214,133 @@ function AutoGenerateInner({
 
   const { toast } = useToast()
 
-  const loadData = async () => {
+  // --- Load cycles (always terminates in success/empty/error) ---
+  const loadCycles = useCallback(async () => {
+    setCyclesStatus('loading')
+    setCyclesError('')
     try {
-      const [c, conts, to] = await Promise.all([
-        getShiftCycles(),
-        getStaffContracts(),
-        getTimeoffRequests(),
-      ])
+      const c = await getShiftCycles()
       setCycles(c)
-      if (!selectedCycle && c.length > 0) {
-        const defaultCycle = c.find((x: any) => x.status === 'active') || c[0]
-        if (defaultCycle) setSelectedCycle(defaultCycle.id)
-      }
-      setContracts(conts)
-      setTimeoffsList(to)
-    } catch (err) {
-      console.error('Failed to load cycles or contracts:', err)
+      setCyclesStatus('success')
+    } catch (err: any) {
+      console.error('Failed to load cycles:', err)
+      setCyclesError(err?.message || 'Não foi possível carregar os ciclos.')
+      setCyclesStatus('error')
     }
-  }
+  }, [])
 
-  useEffect(() => {
-    loadData()
+  // --- Load contracts (for the calendar display) ---
+  const loadContracts = useCallback(async () => {
+    try {
+      const conts = await pb.collection('staff_contracts').getFullList({
+        expand: 'staff_profile,staff_profile.default_sector,shift_type',
+        sort: '-updated',
+      })
+      setContracts(conts)
+    } catch (err) {
+      console.error('Failed to load contracts:', err)
+    }
   }, [])
 
   useEffect(() => {
-    if (projectDeps.length > 0) {
-      setIsSectorsLoading(true)
-      const sectorFilter = projectDeps.map((d) => `department="${d}"`).join(' || ')
-      pb.collection('hospital_sectors')
-        .getFullList({ filter: sectorFilter, sort: 'name' })
-        .then((res) => {
-          setSectors(res)
-          if (res.length > 0) {
-            setSelectedSector((prev) => prev || res[0].id)
-          }
-        })
-        .catch(console.error)
-        .finally(() => setIsSectorsLoading(false))
-    }
-  }, [projectDeps])
+    loadCycles()
+    loadContracts()
+  }, [loadCycles, loadContracts])
 
-  useRealtime('shift_cycles', loadData)
-  useRealtime('staff_contracts', loadData)
-
+  // Auto-select first active cycle once loaded
   useEffect(() => {
+    if (cyclesStatus === 'success' && !selectedCycle && cycles.length > 0) {
+      const defaultCycle = cycles.find((x) => x.status === 'active') || cycles[0]
+      if (defaultCycle) setSelectedCycle(defaultCycle.id)
+    }
+  }, [cyclesStatus, cycles, selectedCycle])
+
+  // --- Load sectors: route-independent, always terminates ---
+  // The project/department narrows the sector list, but if no department
+  // is resolvable we fall back to ALL sectors so the selector is never
+  // stuck in "Carregando setores..." forever.
+  const loadSectors = useCallback(async () => {
+    setSectorsStatus('loading')
+    setSectorsError('')
+
+    // Resolve the department filter (project -> department + associated_departments).
+    let depIds: string[] = []
     if (projectId) {
-      pb.collection('projects')
-        .getOne(projectId, { expand: 'members' })
-        .then((p) => {
-          setProjectDeps([p.department, ...(p.associated_departments || [])].filter(Boolean))
-          setProjectMembers(p.members || [])
+      try {
+        const p = await pb.collection('projects').getOne(projectId, {
+          expand: 'associated_departments',
         })
-        .catch(console.error)
-    } else if (departmentId) {
-      setProjectDeps([departmentId])
+        depIds = [p.department, ...(p.associated_departments || [])].filter(Boolean)
+      } catch {
+        // fall through to departmentId or all
+      }
+    }
+    if (depIds.length === 0 && departmentId) {
+      depIds = [departmentId]
+    }
+
+    try {
+      let result: any[]
+      if (depIds.length > 0) {
+        const filter = depIds.map((d) => `department="${d}"`).join(' || ')
+        result = await pb.collection('hospital_sectors').getFullList({
+          filter,
+          sort: 'name',
+        })
+        // If the department filter returned nothing, fall back to all
+        // sectors rather than leaving the user stuck.
+        if (result.length === 0) {
+          result = await pb.collection('hospital_sectors').getFullList({ sort: 'name' })
+        }
+      } else {
+        result = await pb.collection('hospital_sectors').getFullList({ sort: 'name' })
+      }
+      setSectors(result)
+      if (result.length > 0) {
+        setSelectedSector((prev) => prev || result[0].id)
+      }
+      setSectorsStatus('success')
+    } catch (err: any) {
+      console.error('Failed to load sectors:', err)
+      setSectorsError(err?.message || 'Não foi possível carregar os setores.')
+      setSectorsStatus('error')
     }
   }, [projectId, departmentId])
 
-  const validate = useCallback(async () => {
-    if (!selectedCycle || !selectedSector || projectDeps.length === 0) {
-      setIsReady(false)
-      return
-    }
-    setIsValidating(true)
-    setIsReady(false)
-    const checks: ValidationCheck[] = []
-
-    try {
-      const cycle = cycles.find((c) => c.id === selectedCycle)
-      const cycleDetails = []
-      let cycleStatus: 'success' | 'error' = 'success'
-      if (cycle && cycle.status === 'active') {
-        if (!cycle.start_date || !cycle.end_date) {
-          cycleStatus = 'error'
-          cycleDetails.push('⚠️ O ciclo selecionado possui datas de início e/ou fim inválidas.')
-        } else {
-          cycleDetails.push(`✅ O ciclo ${cycle.name} é válido para geração.`)
-        }
-      } else {
-        cycleStatus = 'error'
-        cycleDetails.push('⚠️ O ciclo selecionado não está ativo. O status deve ser "ativo".')
-      }
-      checks.push({
-        id: 'cycle',
-        label: 'Ciclo Vigente',
-        status: cycleStatus,
-        message: cycleStatus === 'error' ? 'Ciclo inválido' : 'Ciclo configurado',
-        details: cycleDetails,
-      })
-
-      // Sector
-      const sector = sectors.find((s) => s.id === selectedSector)
-      const sectorDetails = []
-      let sectorStatus: 'success' | 'error' = 'success'
-      if (!sector) {
-        sectorStatus = 'error'
-        sectorDetails.push('⚠️ Nenhum setor selecionado.')
-      } else {
-        if (!sector.min_staffing || !sector.ideal_staffing) {
-          sectorStatus = 'error'
-          sectorDetails.push(`⚠️ Setor "${sector.name}" está sem dimensionamento mínimo/ideal.`)
-        } else {
-          sectorDetails.push(`✅ Setor configurado corretamente.`)
-        }
-      }
-      checks.push({
-        id: 'sectors',
-        label: 'Configuração do Setor',
-        status: sectorStatus,
-        message: sectorStatus === 'error' ? 'Configuração de Setor Ausente' : 'Configurado',
-        details: sectorDetails,
-      })
-
-      // Staff profiles are the operational collaborators used by scheduling.
-      let users: any[] = []
-      if (sector) {
-        users = await pb.collection('staff_profiles').getFullList({
-          filter: `default_sector="${sector.id}" && active=true`,
-          expand: 'staff_role,default_sector,rules',
-          sort: 'name',
-        })
-      }
-      setUsersList(users)
-
-      const staffDetails = []
-      let staffStatus: 'success' | 'error' | 'warning' = 'success'
-
-      if (users.length === 0) {
-        staffStatus = 'error'
-        staffDetails.push('Nenhum colaborador associado ao setor selecionado ou ao projeto.')
-      } else {
-        const usersWithoutRole = users.filter((u) => !u.staff_role)
-        const usersWrongSector = users.filter((u) => u.default_sector !== selectedSector)
-
-        if (usersWithoutRole.length > 0) {
-          staffStatus = 'error'
-          usersWithoutRole.forEach((u) =>
-            staffDetails.push(
-              `⚠️ Colaborador(a) ${u.name || u.email} está sem cargo (staff_role) atribuído.`,
-            ),
-          )
-        }
-
-        if (usersWrongSector.length > 0) {
-          if (staffStatus !== 'error') staffStatus = 'warning'
-          usersWrongSector.forEach((u) =>
-            staffDetails.push(
-              `⚠️ Colaborador(a) ${u.name || u.email} não possui este setor como setor padrão.`,
-            ),
-          )
-        }
-
-        if (staffStatus === 'success') {
-          staffDetails.push(
-            `✅ Todos os ${users.length} colaboradores possuem cargo e perfil configurados e pertencem ao setor.`,
-          )
-        }
-      }
-      checks.push({
-        id: 'staff',
-        label: 'Colaboradores (Cargos e Perfis)',
-        status: staffStatus,
-        message:
-          staffStatus === 'error'
-            ? 'Dados incompletos ou ausentes'
-            : staffStatus === 'warning'
-              ? 'Atenção aos setores'
-              : 'Configurados',
-        details: staffDetails,
-      })
-
-      // Contracts & Shift Types
-      const contractDetails = []
-      let contractStatus: 'success' | 'error' = 'success'
-      if (users.length > 0) {
-        const userIds = users.map((u) => u.id)
-        const contractsList = contracts.filter((c) => userIds.includes(c.staff_profile))
-        const usersWithoutContract = users.filter(
-          (u) => !contractsList.some((c) => c.staff_profile === u.id),
-        )
-        const invalidContracts = contractsList.filter(
-          (c) => !c.contract_type || !c.monthly_hour_limit || !c.shift_type,
-        )
-
-        if (usersWithoutContract.length > 0 || invalidContracts.length > 0) {
-          contractStatus = 'error'
-          usersWithoutContract.forEach((u) =>
-            contractDetails.push(
-              `⚠️ Colaborador(a) ${u.name || u.email} não possui contrato (staff_contracts) cadastrado.`,
-            ),
-          )
-          invalidContracts.forEach((c) => {
-            const u = users.find((x) => x.id === c.staff_profile)
-            contractDetails.push(
-              `⚠️ Contrato de ${u?.name || u?.email || 'Desconhecido'} possui dados incompletos (tipo, carga horária ou tipo de turno).`,
-            )
-          })
-        } else {
-          contractDetails.push(
-            `✅ Todos os ${users.length} colaboradores possuem contratos válidos cadastrados.`,
-          )
-        }
-      } else {
-        contractStatus = 'error'
-        contractDetails.push('⚠️ Sem colaboradores para validar contratos.')
-      }
-      checks.push({
-        id: 'contracts',
-        label: 'Contratos e Tipos de Turno',
-        status: contractStatus,
-        message: contractStatus === 'error' ? 'Contratos pendentes' : 'Configurados',
-        details: contractDetails,
-      })
-
-      // Timeoff requests
-      const timeoffDetails = []
-      let timeoffStatus: 'success' | 'warning' = 'success'
-      const timeoffsInCycle = timeoffsList.filter(
-        (t) => t.cycle === selectedCycle && users.some((u) => u.id === t.staff_profile),
-      )
-
-      if (timeoffsInCycle.length === 0) {
-        timeoffStatus = 'warning'
-        timeoffDetails.push(
-          '⚠️ Nenhuma solicitação de folga encontrada para os colaboradores neste ciclo.',
-        )
-      } else {
-        timeoffDetails.push(
-          `✅ ${timeoffsInCycle.length} solicitações de folga cadastradas neste ciclo.`,
-        )
-      }
-
-      checks.push({
-        id: 'timeoff',
-        label: 'Solicitações de Folga',
-        status: timeoffStatus,
-        message: timeoffStatus === 'warning' ? 'Sem folgas cadastradas' : 'Folgas carregadas',
-        details: timeoffDetails,
-      })
-
-      setValidations(checks)
-      setIsReady(!checks.some((c) => c.status === 'error'))
-    } catch (err) {
-      console.error(err)
-      toast({
-        title: 'Erro de Validação',
-        description: 'Não foi possível carregar os parâmetros de validação.',
-        variant: 'destructive',
-      })
-    } finally {
-      setIsValidating(false)
-    }
-  }, [
-    selectedCycle,
-    selectedSector,
-    projectDeps,
-    projectMembers,
-    cycles,
-    sectors,
-    contracts,
-    timeoffsList,
-    toast,
-  ])
-
   useEffect(() => {
-    validate()
-  }, [validate])
+    loadSectors()
+  }, [loadSectors])
 
-  useEffect(() => {
-    if (showPendencyModal) {
-      validate()
-    }
-  }, [showPendencyModal, validate])
+  useRealtime('shift_cycles', loadCycles)
+  useRealtime('hospital_sectors', loadSectors)
 
-  const mapDraftToShifts = (draftArray: any[]) => {
-    return draftArray.map((d: any, index: number) => {
-      const contract = contracts.find((c) => c.staff_profile === d.user_id)
-      const wh = contract?.expand?.shift_type?.work_hours || 12
+  const cycleObj = cycles.find((c) => c.id === selectedCycle)
+  const sectorObj = sectors.find((s) => s.id === selectedSector)
 
-      let st = '07:00:00'
-      let duration = wh
-      if (d.shift === 'D') {
-        st = '07:00:00'
-        duration = wh || 12
-      } else if (d.shift === 'N') {
-        st = '19:00:00'
-        duration = wh || 12
-      } else if (d.shift === 'M') {
-        st = '07:00:00'
-        duration = wh || 6
-      } else if (d.shift === 'T') {
-        st = '13:00:00'
-        duration = wh || 6
-      }
+  const canGenerate =
+    !!selectedCycle &&
+    !!selectedSector &&
+    cyclesStatus === 'success' &&
+    sectorsStatus === 'success' &&
+    genStatus !== 'generating' &&
+    genStatus !== 'validating' &&
+    genStatus !== 'saving'
 
-      const startDate = new Date(`${d.date}T${st}.000Z`)
-      const endDate = new Date(startDate.getTime() + duration * 3600000)
-
-      return {
-        id: `draft_${index}_${Math.random().toString(36).substring(2, 9)}`,
-        staff_profile: d.user_id,
-        sector: selectedSector,
-        cycle: selectedCycle,
-        start_time: startDate.toISOString().replace('T', ' ').substring(0, 23) + 'Z',
-        end_time: endDate.toISOString().replace('T', ' ').substring(0, 23) + 'Z',
-        expand: {
-          staff_profile: usersList.find((u) => u.id === d.user_id),
-          sector: sectors.find((s) => s.id === selectedSector),
-        },
-      }
-    })
-  }
-
-  const handleGenerateDraft = async (isRefinement = false) => {
-    if (!selectedCycle || !selectedSector || projectDeps.length === 0) return
-    setLoading(true)
+  // --- Generate (or refine) ---
+  const handleGenerateDraft = async (isRefinement = false, replace = false) => {
+    if (!selectedCycle || !selectedSector) return
+    setGenStatus(isRefinement ? 'generating' : 'validating')
+    setGenError('')
+    setGenDiagnostics(null)
+    setGenSuggestion('')
+    setDraftExists(null)
 
     toast({
       title: isRefinement ? 'Refinando Rascunho' : 'Iniciando Geração',
-      description: 'A IA está analisando os parâmetros para montar a escala...',
+      description: isRefinement
+        ? 'A IA está refinando o rascunho atual...'
+        : 'Validando pré-requisitos e gerando a escala...',
     })
-
-    const cycle = cycles.find((c) => c.id === selectedCycle)
-    const sector = sectors.find((s) => s.id === selectedSector)
-
-    const context = {
-      cycle: { start_date: cycle?.start_date, end_date: cycle?.end_date },
-      sector: {
-        name: sector?.name,
-        min_staffing: sector?.min_staffing,
-        ideal_staffing: sector?.ideal_staffing,
-      },
-      users: usersList.map((u) => {
-        const contract = contracts.find((c) => c.staff_profile === u.id)
-        const timeoffs = timeoffsList.filter(
-          (t) =>
-            t.staff_profile === u.id &&
-            t.cycle === selectedCycle &&
-            (t.status === 'fulfilled' || t.status === 'pending'),
-        )
-        return {
-          id: u.id,
-          name: u.name,
-          role: u.expand?.staff_role?.name,
-          hierarchy_rank: u.expand?.staff_role?.hierarchy_rank || 0,
-          requires_supervision: u.expand?.staff_role?.requires_supervision === true,
-          contract_hours: contract?.monthly_hour_limit,
-          shift_type: contract?.expand?.shift_type?.name,
-          work_hours: contract?.expand?.shift_type?.work_hours,
-          timeoffs: timeoffs.map((t) => ({
-            start_date: t.date.substring(0, 10),
-            end_date: (t.end_date || t.date).substring(0, 10),
-            status: t.status,
-          })),
-        }
-      }),
-    }
 
     try {
       const aiSettings = {
@@ -555,81 +348,110 @@ function AutoGenerateInner({
         strictness: parseInt(localStorage.getItem('escala_ai_strictness') || '50', 10),
       }
 
-      const fullContext = {
-        ...context,
-        ai_settings: aiSettings,
-      }
-
-      const res = await generateDraftShifts(
+      const res: any = await generateDraftShifts(
         selectedCycle,
         selectedSector,
-        fullContext,
+        { ai_settings: aiSettings },
         isRefinement ? refinementPrompt : undefined,
         isRefinement ? rawDraft : undefined,
+        replace,
       )
 
-      if (res && res.draft) {
+      // Idempotency: an existing draft was found and replace was not requested.
+      if (res && res.draft_exists) {
+        setGenStatus('idle')
+        setDraftExists({
+          cycle_id: res.cycle_id,
+          sector_id: res.sector_id,
+          existing_count: res.existing_count,
+        })
+        toast({
+          title: 'Rascunho existente',
+          description: `Já existem ${res.existing_count} plantões para este ciclo/setor.`,
+        })
+        return
+      }
+
+      if (res && res.success && Array.isArray(res.draft)) {
         setRawDraft(res.draft)
-        const mapped = mapDraftToShifts(res.draft)
-        setDraftShifts(mapped)
+        setDraftShifts(res.draft)
         setIsDraftMode(true)
         if (isRefinement) {
           setDraftIteration((p) => p + 1)
           setRefinementPrompt('')
         }
+        setGenStatus('success')
+        setGenDiagnostics(res.diagnostics || null)
         toast({
-          title: 'Draft Gerado',
-          description: `Versão ${isRefinement ? draftIteration + 1 : 1} gerada com sucesso!`,
+          title: 'Rascunho Gerado',
+          description: `${res.draft.length} plantões gerados e salvos como rascunho (não publicado).`,
         })
+        return
+      }
+
+      // Error path with diagnostics
+      setGenDiagnostics(res?.diagnostics || null)
+      setGenSuggestion(res?.suggestion || '')
+      const msg = res?.error || res?.response?.error || 'A geração não retornou um rascunho válido.'
+      setGenError(typeof msg === 'string' ? msg : JSON.stringify(msg))
+      setGenStatus('error')
+      toast({
+        title: 'Falha na geração',
+        description: typeof msg === 'string' ? msg : JSON.stringify(msg),
+        variant: 'destructive',
+      })
+      if (res?.suggestion) {
+        toast({ title: 'Sugestão da IA', description: res.suggestion })
       }
     } catch (err: any) {
       console.error('Error during AI draft generation:', err)
       const isPBError = err && typeof err === 'object' && 'response' in err
       const respData = isPBError ? err.response : null
       const msg = respData?.error || respData?.message || err.message || 'Falha na geração.'
-      const suggestion = respData?.suggestion
+      setGenError(typeof msg === 'string' ? msg : JSON.stringify(msg))
+      setGenDiagnostics(respData?.diagnostics || null)
+      setGenSuggestion(respData?.suggestion || '')
+      setGenStatus('error')
       toast({
         title: 'Falha na geração do draft',
         description: typeof msg === 'string' ? msg : JSON.stringify(msg),
         variant: 'destructive',
       })
-      if (suggestion) {
-        toast({
-          title: 'Sugestão da IA',
-          description: suggestion,
-        })
+      if (respData?.suggestion) {
+        toast({ title: 'Sugestão da IA', description: respData.suggestion })
       }
-    } finally {
-      setLoading(false)
     }
   }
 
+  // --- Publish the saved draft (commit) ---
   const handleSaveScale = async () => {
     if (!draftShifts.length) return
-    setSaving(true)
+    setGenStatus('saving')
     try {
-      const result = await commitShiftSchedule(
+      const result: any = await commitShiftSchedule(
         selectedCycle,
         selectedSector,
         draftShifts.map((ds) => ({
           staff_profile: ds.staff_profile,
-          sector: ds.sector,
-          cycle: ds.cycle,
+          sector: ds.sector || selectedSector,
+          cycle: ds.cycle || selectedCycle,
           start_time: ds.start_time,
           end_time: ds.end_time,
         })),
+        false, // never auto-publish
       )
       toast({
         title: 'Escala Salva',
         description:
           result?.warnings?.length > 0
-            ? `Escala salva com ${result.warnings.length} aviso(s) de efetivo ideal.`
-            : 'Os plantões foram validados e persistidos em uma única transação.',
+            ? `Escala salva com ${result.warnings.length} aviso(s).`
+            : 'Os plantões foram validados e persistidos.',
       })
       setIsDraftMode(false)
       setDraftShifts([])
       setRawDraft([])
       setDraftIteration(1)
+      setGenStatus('idle')
     } catch (err: any) {
       const response = err?.response
       const details = response?.violations
@@ -641,25 +463,20 @@ function AutoGenerateInner({
             : response?.error || err.message,
         variant: 'destructive',
       })
-    } finally {
-      setSaving(false)
+      setGenStatus('error')
     }
   }
 
-  const hasIssues = validations.some((v) => v.status === 'error' || v.status === 'warning')
-  const cycleObj = cycles.find((c) => c.id === selectedCycle)
-
   const dailyStaffing = useMemo(() => {
     if (!cycleObj || !selectedSector || !isDraftMode) return []
-    const sectorObj = sectors.find((s) => s.id === selectedSector)
     if (!sectorObj) return []
 
     try {
       const start = new Date(cycleObj.start_date.split(' ')[0])
       const end = new Date(cycleObj.end_date.split(' ')[0])
 
-      const days = []
-      let curr = start
+      const days: Date[] = []
+      const curr = new Date(start)
       while (curr <= end) {
         days.push(new Date(curr))
         curr.setDate(curr.getDate() + 1)
@@ -667,7 +484,10 @@ function AutoGenerateInner({
 
       return days.map((d) => {
         const dateStr = d.toISOString().split('T')[0]
-        const count = draftShifts.filter((s) => s.start_time.startsWith(dateStr)).length
+        const count = draftShifts.filter((s) => {
+          const st = s.start_time || ''
+          return st.startsWith(dateStr) || st.startsWith(dateStr.replace(/-/g, '-'))
+        }).length
 
         let status = 'optimal'
         if (count < (sectorObj.min_staffing || 0)) status = 'understaffed'
@@ -685,9 +505,18 @@ function AutoGenerateInner({
     } catch {
       return []
     }
-  }, [draftShifts, cycleObj, selectedSector, sectors, isDraftMode])
+  }, [draftShifts, cycleObj, selectedSector, sectorObj, isDraftMode])
 
   const draftAlerts = dailyStaffing.filter((d) => d.status !== 'optimal')
+
+  const statusLabel: Record<GenStatus, string> = {
+    idle: '',
+    validating: 'Validando pré-requisitos...',
+    generating: 'Gerando com IA...',
+    saving: 'Salvando rascunho...',
+    success: 'Rascunho gerado com sucesso',
+    error: 'Falha na geração',
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -700,16 +529,31 @@ function AutoGenerateInner({
           </div>
           <CardDescription>
             O motor de IA analisará os contratos, regras, disponibilidade e setorização para gerar
-            um rascunho de escala para revisão.
+            um rascunho de escala para revisão. O resultado é salvo como rascunho e nunca publicado
+            automaticamente.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl">
             <div className="space-y-2">
               <label className="text-sm font-medium">Ciclo Alvo</label>
-              <Select value={selectedCycle} onValueChange={setSelectedCycle} disabled={isDraftMode}>
+              <Select
+                value={selectedCycle}
+                onValueChange={setSelectedCycle}
+                disabled={isDraftMode || cyclesStatus === 'loading'}
+              >
                 <SelectTrigger>
-                  <SelectValue placeholder="Selecione o ciclo..." />
+                  <SelectValue
+                    placeholder={
+                      cyclesStatus === 'loading'
+                        ? 'Carregando ciclos...'
+                        : cyclesStatus === 'error'
+                          ? 'Erro ao carregar ciclos'
+                          : cycles.length === 0
+                            ? 'Nenhum ciclo cadastrado'
+                            : 'Selecione o ciclo...'
+                    }
+                  />
                 </SelectTrigger>
                 <SelectContent>
                   {cycles.map((c) => (
@@ -720,6 +564,25 @@ function AutoGenerateInner({
                   ))}
                 </SelectContent>
               </Select>
+              {cyclesStatus === 'error' && (
+                <div className="flex items-center gap-2 text-xs text-red-600">
+                  <AlertCircle className="h-3 w-3" />
+                  <span>{cyclesError}</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-5 px-2 text-xs"
+                    onClick={loadCycles}
+                  >
+                    Tentar novamente
+                  </Button>
+                </div>
+              )}
+              {cyclesStatus === 'success' && cycles.length === 0 && (
+                <p className="text-xs text-amber-600">
+                  Nenhum ciclo cadastrado. Crie um ciclo na aba "Ciclos" antes de gerar.
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -727,12 +590,18 @@ function AutoGenerateInner({
               <Select
                 value={selectedSector}
                 onValueChange={setSelectedSector}
-                disabled={isDraftMode || isSectorsLoading}
+                disabled={isDraftMode || sectorsStatus === 'loading'}
               >
                 <SelectTrigger>
                   <SelectValue
                     placeholder={
-                      isSectorsLoading ? 'Carregando setores...' : 'Selecione o setor...'
+                      sectorsStatus === 'loading'
+                        ? 'Carregando setores...'
+                        : sectorsStatus === 'error'
+                          ? 'Erro ao carregar setores'
+                          : sectors.length === 0
+                            ? 'Nenhum setor cadastrado'
+                            : 'Selecione o setor...'
                     }
                   />
                 </SelectTrigger>
@@ -744,27 +613,88 @@ function AutoGenerateInner({
                   ))}
                 </SelectContent>
               </Select>
+              {sectorsStatus === 'error' && (
+                <div className="flex items-center gap-2 text-xs text-red-600">
+                  <AlertCircle className="h-3 w-3" />
+                  <span>{sectorsError}</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-5 px-2 text-xs"
+                    onClick={loadSectors}
+                  >
+                    Tentar novamente
+                  </Button>
+                </div>
+              )}
+              {sectorsStatus === 'success' && sectors.length === 0 && (
+                <p className="text-xs text-amber-600">
+                  Nenhum setor cadastrado. Crie um setor na aba "Setores" antes de gerar.
+                </p>
+              )}
             </div>
           </div>
+
+          {/* Generation status banner */}
+          {(genStatus === 'validating' ||
+            genStatus === 'generating' ||
+            genStatus === 'saving' ||
+            genStatus === 'success' ||
+            genStatus === 'error') && (
+            <div
+              className={cn(
+                'flex items-center gap-3 p-3 rounded-md border text-sm',
+                genStatus === 'error'
+                  ? 'bg-red-50 border-red-200 text-red-700'
+                  : genStatus === 'success'
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                    : 'bg-blue-50 border-blue-200 text-blue-700',
+              )}
+            >
+              {(genStatus === 'validating' ||
+                genStatus === 'generating' ||
+                genStatus === 'saving') && <Loader2 className="h-4 w-4 animate-spin shrink-0" />}
+              {genStatus === 'success' && <CheckCircle2 className="h-4 w-4 shrink-0" />}
+              {genStatus === 'error' && <XCircle className="h-4 w-4 shrink-0" />}
+              <span className="font-medium">{statusLabel[genStatus]}</span>
+              {genStatus === 'error' && genError && (
+                <span className="text-xs text-red-600 truncate">— {genError}</span>
+              )}
+            </div>
+          )}
+
+          {genDiagnostics && <DiagnosticsPanel diagnostics={genDiagnostics} />}
+
+          {genSuggestion && (
+            <div className="flex items-start gap-2 p-3 rounded-md border bg-indigo-50 border-indigo-200 text-sm text-indigo-800">
+              <Info className="h-4 w-4 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-medium">Sugestão do Escala Expert</p>
+                <p className="text-xs mt-1">{genSuggestion}</p>
+              </div>
+            </div>
+          )}
         </CardContent>
         <CardFooter className="bg-white/50 border-t py-4 flex flex-col items-start gap-4">
           {!isDraftMode ? (
             <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
               <Button
-                onClick={() => {
-                  validate()
-                  setShowPendencyModal(true)
-                }}
-                disabled={loading || !selectedCycle || !selectedSector}
+                onClick={() => handleGenerateDraft(false, false)}
+                disabled={!canGenerate}
                 className="w-full sm:w-auto gap-2 transition-all bg-emerald-700 hover:bg-emerald-800 text-white shadow-sm"
               >
-                {loading ? (
+                {genStatus === 'validating' || genStatus === 'generating' ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <Wand2 className="h-4 w-4" />
                 )}
                 Gerar com IA
               </Button>
+              {!canGenerate && selectedCycle && selectedSector && (
+                <p className="text-xs text-slate-500">
+                  Aguarde o carregamento dos dados ou resolva os pendentes acima.
+                </p>
+              )}
             </div>
           ) : (
             <div className="flex flex-col sm:flex-row items-center gap-3 w-full bg-emerald-50 p-3 rounded-lg border border-emerald-200 shadow-sm">
@@ -774,7 +704,7 @@ function AutoGenerateInner({
                   Modo Rascunho Ativo (Versão {draftIteration})
                 </p>
                 <p className="text-xs text-emerald-600">
-                  Refine o draft usando a caixa de texto abaixo ou salve se estiver satisfeito.
+                  O rascunho já está salvo. Refine abaixo ou publique a escala definitiva.
                 </p>
               </div>
               <Button
@@ -785,19 +715,14 @@ function AutoGenerateInner({
                   setDraftShifts([])
                   setRawDraft([])
                   setDraftIteration(1)
+                  setGenStatus('idle')
                 }}
-                disabled={loading || saving}
+                disabled={genStatus === 'generating' || genStatus === 'saving'}
                 className="border-emerald-200 text-emerald-700 hover:bg-emerald-100"
               >
                 Descartar Rascunho
               </Button>
             </div>
-          )}
-          {!isReady && selectedCycle && selectedSector && !isDraftMode && (
-            <p className="text-xs text-red-500 font-medium">
-              A geração está desabilitada devido a erros de validação nos parâmetros. Clique em "Ver
-              Pendências".
-            </p>
           )}
         </CardFooter>
       </Card>
@@ -814,21 +739,21 @@ function AutoGenerateInner({
                   variant="outline"
                   className="bg-amber-100 text-amber-800 border-amber-300 ml-2"
                 >
-                  Não Salvo
+                  Não Publicado
                 </Badge>
               </CardTitle>
               <Button
                 size="sm"
                 onClick={handleSaveScale}
-                disabled={saving || loading}
+                disabled={genStatus === 'saving' || genStatus === 'generating'}
                 className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white w-full sm:w-auto shadow-sm"
               >
-                {saving ? (
+                {genStatus === 'saving' ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <Save className="h-4 w-4" />
                 )}
-                Salvar Escala Definitiva
+                Publicar Escala Definitiva
               </Button>
             </div>
           </CardHeader>
@@ -872,8 +797,8 @@ function AutoGenerateInner({
                 Refinamento com IA
               </label>
               <p className="text-xs text-emerald-700">
-                Utilize linguagem natural para solicitar ajustes e melhorias na escala atual. A IA
-                considerará este rascunho como base.
+                Utilize linguagem natural para solicitar ajustes. A IA considerará este rascunho
+                como base e o rascunho será substituído.
               </p>
               <div className="flex gap-2">
                 <Input
@@ -883,18 +808,20 @@ function AutoGenerateInner({
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey && refinementPrompt.trim()) {
                       e.preventDefault()
-                      handleGenerateDraft(true)
+                      handleGenerateDraft(true, true)
                     }
                   }}
-                  disabled={loading || saving}
+                  disabled={genStatus === 'generating' || genStatus === 'saving'}
                   className="bg-white border-emerald-200 focus-visible:ring-emerald-500"
                 />
                 <Button
-                  onClick={() => handleGenerateDraft(true)}
-                  disabled={!refinementPrompt.trim() || loading || saving}
+                  onClick={() => handleGenerateDraft(true, true)}
+                  disabled={
+                    !refinementPrompt.trim() || genStatus === 'generating' || genStatus === 'saving'
+                  }
                   className="gap-2 shrink-0 bg-slate-800 hover:bg-slate-900 text-white"
                 >
-                  {loading ? (
+                  {genStatus === 'generating' ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     <Send className="h-4 w-4" />
@@ -907,98 +834,78 @@ function AutoGenerateInner({
         </Card>
       )}
 
-      <Dialog open={showPendencyModal} onOpenChange={setShowPendencyModal}>
-        <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col gap-0 p-0 overflow-hidden">
-          <DialogHeader className="p-6 pb-4 border-b bg-white">
-            <DialogTitle className="text-xl text-slate-800 flex items-center gap-2">
-              <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-              Checklist de Validação (Pré-Geração)
-            </DialogTitle>
-            <DialogDescription className="mt-2 text-slate-600">
-              A IA precisa de dados estruturados para gerar a escala. Verifique as pendências
-              abaixo.
+      {/* Idempotency dialog: existing draft for cycle+sector */}
+      <Dialog open={!!draftExists} onOpenChange={(o) => !o && setDraftExists(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rascunho existente</DialogTitle>
+            <DialogDescription>
+              Já existem <strong>{draftExists?.existing_count}</strong> plantões salvos como
+              rascunho para este ciclo e setor. Deseja abrir o rascunho existente ou substituí-lo
+              por uma nova geração?
             </DialogDescription>
           </DialogHeader>
-          <ScrollArea className="flex-1 p-6 bg-slate-50/50">
-            <div className="space-y-6">
-              {isValidating && validations.length === 0 ? (
-                <div className="flex items-center justify-center py-10 gap-3 text-muted-foreground">
-                  <Loader2 className="h-6 w-6 animate-spin" />
-                  <span>Verificando dados no banco...</span>
-                </div>
-              ) : (
-                validations.map((v) => (
-                  <div key={v.id} className="space-y-3 bg-white p-4 rounded-lg border shadow-sm">
-                    <div className="flex items-center gap-2">
-                      <CheckItemIcon status={v.status} />
-                      <h4 className="font-semibold text-base text-slate-800 flex items-center gap-2">
-                        {v.label}
-                        {v.status === 'error' && (
-                          <Badge
-                            variant="destructive"
-                            className="text-[10px] h-5 px-1.5 font-medium"
-                          >
-                            Erro Crítico
-                          </Badge>
-                        )}
-                        {v.status === 'warning' && (
-                          <Badge
-                            variant="outline"
-                            className="text-[10px] h-5 bg-amber-50 text-amber-700 border-amber-200 px-1.5 font-medium"
-                          >
-                            Atenção
-                          </Badge>
-                        )}
-                        {v.status === 'success' && (
-                          <Badge
-                            variant="outline"
-                            className="text-[10px] h-5 bg-emerald-50 text-emerald-700 border-emerald-200 px-1.5 font-medium"
-                          >
-                            Validado
-                          </Badge>
-                        )}
-                      </h4>
-                    </div>
-                    {v.details && v.details.length > 0 ? (
-                      <ul className="space-y-1.5 ml-8 border-l-2 border-slate-100 pl-4">
-                        {v.details.map((detail, idx) => (
-                          <li key={idx} className="text-sm text-slate-600">
-                            {detail}
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="text-sm text-slate-500 ml-8 italic">Sem detalhes adicionais.</p>
-                    )}
-                  </div>
-                ))
-              )}
-            </div>
-          </ScrollArea>
-          <div className="p-4 border-t bg-white flex justify-end gap-3 shadow-[0_-4px_6px_-1px_rgb(0,0,0,0.05)]">
-            <Button
-              variant="outline"
-              onClick={() => setShowPendencyModal(false)}
-              disabled={loading}
-            >
+          <DialogFooter className="gap-2 sm:gap-0 mt-4">
+            <Button variant="outline" onClick={() => setDraftExists(null)}>
               Cancelar
             </Button>
             <Button
-              disabled={!isReady || loading || isValidating}
-              onClick={() => {
-                setShowPendencyModal(false)
-                handleGenerateDraft(false)
+              variant="secondary"
+              onClick={async () => {
+                if (!draftExists) return
+                // Load the existing draft shifts for display.
+                try {
+                  const existing = await pb.collection('shifts').getFullList({
+                    filter: `cycle="${draftExists.cycle_id}" && sector="${draftExists.sector_id}"`,
+                    expand: 'staff_profile,sector',
+                    sort: 'start_time',
+                  })
+                  setDraftShifts(existing)
+                  setRawDraft(
+                    existing.map((s: any) => ({
+                      staff_profile: s.staff_profile,
+                      name: s.expand?.staff_profile?.name,
+                      sector: s.sector,
+                      cycle: s.cycle,
+                      start_time: s.start_time,
+                      end_time: s.end_time,
+                    })),
+                  )
+                  setIsDraftMode(true)
+                  setDraftIteration(1)
+                  setGenStatus('idle')
+                  setDraftExists(null)
+                  toast({
+                    title: 'Rascunho carregado',
+                    description: `${existing.length} plantões.`,
+                  })
+                } catch (err: any) {
+                  toast({
+                    title: 'Erro',
+                    description: err.message || 'Falha ao carregar o rascunho.',
+                    variant: 'destructive',
+                  })
+                }
               }}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2 shadow-sm"
+              className="gap-2"
             >
-              {loading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Wand2 className="h-4 w-4" />
-              )}
-              {isReady ? 'Prosseguir para Geração' : 'Resolva as pendências'}
+              <FileText className="h-4 w-4" />
+              Abrir existente
             </Button>
-          </div>
+            <Button
+              onClick={() => {
+                if (!draftExists) return
+                const ce = draftExists
+                setDraftExists(null)
+                handleGenerateDraft(false, true)
+                void ce
+              }}
+              className="gap-2 bg-emerald-700 hover:bg-emerald-800 text-white"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Substituir
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

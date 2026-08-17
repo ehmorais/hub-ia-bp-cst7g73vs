@@ -108,6 +108,7 @@ export const generateDraftShifts = (
   context: any,
   additionalPrompt?: string,
   currentDraft?: any[],
+  replace = false,
 ) =>
   pb.send('/backend/v1/escala/draft', {
     method: 'POST',
@@ -117,8 +118,17 @@ export const generateDraftShifts = (
       context,
       additional_prompt: additionalPrompt,
       current_draft: currentDraft,
+      replace,
     }),
     headers: { 'Content-Type': 'application/json' },
+  })
+
+// Draft shifts persisted for a given cycle + sector (read-only fetch).
+export const getDraftShifts = (cycleId: string, sectorId: string) =>
+  pb.collection('shifts').getFullList({
+    filter: `cycle="${cycleId}" && sector="${sectorId}"`,
+    expand: 'staff_profile,sector,cycle',
+    sort: 'start_time',
   })
 
 export const commitShiftSchedule = (
