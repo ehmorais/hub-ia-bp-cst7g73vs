@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import {
   Table,
@@ -12,101 +12,433 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
-import { ShieldAlert, Trash2, Plus } from 'lucide-react'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { Badge } from '@/components/ui/badge'
+import { ShieldAlert, Trash2, Plus, Pencil, Loader2 } from 'lucide-react'
 import { useToast } from '@/components/ui/use-toast'
 import {
   getHospitalSectors,
   createHospitalSector,
   updateHospitalSector,
   deleteHospitalSector,
+  checkSectorReferences,
 } from '@/services/escala'
+import { getDepartments } from '@/services/admin'
 import { useRealtime } from '@/hooks/use-realtime'
+import { extractFieldErrors, type FieldErrors } from '@/lib/pocketbase/errors'
+
+interface SectorForm {
+  name: string
+  department: string
+  min_staffing: number
+  ideal_staffing: number
+  bed_capacity: number
+  staffing_ratio: number
+  is_critical: boolean
+  active: boolean
+}
 
 export function Sectors({ departmentId }: { departmentId?: string; projectId?: string }) {
   const [sectors, setSectors] = useState<any[]>([])
-  const [name, setName] = useState('')
-  const [min, setMin] = useState(0)
-  const [ideal, setIdeal] = useState(0)
-  const [bedCapacity, setBedCapacity] = useState(0)
-  const [staffingRatio, setStaffingRatio] = useState(10)
-  const [isCritical, setIsCritical] = useState(false)
+  const [departments, setDepartments] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [form, setForm] = useState<SectorForm>({
+    name: '',
+    department: departmentId || '',
+    min_staffing: 0,
+    ideal_staffing: 0,
+    bed_capacity: 0,
+    staffing_ratio: 10,
+    is_critical: false,
+    active: true,
+  })
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
+  const [saving, setSaving] = useState(false)
+
+  // Exclusão: preflight de referências + diálogo de bloqueio/desativação.
+  const [deleteTarget, setDeleteTarget] = useState<any | null>(null)
+  const [deleteRefs, setDeleteRefs] = useState<{
+    staffProfiles: number
+    shifts: number
+    drafts: number
+    runs: number
+    total: number
+  } | null>(null)
+  const [deleteChecking, setDeleteChecking] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deactivating, setDeactivating] = useState(false)
+
   const { toast } = useToast()
 
-  const loadData = async () =>
-    getHospitalSectors(departmentId).then(setSectors).catch(console.error)
+  const loadData = useCallback(async () => {
+    try {
+      const [sectorRecords, deptRecords] = await Promise.all([
+        getHospitalSectors(departmentId),
+        getDepartments(),
+      ])
+      setSectors(sectorRecords)
+      setDepartments(deptRecords)
+    } catch {
+      toast({
+        title: 'Erro',
+        description: 'Falha ao carregar setores.',
+        variant: 'destructive',
+      })
+    } finally {
+      setLoading(false)
+    }
+  }, [departmentId, toast])
+
   useEffect(() => {
     loadData()
-  }, [departmentId])
+  }, [loadData])
+
   useRealtime('hospital_sectors', loadData)
 
-  const handleCreate = async () => {
-    if (!name)
-      return toast({ title: 'Erro', description: 'Nome obrigatório', variant: 'destructive' })
+  const openCreate = () => {
+    setForm({
+      name: '',
+      department: departmentId || '',
+      min_staffing: 0,
+      ideal_staffing: 0,
+      bed_capacity: 0,
+      staffing_ratio: 10,
+      is_critical: false,
+      active: true,
+    })
+    setEditingId(null)
+    setFieldErrors({})
+    setDialogOpen(true)
+  }
+
+  const openEdit = (sector: any) => {
+    setForm({
+      name: sector.name || '',
+      department: sector.department || departmentId || '',
+      min_staffing: sector.min_staffing || 0,
+      ideal_staffing: sector.ideal_staffing || 0,
+      bed_capacity: sector.bed_capacity || 0,
+      staffing_ratio: sector.staffing_ratio || 10,
+      is_critical: sector.is_critical || false,
+      active: sector.active !== false,
+    })
+    setEditingId(sector.id)
+    setFieldErrors({})
+    setDialogOpen(true)
+  }
+
+  const handleSave = async () => {
+    if (!form.name.trim()) {
+      setFieldErrors({ name: 'Nome é obrigatório' })
+      return
+    }
+    if (!form.department) {
+      setFieldErrors({ department: 'Departamento é obrigatório' })
+      return
+    }
+
+    setSaving(true)
+    setFieldErrors({})
     try {
-      await createHospitalSector({
-        name,
-        min_staffing: min,
-        ideal_staffing: ideal,
-        bed_capacity: bedCapacity,
-        staffing_ratio: staffingRatio,
-        is_critical: isCritical,
-        department: departmentId,
+      const payload = {
+        name: form.name.trim(),
+        department: form.department,
+        min_staffing: form.min_staffing,
+        ideal_staffing: form.ideal_staffing,
+        bed_capacity: form.bed_capacity,
+        staffing_ratio: form.staffing_ratio,
+        is_critical: form.is_critical,
+        active: form.active,
+      }
+      if (editingId) {
+        await updateHospitalSector(editingId, payload)
+        toast({ title: 'Setor atualizado', description: form.name })
+      } else {
+        await createHospitalSector(payload)
+        toast({ title: 'Setor criado', description: form.name })
+      }
+      setDialogOpen(false)
+      setEditingId(null)
+    } catch (e: any) {
+      const errors = extractFieldErrors(e)
+      if (Object.keys(errors).length > 0) {
+        setFieldErrors(errors)
+        toast({
+          title: 'Erro de validação',
+          description: Object.values(errors).join(' '),
+          variant: 'destructive',
+        })
+      } else {
+        toast({
+          title: 'Erro',
+          description: e.message || 'Falha ao salvar setor.',
+          variant: 'destructive',
+        })
+      }
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Preflight: ao clicar em excluir, contamos as referências antes de tentar.
+  const openDelete = async (sector: any) => {
+    setDeleteTarget(sector)
+    setDeleteRefs(null)
+    setDeleteChecking(true)
+    try {
+      const refs = await checkSectorReferences(sector.id)
+      setDeleteRefs(refs)
+    } catch {
+      setDeleteRefs(null)
+    } finally {
+      setDeleteChecking(false)
+    }
+  }
+
+  const closeDelete = () => {
+    setDeleteTarget(null)
+    setDeleteRefs(null)
+    setDeleting(false)
+    setDeactivating(false)
+  }
+
+  const handleDeactivate = async () => {
+    if (!deleteTarget) return
+    setDeactivating(true)
+    try {
+      await updateHospitalSector(deleteTarget.id, { active: false })
+      toast({ title: 'Setor desativado', description: deleteTarget.name })
+      closeDelete()
+    } catch (e: any) {
+      toast({
+        title: 'Erro ao desativar',
+        description: e.message || 'Falha ao desativar setor.',
+        variant: 'destructive',
       })
-      setName('')
-      setMin(0)
-      setIdeal(0)
-      setBedCapacity(0)
-      setStaffingRatio(10)
-      setIsCritical(false)
-      toast({ title: 'Setor criado' })
-    } catch (e: any) {
-      toast({ title: 'Erro', description: e.message, variant: 'destructive' })
+    } finally {
+      setDeactivating(false)
     }
   }
 
-  const handleUpdate = async (id: string, field: string, val: any) => {
+  const handleDelete = async () => {
+    if (!deleteTarget) return
+    setDeleting(true)
     try {
-      await updateHospitalSector(id, { [field]: val })
+      await deleteHospitalSector(deleteTarget.id)
+      toast({ title: 'Setor removido', description: deleteTarget.name })
+      closeDelete()
     } catch (e: any) {
-      toast({ title: 'Erro', description: e.message, variant: 'destructive' })
+      try {
+        const refs = await checkSectorReferences(deleteTarget.id)
+        setDeleteRefs(refs)
+      } catch (_) {
+        /* mantém o que houver */
+      }
+      toast({
+        title: 'Não foi possível excluir',
+        description:
+          'Existem registros vinculados a este setor. Desative-o como alternativa segura.',
+        variant: 'destructive',
+      })
+    } finally {
+      setDeleting(false)
     }
   }
 
-  const handleDelete = async (id: string) => {
-    try {
-      await deleteHospitalSector(id)
-      toast({ title: 'Setor removido' })
-    } catch (e: any) {
-      toast({ title: 'Erro', description: e.message, variant: 'destructive' })
-    }
+  const getDeptName = (deptId: string) => {
+    const dept = departments.find((d) => d.id === deptId)
+    return dept?.name || '—'
   }
 
   return (
     <div className="space-y-6 animate-fade-in">
       <Card>
-        <CardHeader>
-          <CardTitle>Novo Setor</CardTitle>
-          <CardDescription>
-            Crie um novo setor assistencial e defina regras de dimensionamento.
-          </CardDescription>
+        <CardHeader className="flex-row items-center justify-between space-y-0">
+          <div>
+            <CardTitle>Setores e Dimensionamento</CardTitle>
+            <CardDescription>
+              Gerencie setores, lotação e proporções. Clique em Editar para alterar.
+            </CardDescription>
+          </div>
+          <Button onClick={openCreate} size="sm">
+            <Plus className="h-4 w-4 mr-2" />
+            Novo Setor
+          </Button>
         </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-7 gap-4 items-end">
-            <div className="space-y-2 md:col-span-2">
-              <Label>Nome do Setor</Label>
+        <CardContent className="p-0 overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Setor</TableHead>
+                <TableHead>Departamento</TableHead>
+                <TableHead>Leitos</TableHead>
+                <TableHead>Ratio (1:X)</TableHead>
+                <TableHead>Mínimo</TableHead>
+                <TableHead>Ideal</TableHead>
+                <TableHead>Crítico</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Ações</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={9} className="text-center py-8">
+                    <Loader2 className="h-5 w-5 animate-spin mx-auto text-slate-400" />
+                  </TableCell>
+                </TableRow>
+              ) : sectors.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                    Nenhum setor cadastrado.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                sectors.map((s) => (
+                  <TableRow key={s.id} className={s.active === false ? 'opacity-60' : ''}>
+                    <TableCell className="font-medium flex items-center gap-2">
+                      {s.is_critical && <ShieldAlert className="h-4 w-4 text-orange-500" />}
+                      {s.name}
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-sm text-slate-600">{getDeptName(s.department)}</span>
+                    </TableCell>
+                    <TableCell>{s.bed_capacity ?? 0}</TableCell>
+                    <TableCell>{s.staffing_ratio ?? 10}</TableCell>
+                    <TableCell>{s.min_staffing ?? 0}</TableCell>
+                    <TableCell>{s.ideal_staffing ?? 0}</TableCell>
+                    <TableCell>
+                      {s.is_critical ? (
+                        <Badge variant="destructive" className="bg-orange-500 hover:bg-orange-600">
+                          Crítico
+                        </Badge>
+                      ) : (
+                        <Badge variant="secondary">Normal</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {s.active === false ? (
+                        <Badge variant="secondary" className="bg-slate-300 text-slate-700">
+                          Inativo
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="border-green-500 text-green-700">
+                          Ativo
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => openEdit(s)}
+                          title="Editar setor"
+                        >
+                          <Pencil className="h-4 w-4 text-slate-500" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => openDelete(s)}
+                          title="Excluir setor"
+                        >
+                          <Trash2 className="h-4 w-4 text-red-500" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="sm:max-w-[560px]">
+          <DialogHeader>
+            <DialogTitle>{editingId ? 'Editar Setor' : 'Novo Setor'}</DialogTitle>
+            <DialogDescription>
+              {editingId
+                ? 'Atualize os dados do setor hospitalar.'
+                : 'Preencha os dados para criar um novo setor.'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-2">
+            <div className="space-y-2 sm:col-span-2">
+              <Label htmlFor="esc-sector-name">
+                Nome do Setor <span className="text-red-500">*</span>
+              </Label>
               <Input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
+                id="esc-sector-name"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
                 placeholder="Ex: UTI Adulto"
+                className={fieldErrors.name ? 'border-red-500' : ''}
               />
+              {fieldErrors.name && <p className="text-sm text-red-500">{fieldErrors.name}</p>}
             </div>
+
+            <div className="space-y-2 sm:col-span-2">
+              <Label>
+                Departamento <span className="text-red-500">*</span>
+              </Label>
+              <Select
+                value={form.department}
+                onValueChange={(val) => setForm({ ...form, department: val })}
+              >
+                <SelectTrigger className={fieldErrors.department ? 'border-red-500' : ''}>
+                  <SelectValue placeholder="Selecione um departamento" />
+                </SelectTrigger>
+                <SelectContent>
+                  {departments.map((d) => (
+                    <SelectItem key={d.id} value={d.id}>
+                      {d.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {fieldErrors.department && (
+                <p className="text-sm text-red-500">{fieldErrors.department}</p>
+              )}
+            </div>
+
             <div className="space-y-2">
               <Label>Leitos</Label>
               <Input
                 type="number"
                 min={0}
-                value={bedCapacity}
-                onChange={(e) => setBedCapacity(Number(e.target.value))}
+                value={form.bed_capacity}
+                onChange={(e) => setForm({ ...form, bed_capacity: Number(e.target.value) })}
               />
             </div>
             <div className="space-y-2">
@@ -114,131 +446,119 @@ export function Sectors({ departmentId }: { departmentId?: string; projectId?: s
               <Input
                 type="number"
                 min={1}
-                value={staffingRatio}
-                onChange={(e) => setStaffingRatio(Number(e.target.value))}
+                value={form.staffing_ratio}
+                onChange={(e) => setForm({ ...form, staffing_ratio: Number(e.target.value) })}
               />
             </div>
             <div className="space-y-2">
-              <Label>Min. Profs</Label>
+              <Label>Mín. Profissionais</Label>
               <Input
                 type="number"
                 min={0}
-                value={min}
-                onChange={(e) => setMin(Number(e.target.value))}
+                value={form.min_staffing}
+                onChange={(e) => setForm({ ...form, min_staffing: Number(e.target.value) })}
               />
             </div>
             <div className="space-y-2">
-              <Label>Ideal Profs</Label>
+              <Label>Ideal Profissionais</Label>
               <Input
                 type="number"
                 min={0}
-                value={ideal}
-                onChange={(e) => setIdeal(Number(e.target.value))}
+                value={form.ideal_staffing}
+                onChange={(e) => setForm({ ...form, ideal_staffing: Number(e.target.value) })}
               />
             </div>
-            <div className="space-y-2 flex flex-col pb-2">
-              <Label className="mb-2">Crítico?</Label>
-              <Switch checked={isCritical} onCheckedChange={setIsCritical} />
+            <div className="space-y-2 sm:col-span-2 flex items-center gap-3 pt-2">
+              <Switch
+                checked={form.is_critical}
+                onCheckedChange={(val) => setForm({ ...form, is_critical: val })}
+              />
+              <Label className="cursor-pointer">Setor crítico</Label>
             </div>
-            <div className="md:col-span-7">
-              <Button onClick={handleCreate} className="w-full md:w-auto mt-2">
-                <Plus className="h-4 w-4 mr-2" />
-                Adicionar Setor
-              </Button>
-            </div>
+            {editingId && (
+              <div className="space-y-2 sm:col-span-2 flex items-center gap-3">
+                <Switch
+                  checked={form.active}
+                  onCheckedChange={(val) => setForm({ ...form, active: val })}
+                />
+                <Label className="cursor-pointer">Setor ativo</Label>
+              </div>
+            )}
           </div>
-        </CardContent>
-      </Card>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSave} disabled={saving}>
+              {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {editingId ? 'Salvar Alterações' : 'Criar Setor'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Setores e Dimensionamento</CardTitle>
-          <CardDescription>Gerencie a lotação e proporções de leitos.</CardDescription>
-        </CardHeader>
-        <CardContent className="p-0 overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Setor</TableHead>
-                <TableHead>Leitos</TableHead>
-                <TableHead>Ratio (1:X)</TableHead>
-                <TableHead>Mínimo</TableHead>
-                <TableHead>Ideal</TableHead>
-                <TableHead>Crítico?</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {sectors.map((s) => (
-                <TableRow key={s.id}>
-                  <TableCell className="font-medium flex items-center gap-2">
-                    <ShieldAlert className="h-4 w-4 text-orange-500" />
-                    <Input
-                      defaultValue={s.name}
-                      onBlur={(e) => handleUpdate(s.id, 'name', e.target.value)}
-                      className="w-40 h-8"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Input
-                      type="number"
-                      min={0}
-                      defaultValue={s.bed_capacity || 0}
-                      onBlur={(e) => handleUpdate(s.id, 'bed_capacity', Number(e.target.value))}
-                      className="w-20 h-8"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Input
-                      type="number"
-                      min={1}
-                      defaultValue={s.staffing_ratio || 10}
-                      onBlur={(e) => handleUpdate(s.id, 'staffing_ratio', Number(e.target.value))}
-                      className="w-20 h-8"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Input
-                      type="number"
-                      min={0}
-                      defaultValue={s.min_staffing}
-                      onBlur={(e) => handleUpdate(s.id, 'min_staffing', Number(e.target.value))}
-                      className="w-20 h-8"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Input
-                      type="number"
-                      min={0}
-                      defaultValue={s.ideal_staffing}
-                      onBlur={(e) => handleUpdate(s.id, 'ideal_staffing', Number(e.target.value))}
-                      className="w-20 h-8"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Switch
-                      checked={s.is_critical}
-                      onCheckedChange={(val) => handleUpdate(s.id, 'is_critical', val)}
-                    />
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="ghost" size="icon" onClick={() => handleDelete(s.id)}>
-                      <Trash2 className="h-4 w-4 text-red-500" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {sectors.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center py-6 text-muted-foreground">
-                    Nenhum setor.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && closeDelete()}>
+        <AlertDialogContent className="sm:max-w-[480px]">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {deleteRefs && deleteRefs.total > 0
+                ? 'Não é possível excluir este setor'
+                : 'Confirmar exclusão'}
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 text-sm">
+                {deleteChecking ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Verificando vínculos do setor <strong>{deleteTarget?.name}</strong>…
+                  </span>
+                ) : deleteRefs && deleteRefs.total > 0 ? (
+                  <>
+                    <span>
+                      O setor <strong>{deleteTarget?.name}</strong> possui registros vinculados e
+                      não pode ser excluído. Remova ou realoque os vínculos antes de tentar
+                      novamente — ou desative o setor como alternativa segura.
+                    </span>
+                    <ul className="list-disc pl-5 space-y-1 text-slate-700">
+                      <li>Colaboradores (staff_profiles): {deleteRefs.staffProfiles}</li>
+                      <li>Plantões (shifts): {deleteRefs.shifts}</li>
+                      <li>Rascunhos (schedule_drafts): {deleteRefs.drafts}</li>
+                      <li>Execuções (schedule_generation_runs): {deleteRefs.runs}</li>
+                    </ul>
+                  </>
+                ) : (
+                  <span>
+                    Tem certeza que deseja remover o setor <strong>{deleteTarget?.name}</strong>?
+                    Esta ação não pode ser desfeita.
+                  </span>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting || deactivating}>Cancelar</AlertDialogCancel>
+            {deleteRefs && deleteRefs.total > 0 ? (
+              <AlertDialogAction
+                onClick={handleDeactivate}
+                disabled={deactivating || deleteChecking}
+                className="bg-amber-600 hover:bg-amber-700"
+              >
+                {deactivating && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Desativar Setor
+              </AlertDialogAction>
+            ) : (
+              <AlertDialogAction
+                onClick={handleDelete}
+                disabled={deleting || deleteChecking}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {deleting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Excluir
+              </AlertDialogAction>
+            )}
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

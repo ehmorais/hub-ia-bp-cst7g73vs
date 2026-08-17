@@ -45,6 +45,7 @@ import {
   createHospitalSector,
   updateHospitalSector,
   deleteHospitalSector,
+  checkSectorReferences,
 } from '@/services/escala'
 import { getDepartments } from '@/services/admin'
 import { useRealtime } from '@/hooks/use-realtime'
@@ -58,6 +59,7 @@ interface SectorForm {
   bed_capacity: number
   staffing_ratio: number
   is_critical: boolean
+  active: boolean
 }
 
 const emptyForm: SectorForm = {
@@ -68,6 +70,7 @@ const emptyForm: SectorForm = {
   bed_capacity: 0,
   staffing_ratio: 10,
   is_critical: false,
+  active: true,
 }
 
 export default function Sectors() {
@@ -79,8 +82,23 @@ export default function Sectors() {
   const [form, setForm] = useState<SectorForm>(emptyForm)
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [saving, setSaving] = useState(false)
+
+  // Exclusão: preflight de referências + diálogo de bloqueio/desativação.
   const [deleteTarget, setDeleteTarget] = useState<any | null>(null)
+  const [deleteRefs, setDeleteRefs] = useState<{
+    staffProfiles: number
+    shifts: number
+    drafts: number
+    runs: number
+    total: number
+  } | null>(null)
+  const [deleteChecking, setDeleteChecking] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [deactivating, setDeactivating] = useState(false)
+
+  // Filtro de ativos/inativos.
+  const [showInactive, setShowInactive] = useState(false)
+
   const { toast } = useToast()
 
   const loadData = useCallback(async () => {
@@ -91,7 +109,7 @@ export default function Sectors() {
       ])
       setSectors(sectorRecords)
       setDepartments(deptRecords)
-    } catch (e: any) {
+    } catch {
       toast({
         title: 'Erro',
         description: 'Falha ao carregar setores.',
@@ -126,6 +144,7 @@ export default function Sectors() {
       bed_capacity: sector.bed_capacity || 0,
       staffing_ratio: sector.staffing_ratio || 10,
       is_critical: sector.is_critical || false,
+      active: sector.active !== false,
     })
     setEditingId(sector.id)
     setFieldErrors({})
@@ -153,6 +172,7 @@ export default function Sectors() {
         bed_capacity: form.bed_capacity,
         staffing_ratio: form.staffing_ratio,
         is_critical: form.is_critical,
+        active: form.active,
       }
       if (editingId) {
         await updateHospitalSector(editingId, payload)
@@ -185,17 +205,67 @@ export default function Sectors() {
     }
   }
 
+  // Preflight: ao clicar em excluir, contamos as referências antes de tentar.
+  const openDelete = async (sector: any) => {
+    setDeleteTarget(sector)
+    setDeleteRefs(null)
+    setDeleteChecking(true)
+    try {
+      const refs = await checkSectorReferences(sector.id)
+      setDeleteRefs(refs)
+    } catch {
+      // Se o preflight falhar, deixamos tentar a exclusão direto (fallback).
+      setDeleteRefs(null)
+    } finally {
+      setDeleteChecking(false)
+    }
+  }
+
+  const closeDelete = () => {
+    setDeleteTarget(null)
+    setDeleteRefs(null)
+    setDeleting(false)
+    setDeactivating(false)
+  }
+
+  const handleDeactivate = async () => {
+    if (!deleteTarget) return
+    setDeactivating(true)
+    try {
+      await updateHospitalSector(deleteTarget.id, { active: false })
+      toast({ title: 'Setor desativado', description: deleteTarget.name })
+      closeDelete()
+    } catch (e: any) {
+      toast({
+        title: 'Erro ao desativar',
+        description: e.message || 'Falha ao desativar setor.',
+        variant: 'destructive',
+      })
+    } finally {
+      setDeactivating(false)
+    }
+  }
+
   const handleDelete = async () => {
     if (!deleteTarget) return
     setDeleting(true)
     try {
       await deleteHospitalSector(deleteTarget.id)
       toast({ title: 'Setor removido', description: deleteTarget.name })
-      setDeleteTarget(null)
+      closeDelete()
     } catch (e: any) {
+      // Erro 400 de relation reference — recarregamos as referências e
+      // oferecemos desativar como alternativa segura.
+      try {
+        const refs = await checkSectorReferences(deleteTarget.id)
+        setDeleteRefs(refs)
+      } catch (_) {
+        /* mantém o que houver */
+      }
       toast({
-        title: 'Erro',
-        description: e.message || 'Falha ao remover setor.',
+        title: 'Não foi possível excluir',
+        description:
+          'Existem registros vinculados a este setor. Desative-o como alternativa segura.',
         variant: 'destructive',
       })
     } finally {
@@ -207,6 +277,10 @@ export default function Sectors() {
     const dept = departments.find((d) => d.id === deptId)
     return dept?.name || '—'
   }
+
+  const visibleSectors = sectors.filter((s) => (showInactive ? true : s.active !== false))
+  const activeCount = sectors.filter((s) => s.active !== false).length
+  const inactiveCount = sectors.length - activeCount
 
   return (
     <div className="space-y-6 animate-fade-in p-4 md:p-6">
@@ -228,10 +302,19 @@ export default function Sectors() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Setores e Dimensionamento</CardTitle>
-          <CardDescription>
-            {sectors.length} setor(es) cadastrado(s). A lista atualiza automaticamente.
-          </CardDescription>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <CardTitle>Setores e Dimensionamento</CardTitle>
+              <CardDescription>
+                {activeCount} ativo(s) · {inactiveCount} inativo(s). A lista atualiza
+                automaticamente.
+              </CardDescription>
+            </div>
+            <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer select-none">
+              <Switch checked={showInactive} onCheckedChange={setShowInactive} />
+              Mostrar inativos
+            </label>
+          </div>
         </CardHeader>
         <CardContent className="p-0 overflow-x-auto">
           <Table>
@@ -244,25 +327,31 @@ export default function Sectors() {
                 <TableHead>Mín. Profs</TableHead>
                 <TableHead>Ideal Profs</TableHead>
                 <TableHead>Crítico</TableHead>
+                <TableHead>Status</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8">
+                  <TableCell colSpan={9} className="text-center py-8">
                     <Loader2 className="h-5 w-5 animate-spin mx-auto text-slate-400" />
                   </TableCell>
                 </TableRow>
-              ) : sectors.length === 0 ? (
+              ) : visibleSectors.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
-                    Nenhum setor cadastrado. Clique em "Novo Setor" para começar.
+                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                    {showInactive
+                      ? 'Nenhum setor cadastrado.'
+                      : 'Nenhum setor ativo. Ative "Mostrar inativos" para ver todos.'}
                   </TableCell>
                 </TableRow>
               ) : (
-                sectors.map((s) => (
-                  <TableRow key={s.id} className="hover:bg-slate-50/50">
+                visibleSectors.map((s) => (
+                  <TableRow
+                    key={s.id}
+                    className={`hover:bg-slate-50/50 ${s.active === false ? 'opacity-60' : ''}`}
+                  >
                     <TableCell className="font-medium flex items-center gap-2">
                       {s.is_critical && <ShieldAlert className="h-4 w-4 text-orange-500" />}
                       {s.name}
@@ -283,6 +372,17 @@ export default function Sectors() {
                         <Badge variant="secondary">Normal</Badge>
                       )}
                     </TableCell>
+                    <TableCell>
+                      {s.active === false ? (
+                        <Badge variant="secondary" className="bg-slate-300 text-slate-700">
+                          Inativo
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="border-green-500 text-green-700">
+                          Ativo
+                        </Badge>
+                      )}
+                    </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
                         <Button
@@ -290,14 +390,16 @@ export default function Sectors() {
                           size="icon"
                           onClick={() => openEdit(s)}
                           className="h-8 w-8"
+                          title="Editar setor"
                         >
                           <Pencil className="h-4 w-4 text-slate-500" />
                         </Button>
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => setDeleteTarget(s)}
+                          onClick={() => openDelete(s)}
                           className="h-8 w-8"
+                          title="Excluir setor"
                         >
                           <Trash2 className="h-4 w-4 text-red-500" />
                         </Button>
@@ -403,6 +505,15 @@ export default function Sectors() {
               />
               <Label className="cursor-pointer">Setor crítico</Label>
             </div>
+            {editingId && (
+              <div className="space-y-2 sm:col-span-2 flex items-center gap-3">
+                <Switch
+                  checked={form.active}
+                  onCheckedChange={(val) => setForm({ ...form, active: val })}
+                />
+                <Label className="cursor-pointer">Setor ativo</Label>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>
@@ -420,25 +531,65 @@ export default function Sectors() {
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
-        <AlertDialogContent>
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && closeDelete()}>
+        <AlertDialogContent className="sm:max-w-[480px]">
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
-            <AlertDialogDescription>
-              Tem certeza que deseja remover o setor <strong>{deleteTarget?.name}</strong>? Esta
-              ação não pode ser desfeita.
+            <AlertDialogTitle>
+              {deleteRefs && deleteRefs.total > 0
+                ? 'Não é possível excluir este setor'
+                : 'Confirmar exclusão'}
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 text-sm">
+                {deleteChecking ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Verificando vínculos do setor <strong>{deleteTarget?.name}</strong>…
+                  </span>
+                ) : deleteRefs && deleteRefs.total > 0 ? (
+                  <>
+                    <span>
+                      O setor <strong>{deleteTarget?.name}</strong> possui registros vinculados e
+                      não pode ser excluído. Remova ou realoque os vínculos antes de tentar
+                      novamente — ou desative o setor como alternativa segura.
+                    </span>
+                    <ul className="list-disc pl-5 space-y-1 text-slate-700">
+                      <li>Colaboradores (staff_profiles): {deleteRefs.staffProfiles}</li>
+                      <li>Plantões (shifts): {deleteRefs.shifts}</li>
+                      <li>Rascunhos (schedule_drafts): {deleteRefs.drafts}</li>
+                      <li>Execuções (schedule_generation_runs): {deleteRefs.runs}</li>
+                    </ul>
+                  </>
+                ) : (
+                  <span>
+                    Tem certeza que deseja remover o setor <strong>{deleteTarget?.name}</strong>?
+                    Esta ação não pode ser desfeita.
+                  </span>
+                )}
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDelete}
-              disabled={deleting}
-              className="bg-red-600 hover:bg-red-700"
-            >
-              {deleting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Excluir
-            </AlertDialogAction>
+            <AlertDialogCancel disabled={deleting || deactivating}>Cancelar</AlertDialogCancel>
+            {deleteRefs && deleteRefs.total > 0 ? (
+              <AlertDialogAction
+                onClick={handleDeactivate}
+                disabled={deactivating || deleteChecking}
+                className="bg-amber-600 hover:bg-amber-700"
+              >
+                {deactivating && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Desativar Setor
+              </AlertDialogAction>
+            ) : (
+              <AlertDialogAction
+                onClick={handleDelete}
+                disabled={deleting || deleteChecking}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {deleting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Excluir
+              </AlertDialogAction>
+            )}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

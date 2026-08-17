@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-17T15:40:20.326Z",
+  "generatedAt": "2026-08-17T16:01:41.955Z",
   "collections": [
     {
       "name": "users",
@@ -449,9 +449,15 @@
           "type": "bool",
           "required": false,
           "system": false
+        },
+        {
+          "name": "active",
+          "type": "bool",
+          "required": false,
+          "system": false
         }
       ],
-      "indexes": []
+      "indexes": ["CREATE INDEX `idx_hospital_sectors_active` ON `hospital_sectors` (active)"]
     },
     {
       "name": "staff_roles",

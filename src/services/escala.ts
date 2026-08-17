@@ -34,6 +34,37 @@ export const updateHospitalSector = (id: string, data: any) =>
   pb.collection('hospital_sectors').update(id, data)
 export const deleteHospitalSector = (id: string) => pb.collection('hospital_sectors').delete(id)
 
+/**
+ * Setor ↔ referências: conta, de forma performática (1 item por coleção),
+ * quantos registros dependem de um setor. Usado como preflight de exclusão:
+ * se houver QUALQUER vínculo, a exclusão física será bloqueada pelo PocketBase
+ * (erro 400 "required relation reference") e o usuário deve desativar o setor.
+ */
+export async function checkSectorReferences(sectorId: string): Promise<{
+  staffProfiles: number
+  shifts: number
+  drafts: number
+  runs: number
+  total: number
+}> {
+  const [staffProfiles, shifts, drafts, runs] = await Promise.all([
+    pb.collection('staff_profiles').getList(1, 1, { filter: `default_sector="${sectorId}"` }),
+    pb.collection('shifts').getList(1, 1, { filter: `sector="${sectorId}"` }),
+    pb.collection('schedule_drafts').getList(1, 1, { filter: `sector="${sectorId}"` }),
+    pb.collection('schedule_generation_runs').getList(1, 1, { filter: `sector="${sectorId}"` }),
+  ])
+  const counts = {
+    staffProfiles: staffProfiles.totalItems,
+    shifts: shifts.totalItems,
+    drafts: drafts.totalItems,
+    runs: runs.totalItems,
+  }
+  return {
+    ...counts,
+    total: counts.staffProfiles + counts.shifts + counts.drafts + counts.runs,
+  }
+}
+
 // Staff Roles
 export const getStaffRoles = () =>
   pb.collection('staff_roles').getFullList({ sort: '-hierarchy_rank' })
