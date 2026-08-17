@@ -56,6 +56,7 @@ export function ShiftCalendar({
   const [view, setView] = useState<ViewMode>('week')
   const cycleStart = cycle ? parseISO(cycle.start_date.split(' ')[0]) : new Date()
   const cycleEnd = cycle ? parseISO(cycle.end_date.split(' ')[0]) : new Date()
+  const cycleInterval = { start: cycleStart, end: cycleEnd }
 
   const [currentDate, setCurrentDate] = useState(cycleStart)
   const [sectors, setSectors] = useState<any[]>([])
@@ -74,10 +75,15 @@ export function ShiftCalendar({
   useRealtime('shift_rules', loadRules)
 
   useEffect(() => {
-    if (sectors.length > 0 && !selectedSectorId) {
-      setSelectedSectorId(sectors[0].id)
-    }
-  }, [sectors, selectedSectorId])
+    if (sectors.length === 0) return
+    if (selectedSectorId) return
+    // Default to the sector the visible shifts actually belong to, so the
+    // coverage threshold (hospital_sectors.min_staffing) matches the draft
+    // being shown instead of an unrelated sector that happens to sort first.
+    const shiftSector = shifts[0]?.sector || shifts[0]?.expand?.sector?.id || ''
+    const match = shiftSector ? sectors.find((s) => s.id === shiftSector) : null
+    setSelectedSectorId(match ? match.id : sectors[0].id)
+  }, [sectors, selectedSectorId, shifts])
 
   const visibleShifts = useMemo(() => {
     if (!selectedSectorId) return []
@@ -107,36 +113,55 @@ export function ShiftCalendar({
 
     const sectorRules = shiftRules.filter((r) => r.department === sector.department)
 
-    // Compute staffing alerts for visible days
-    days.forEach((day) => {
-      const dayShifts = visibleShifts.filter((s) =>
-        isSameDay(parseISO(s.start_time.split(' ')[0]), day),
-      )
-      const count = dayShifts.length
+    // --- Coverage validation guards ---
+    // Only validate days INSIDE the current cycle. Days outside the cycle have
+    // nothing to validate (no draft/published schedule covers them).
+    if (cycle) {
+      days.forEach((day) => {
+        if (!isWithinInterval(day, cycleInterval)) return // outside the cycle
 
-      if (sector.min_staffing > 0 && count < sector.min_staffing) {
-        newAlerts.push({
-          type: 'error',
-          message: `Dia ${format(day, 'dd/MM')}: Efetivo abaixo do mínimo (${count}/${sector.min_staffing})`,
-          date: day,
-        })
-      } else if (sector.ideal_staffing > 0 && count < sector.ideal_staffing) {
-        newAlerts.push({
-          type: 'warning',
-          message: `Dia ${format(day, 'dd/MM')}: Efetivo abaixo do ideal (${count}/${sector.ideal_staffing})`,
-          date: day,
-        })
-      }
+        const dayShifts = visibleShifts.filter((s) =>
+          isSameDay(parseISO(s.start_time.split(' ')[0]), day),
+        )
+        const count = dayShifts.length
 
-      const minStaffRule = sectorRules.find((r) => r.rule_type === 'min_staff')
-      if (minStaffRule && count < minStaffRule.value) {
-        newAlerts.push({
-          type: 'error',
-          message: `Dia ${format(day, 'dd/MM')}: Efetivo abaixo da regra do departamento (${count}/${minStaffRule.value})`,
-          date: day,
-        })
-      }
-    })
+        // The cycle has an active draft or published schedule (there are
+        // visible shifts somewhere in this sector). When the cycle has NO
+        // content at all, we never raise a coverage alert — there is nothing
+        // to validate. We detect "no content" by checking the full shifts list
+        // (the calendar can be rendered with an empty draft).
+        if (visibleShifts.length === 0) {
+          // No shifts for this sector in the selected cycle: nothing to
+          // validate. Surface an informational note instead of a hard
+          // "below minimum" violation.
+          if (count === 0) {
+            newAlerts.push({
+              type: 'info',
+              message: `Dia ${format(day, 'dd/MM')}: Sem plantonistas (sem rascunho ativo para este ciclo/setor).`,
+              date: day,
+            })
+          }
+          return
+        }
+
+        // Below the hard minimum (hospital_sectors.min_staffing). This is the
+        // single source of truth for the minimum — shift_rules.min_staff is no
+        // longer mixed in here, so UTI ADULTO reports 0/4, not 0/5.
+        if (sector.min_staffing > 0 && count < sector.min_staffing) {
+          newAlerts.push({
+            type: 'error',
+            message: `Dia ${format(day, 'dd/MM')}: Efetivo abaixo do mínimo (${count}/${sector.min_staffing})`,
+            date: day,
+          })
+        } else if (sector.ideal_staffing > 0 && count < sector.ideal_staffing) {
+          newAlerts.push({
+            type: 'warning',
+            message: `Dia ${format(day, 'dd/MM')}: Efetivo abaixo do ideal (${count}/${sector.ideal_staffing})`,
+            date: day,
+          })
+        }
+      })
+    }
 
     // Compute user specific alerts (rest hours, overlaps) for users in this sector
     const usersInSector = Array.from(
@@ -228,7 +253,17 @@ export function ShiftCalendar({
     })
 
     return newAlerts
-  }, [visibleShifts, shifts, days, sectors, selectedSectorId, contracts, shiftRules])
+  }, [
+    visibleShifts,
+    shifts,
+    days,
+    sectors,
+    selectedSectorId,
+    contracts,
+    shiftRules,
+    cycle,
+    cycleInterval,
+  ])
 
   useEffect(() => {
     pb.collection('hospital_sectors').getFullList().then(setSectors).catch(console.error)
@@ -254,8 +289,6 @@ export function ShiftCalendar({
       })
       .sort((a, b) => a.start_time.localeCompare(b.start_time))
   }
-
-  const cycleInterval = { start: cycleStart, end: cycleEnd }
 
   const handleDragStart = (e: React.DragEvent, shift: any) => {
     e.dataTransfer.setData('application/json', JSON.stringify(shift))

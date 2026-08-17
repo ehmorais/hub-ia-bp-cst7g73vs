@@ -76,9 +76,13 @@ routerAdd(
     }
 
     // Infer a structured {rule_name, code, date, staff_id} from a free-text
-    // violation/warning message. Used when persisting validation_issues.
-    // `profiles` is the eligible list (built later) — passed in so name→id
-    // resolution works without relying on a closure over a top-level var.
+    // violation/warning message. Used when persisting validation_issues so the
+    // dashboard can filter/group by rule type. Coverage messages produced by
+    // this hook use the prefixes "Efetivo insuficiente" (hard, below
+    // min_staffing) and "Efetivo abaixo do ideal" (preference, below
+    // ideal_staffing but at/above min_staffing). Without this mapping they all
+    // came back as rule_name:'other', which hid them from the min_staff view
+    // and made them indistinguishable from generic warnings.
     var inferIssue = function (message, profiles) {
       var m = typeof message === 'string' ? message : String(message || '')
       var result = { rule_name: 'other', code: 'OTHER', date: '', staff_id: '' }
@@ -86,6 +90,47 @@ routerAdd(
         var dm = m.match(/(\d{4}-\d{2}-\d{2})/)
         if (dm) result.date = dm[1]
       } catch (_) {}
+
+      var lower = m.toLowerCase()
+      if (
+        lower.indexOf('efetivo insuficiente') !== -1 ||
+        lower.indexOf('abaixo do mínimo') !== -1 ||
+        lower.indexOf('abaixo do minimo') !== -1
+      ) {
+        result.rule_name = 'min_staff'
+        result.code = 'MIN_STAFF'
+      } else if (lower.indexOf('abaixo do ideal') !== -1) {
+        // Below ideal but at/above min_staffing → preference, still min_staff
+        // family so it groups with the coverage rule on the dashboard.
+        result.rule_name = 'min_staff'
+        result.code = 'IDEAL_STAFF'
+      } else if (
+        lower.indexOf('supervisão ausente') !== -1 ||
+        lower.indexOf('supervisao ausente') !== -1
+      ) {
+        result.rule_name = 'professional_mix'
+        result.code = 'SUPERVISION'
+      } else if (lower.indexOf('descanso') !== -1 || lower.indexOf('mínimo') !== -1) {
+        if (lower.indexOf('descanso') !== -1) {
+          result.rule_name = 'min_rest_hours'
+          result.code = 'MIN_REST'
+        }
+      } else if (lower.indexOf('consecutivos') !== -1 || lower.indexOf('consecutivas') !== -1) {
+        result.rule_name = 'max_consecutive'
+        result.code = 'MAX_CONSECUTIVE'
+      } else if (lower.indexOf('limite mensal') !== -1 || lower.indexOf('excede') !== -1) {
+        result.rule_name = 'max_hours'
+        result.code = 'MAX_HOURS'
+      } else if (lower.indexOf('folga') !== -1) {
+        result.rule_name = 'timeoff'
+        result.code = 'TIMEOFF'
+      } else if (
+        lower.indexOf('sobrepostos') !== -1 ||
+        lower.indexOf('conflito de horários') !== -1
+      ) {
+        result.rule_name = 'overlap'
+        result.code = 'OVERLAP'
+      }
       return result
     }
 
