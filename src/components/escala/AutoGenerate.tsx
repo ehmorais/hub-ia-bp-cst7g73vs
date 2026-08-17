@@ -1,4 +1,12 @@
-import React, { useState, useEffect, useCallback, useMemo, Component, ReactNode } from 'react'
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef,
+  Component,
+  ReactNode,
+} from 'react'
 import {
   Card,
   CardContent,
@@ -407,8 +415,15 @@ function AutoGenerateInner({
   const [genSource, setGenSource] = useState<'ai' | 'fallback' | ''>('')
   const [runMetrics, setRunMetrics] = useState<RunMetrics | null>(null)
   const [validationIssues, setValidationIssues] = useState<ValidationIssue[]>([])
+  const calendarRef = useRef<HTMLDivElement>(null)
 
   const { toast } = useToast()
+
+  useEffect(() => {
+    if (isDraftMode && draftShifts.length > 0) {
+      calendarRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [isDraftMode, draftShifts.length])
 
   // Load the full generation run + its validation issues for display. Used
   // both after a fresh generation (run_id from the response) and when opening
@@ -1031,7 +1046,10 @@ function AutoGenerateInner({
       </Card>
 
       {isDraftMode && draftShifts.length > 0 && cycleObj && (
-        <Card className="relative overflow-hidden shadow-md border-emerald-900/10 animate-fade-in-up">
+        <Card
+          ref={calendarRef}
+          className="relative overflow-hidden shadow-md border-emerald-900/10 animate-fade-in-up scroll-mt-4"
+        >
           <div className="absolute top-0 left-0 right-0 h-1 bg-emerald-600 z-10" />
           <CardHeader className="bg-slate-50 border-b pb-4 pt-6">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">

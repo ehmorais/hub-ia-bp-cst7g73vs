@@ -76,13 +76,12 @@ export function ShiftCalendar({
 
   useEffect(() => {
     if (sectors.length === 0) return
-    if (selectedSectorId) return
-    // Default to the sector the visible shifts actually belong to, so the
-    // coverage threshold (hospital_sectors.min_staffing) matches the draft
-    // being shown instead of an unrelated sector that happens to sort first.
+    // A newly generated draft may belong to a different sector than the
+    // previous one. Always follow the sector present in the current records.
     const shiftSector = shifts[0]?.sector || shifts[0]?.expand?.sector?.id || ''
     const match = shiftSector ? sectors.find((s) => s.id === shiftSector) : null
-    setSelectedSectorId(match ? match.id : sectors[0].id)
+    const nextSectorId = match ? match.id : selectedSectorId || sectors[0].id
+    if (nextSectorId !== selectedSectorId) setSelectedSectorId(nextSectorId)
   }, [sectors, selectedSectorId, shifts])
 
   const visibleShifts = useMemo(() => {
@@ -430,7 +429,8 @@ export function ShiftCalendar({
           <div
             className={cn(
               'grid',
-              (view === 'month' || view === 'cycle') && 'grid-cols-7 auto-rows-[240px]',
+              view === 'month' && 'grid-cols-7 auto-rows-[240px]',
+              view === 'cycle' && 'grid-cols-7 auto-rows-[minmax(240px,auto)]',
               view === 'week' && 'grid-cols-7 min-h-full',
               view === 'day' && 'grid-cols-1 min-h-full',
             )}
@@ -445,7 +445,8 @@ export function ShiftCalendar({
                   onDrop={(e) => handleDrop(e, day)}
                   onDragOver={handleDragOver}
                   className={cn(
-                    'border-r border-b p-2 flex flex-col gap-1 overflow-hidden transition-colors',
+                    'border-r border-b p-2 flex flex-col gap-1 transition-colors',
+                    view === 'cycle' ? 'overflow-visible' : 'overflow-hidden',
                     !inCycle ? 'bg-slate-100/50 opacity-50' : 'hover:bg-slate-50/80',
                   )}
                 >
@@ -472,8 +473,12 @@ export function ShiftCalendar({
                   </div>
                   <div
                     className={cn(
-                      'flex-1 overflow-y-auto space-y-1.5 pr-1',
-                      view === 'month' || view === 'cycle' ? 'scrollbar-thin' : '',
+                      'flex-1 space-y-1.5 pr-1',
+                      view === 'cycle'
+                        ? 'overflow-visible'
+                        : view === 'month'
+                          ? 'overflow-y-auto scrollbar-thin'
+                          : 'overflow-y-auto',
                     )}
                   >
                     {dayShifts.map((s) => {
