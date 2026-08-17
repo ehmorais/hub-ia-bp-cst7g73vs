@@ -51,9 +51,10 @@ export function ShiftCalendar({
   shifts: any[]
   cycle: any
   contracts: any[]
-  onShiftUpdate?: () => void
+  onShiftUpdate?: (updatedShift: any) => void
 }) {
   const [view, setView] = useState<ViewMode>('cycle')
+  const [movedShiftIds, setMovedShiftIds] = useState<Set<string>>(() => new Set())
   const cycleStart = cycle ? parseISO(cycle.start_date.split(' ')[0]) : new Date()
   const cycleEnd = cycle ? parseISO(cycle.end_date.split(' ')[0]) : new Date()
   const cycleInterval = { start: cycleStart, end: cycleEnd }
@@ -348,12 +349,22 @@ export function ShiftCalendar({
     }
 
     try {
-      await pb.collection('shifts').update(shift.id, {
+      const savedShift = await pb.collection('shifts').update(shift.id, {
         start_time: updatedShift.start_time,
         end_time: updatedShift.end_time,
       })
+      const synchronizedShift = {
+        ...shift,
+        ...savedShift,
+        expand: shift.expand,
+      }
+      setMovedShiftIds((current) => {
+        const next = new Set(current)
+        next.add(shift.id)
+        return next
+      })
+      onShiftUpdate?.(synchronizedShift)
       toast({ title: 'Plantão atualizado', description: 'O plantão foi movido com sucesso.' })
-      onShiftUpdate?.()
     } catch (err) {
       toast({ title: 'Erro', description: 'Falha ao mover o plantão', variant: 'destructive' })
     }
@@ -491,7 +502,12 @@ export function ShiftCalendar({
                           key={s.id}
                           draggable
                           onDragStart={(e) => handleDragStart(e, s)}
-                          className="text-xs p-2 rounded bg-white border border-slate-200 shadow-sm flex flex-col gap-1 hover:border-primary/50 transition-colors cursor-move active:cursor-grabbing"
+                          className={cn(
+                            'text-xs p-2 rounded bg-white border shadow-sm flex flex-col gap-1 transition-colors cursor-move active:cursor-grabbing',
+                            movedShiftIds.has(s.id)
+                              ? 'border-orange-500 hover:border-orange-600'
+                              : 'border-slate-200 hover:border-primary/50',
+                          )}
                         >
                           <div
                             className="font-semibold text-slate-800 truncate"

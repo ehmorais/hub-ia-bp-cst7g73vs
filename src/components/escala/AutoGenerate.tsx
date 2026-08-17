@@ -646,6 +646,7 @@ function AutoGenerateInner({
           console.error('Falha ao carregar nomes do rascunho:', hydrateError)
         }
         setDraftShifts(hydratedDraft)
+        setRawDraft(hydratedDraft)
         setIsDraftMode(true)
         if (isRefinement) {
           setDraftIteration((p) => p + 1)
@@ -725,6 +726,13 @@ function AutoGenerateInner({
       }
     }
   }
+
+  const handleDraftShiftUpdate = useCallback((updatedShift: any) => {
+    const replaceShift = (items: any[]) =>
+      items.map((item) => (item.id === updatedShift.id ? { ...item, ...updatedShift } : item))
+    setDraftShifts(replaceShift)
+    setRawDraft(replaceShift)
+  }, [])
 
   // --- Publish the saved draft (commit) ---
   const handleSaveScale = async () => {
@@ -1079,7 +1087,12 @@ function AutoGenerateInner({
             </div>
           </CardHeader>
           <CardContent className="p-0">
-            <ShiftCalendar shifts={draftShifts} cycle={cycleObj} contracts={contracts} />
+            <ShiftCalendar
+              shifts={draftShifts}
+              cycle={cycleObj}
+              contracts={contracts}
+              onShiftUpdate={handleDraftShiftUpdate}
+            />
 
             <div className="p-5 bg-emerald-50/50 border-t flex flex-col gap-3">
               {draftAlerts.length > 0 && (
@@ -1184,6 +1197,7 @@ function AutoGenerateInner({
                   setDraftShifts(existing)
                   setRawDraft(
                     existing.map((s: any) => ({
+                      id: s.id,
                       staff_profile: s.staff_profile,
                       name: s.expand?.staff_profile?.name,
                       sector: s.sector,
