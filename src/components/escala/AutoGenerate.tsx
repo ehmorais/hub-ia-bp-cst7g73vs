@@ -9,7 +9,15 @@ import {
 } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/use-toast'
-import { getShiftCycles, generateDraftShifts, commitShiftSchedule } from '@/services/escala'
+import {
+  getShiftCycles,
+  generateDraftShifts,
+  commitShiftSchedule,
+  getGenerationRun,
+  getDraft,
+  getDraftIssues,
+  getRunIssues,
+} from '@/services/escala'
 import { useRealtime } from '@/hooks/use-realtime'
 import {
   Wand2,
@@ -24,7 +32,13 @@ import {
   MessageSquare,
   RefreshCw,
   FileText,
+  ChevronDown,
+  ChevronRight,
+  Activity,
+  ListChecks,
+  Cpu,
 } from 'lucide-react'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import {
@@ -103,6 +117,29 @@ type Diagnostics = {
   cycle_end?: string
 }
 
+// Generation-run metrics from schedule_generation_runs.metrics (json).
+type RunMetrics = {
+  eligible_count?: number
+  orphan_contracts_ignored?: number
+  hard_rules_count?: number
+  preferred_rules_count?: number
+  contradictions_count?: number
+  tokens_used?: number
+  shifts_proposed?: number
+  shifts_accepted?: number
+  shifts_rejected?: number
+}
+
+type ValidationIssue = {
+  id: string
+  rule_name?: string
+  severity?: 'hard' | 'preference' | 'info'
+  code?: string
+  message?: string
+  issue_date?: string
+  resolved?: boolean
+}
+
 function DiagnosticsPanel({ diagnostics }: { diagnostics: Diagnostics }) {
   if (!diagnostics) return null
   return (
@@ -176,6 +213,156 @@ function DiagnosticsPanel({ diagnostics }: { diagnostics: Diagnostics }) {
   )
 }
 
+// Badge describing the generation origin (AI / Fallback / Híbrida).
+function SourceBadge({ source }: { source?: 'ai' | 'fallback' | string }) {
+  if (!source) return null
+  const isFallback = source === 'fallback'
+  return (
+    <Badge
+      variant="outline"
+      className={cn(
+        'ml-2 gap-1',
+        isFallback
+          ? 'bg-amber-100 text-amber-800 border-amber-300'
+          : 'bg-indigo-100 text-indigo-800 border-indigo-300',
+      )}
+    >
+      <Cpu className="h-3 w-3" />
+      {isFallback ? 'Fallback' : 'IA'}
+    </Badge>
+  )
+}
+
+// Collapsible metrics panel showing the run metrics (eligible count, tokens,
+// shifts proposed/accepted/rejected). Pulled from schedule_generation_runs.
+function GenerationMetricsPanel({ metrics }: { metrics: RunMetrics | null }) {
+  const [open, setOpen] = useState(false)
+  if (!metrics) return null
+  const cells = [
+    { label: 'Elegíveis', value: metrics.eligible_count ?? '-', tone: 'emerald' },
+    { label: 'Tokens usados', value: metrics.tokens_used ?? 0, tone: 'blue' },
+    { label: 'Plantões propostos', value: metrics.shifts_proposed ?? 0, tone: 'slate' },
+    { label: 'Aceitos', value: metrics.shifts_accepted ?? 0, tone: 'emerald' },
+    { label: 'Rejeitados', value: metrics.shifts_rejected ?? 0, tone: 'red' },
+    { label: 'Regras duras', value: metrics.hard_rules_count ?? 0, tone: 'blue' },
+  ]
+  return (
+    <Collapsible open={open} onOpenChange={setOpen} className="bg-white rounded-lg border">
+      <CollapsibleTrigger asChild>
+        <button
+          type="button"
+          className="flex items-center gap-2 w-full p-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 rounded-lg"
+        >
+          {open ? (
+            <ChevronDown className="h-4 w-4 text-slate-500" />
+          ) : (
+            <ChevronRight className="h-4 w-4 text-slate-500" />
+          )}
+          <Activity className="h-4 w-4 text-emerald-600" />
+          Métricas da Geração
+          <span className="ml-auto text-xs font-normal text-slate-500">
+            {metrics.shifts_accepted ?? 0}/{metrics.shifts_proposed ?? 0} plantões aceitos
+          </span>
+        </button>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3 pt-0 text-xs">
+          {cells.map((c) => (
+            <div
+              key={c.label}
+              className={cn(
+                'p-2 rounded border',
+                c.tone === 'emerald' && 'bg-emerald-50 border-emerald-100',
+                c.tone === 'blue' && 'bg-blue-50 border-blue-100',
+                c.tone === 'red' && 'bg-red-50 border-red-100',
+                c.tone === 'slate' && 'bg-slate-50 border-slate-100',
+              )}
+            >
+              <p
+                className={cn(
+                  'font-medium',
+                  c.tone === 'emerald' && 'text-emerald-700',
+                  c.tone === 'blue' && 'text-blue-700',
+                  c.tone === 'red' && 'text-red-700',
+                  c.tone === 'slate' && 'text-slate-700',
+                )}
+              >
+                {c.label}
+              </p>
+              <p
+                className={cn(
+                  'text-lg font-bold',
+                  c.tone === 'emerald' && 'text-emerald-800',
+                  c.tone === 'blue' && 'text-blue-800',
+                  c.tone === 'red' && 'text-red-800',
+                  c.tone === 'slate' && 'text-slate-800',
+                )}
+              >
+                {c.value}
+              </p>
+            </div>
+          ))}
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
+  )
+}
+
+// Collapsible issues panel listing the validation_issues persisted for the
+// run/draft (hard violations + preference warnings).
+function GenerationIssuesPanel({ issues }: { issues: ValidationIssue[] }) {
+  const [open, setOpen] = useState(false)
+  if (issues.length === 0) return null
+  const hard = issues.filter((i) => i.severity === 'hard')
+  const pref = issues.filter((i) => i.severity === 'preference')
+  return (
+    <Collapsible open={open} onOpenChange={setOpen} className="bg-white rounded-lg border">
+      <CollapsibleTrigger asChild>
+        <button
+          type="button"
+          className="flex items-center gap-2 w-full p-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 rounded-lg"
+        >
+          {open ? (
+            <ChevronDown className="h-4 w-4 text-slate-500" />
+          ) : (
+            <ChevronRight className="h-4 w-4 text-slate-500" />
+          )}
+          <ListChecks className="h-4 w-4 text-amber-600" />
+          Issues de Validação
+          <span className="ml-auto text-xs font-normal text-slate-500">
+            {hard.length} dura(s) · {pref.length} preferencial(is)
+          </span>
+        </button>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <ul className="p-3 pt-0 space-y-1 max-h-60 overflow-y-auto text-xs">
+          {issues.map((iss) => (
+            <li
+              key={iss.id}
+              className={cn(
+                'flex items-start gap-2 p-2 rounded border',
+                iss.severity === 'hard'
+                  ? 'bg-red-50 border-red-100 text-red-700'
+                  : 'bg-amber-50 border-amber-100 text-amber-700',
+              )}
+            >
+              <span className="font-mono text-[10px] px-1 py-0.5 rounded bg-white/70 shrink-0">
+                {iss.code || iss.rule_name || '—'}
+              </span>
+              <span className="break-words">{iss.message}</span>
+              {iss.issue_date && (
+                <span className="ml-auto text-[10px] text-slate-400 shrink-0">
+                  {iss.issue_date}
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      </CollapsibleContent>
+    </Collapsible>
+  )
+}
+
 function AutoGenerateInner({
   departmentId,
   projectId,
@@ -204,6 +391,8 @@ function AutoGenerateInner({
     cycle_id: string
     sector_id: string
     existing_count: number
+    existing_run_id?: string
+    existing_draft_id?: string
   } | null>(null)
 
   const [draftShifts, setDraftShifts] = useState<any[]>([])
@@ -212,7 +401,46 @@ function AutoGenerateInner({
   const [isDraftMode, setIsDraftMode] = useState(false)
   const [draftIteration, setDraftIteration] = useState(1)
 
+  // Generation run/draft tracking (schedule_generation_runs + schedule_drafts).
+  const [runId, setRunId] = useState<string>('')
+  const [draftId, setDraftId] = useState<string>('')
+  const [genSource, setGenSource] = useState<'ai' | 'fallback' | ''>('')
+  const [runMetrics, setRunMetrics] = useState<RunMetrics | null>(null)
+  const [validationIssues, setValidationIssues] = useState<ValidationIssue[]>([])
+
   const { toast } = useToast()
+
+  // Load the full generation run + its validation issues for display. Used
+  // both after a fresh generation (run_id from the response) and when opening
+  // an existing draft (existing_run_id from the idempotency payload).
+  const loadRunTracking = useCallback(async (rId: string, dId?: string) => {
+    if (!rId) return
+    try {
+      const run: any = await getGenerationRun(rId)
+      setRunMetrics((run?.metrics as RunMetrics) || null)
+      setGenSource(
+        run?.generation_source === 'deterministic'
+          ? 'fallback'
+          : (run?.generation_source as 'ai' | 'fallback') || '',
+      )
+    } catch (err) {
+      console.error('Failed to load generation run:', err)
+    }
+    // Issues may be attached to the draft (success path) or to the run
+    // alone (validation_failed path with no draft). Prefer the draft's.
+    try {
+      const issues = dId ? await getDraftIssues(dId) : await getRunIssues(rId)
+      setValidationIssues(issues as ValidationIssue[])
+    } catch (err) {
+      // Try the run-only issues as a fallback.
+      try {
+        const issues = await getRunIssues(rId)
+        setValidationIssues(issues as ValidationIssue[])
+      } catch (_) {
+        setValidationIssues([])
+      }
+    }
+  }, [])
 
   // --- Load cycles (always terminates in success/empty/error) ---
   const loadCycles = useCallback(async () => {
@@ -334,6 +562,11 @@ function AutoGenerateInner({
     setGenDiagnostics(null)
     setGenSuggestion('')
     setDraftExists(null)
+    setRunId('')
+    setDraftId('')
+    setGenSource('')
+    setRunMetrics(null)
+    setValidationIssues([])
 
     toast({
       title: isRefinement ? 'Refinando Rascunho' : 'Iniciando Geração',
@@ -360,11 +593,20 @@ function AutoGenerateInner({
       // Idempotency: an existing draft was found and replace was not requested.
       if (res && res.draft_exists) {
         setGenStatus('idle')
+        const existingRunId = res.existing_run_id || res.run_id || ''
+        const existingDraftId = res.existing_draft_id || ''
         setDraftExists({
-          cycle_id: res.cycle_id,
-          sector_id: res.sector_id,
-          existing_count: res.existing_count,
+          cycle_id: res.cycle_id || '',
+          sector_id: res.sector_id || '',
+          existing_count: res.existing_count || 0,
+          existing_run_id: existingRunId,
+          existing_draft_id: existingDraftId,
         })
+        // Pre-load the associated run/draft tracking so the idempotency
+        // dialog can show metrics + issues for the existing draft.
+        if (existingRunId) {
+          loadRunTracking(existingRunId, existingDraftId)
+        }
         toast({
           title: 'Rascunho existente',
           description: `Já existem ${res.existing_count} plantões para este ciclo/setor.`,
@@ -383,6 +625,13 @@ function AutoGenerateInner({
         setGenStatus('success')
         setGenDiagnostics(res.diagnostics || null)
         const isFallback = res.source === 'fallback'
+        setGenSource(isFallback ? 'fallback' : 'ai')
+        if (res.run_id) setRunId(res.run_id)
+        if (res.draft_id) setDraftId(res.draft_id)
+        // Load full metrics + issues from the persisted run/draft.
+        if (res.run_id) {
+          loadRunTracking(res.run_id, res.draft_id)
+        }
         toast({
           title: isFallback ? 'Rascunho gerado (fallback)' : 'Rascunho Gerado',
           description: isFallback
@@ -462,6 +711,10 @@ function AutoGenerateInner({
           cycle: ds.cycle || selectedCycle,
           start_time: ds.start_time,
           end_time: ds.end_time,
+          // Pass the draft_id so the commit endpoint can associate the
+          // published shifts with their generation draft (if it supports it).
+          draft: draftId || ds.draft || undefined,
+          generation_run: runId || ds.generation_run || undefined,
         })),
         false, // never auto-publish
       )
@@ -685,10 +938,21 @@ function AutoGenerateInner({
               {genStatus === 'error' && genError && (
                 <span className="text-xs text-red-600 truncate">— {genError}</span>
               )}
+              {/* Origin badge (AI / Fallback) on success. */}
+              {genStatus === 'success' && genSource && <SourceBadge source={genSource} />}
             </div>
           )}
 
           {genDiagnostics && <DiagnosticsPanel diagnostics={genDiagnostics} />}
+
+          {/* Run metrics + validation issues (collapsible). Shown whenever a
+              run was created (fresh generation or an existing-draft open). */}
+          {runId && (
+            <div className="space-y-2">
+              <GenerationMetricsPanel metrics={runMetrics} />
+              <GenerationIssuesPanel issues={validationIssues} />
+            </div>
+          )}
 
           {genSuggestion && (
             <div className="flex items-start gap-2 p-3 rounded-md border bg-indigo-50 border-indigo-200 text-sm text-indigo-800">
@@ -894,11 +1158,22 @@ function AutoGenerateInner({
                       cycle: s.cycle,
                       start_time: s.start_time,
                       end_time: s.end_time,
+                      draft: s.draft,
+                      generation_run: s.generation_run,
                     })),
                   )
                   setIsDraftMode(true)
                   setDraftIteration(1)
                   setGenStatus('idle')
+                  // Carry over the run/draft tracking from the existing shifts
+                  // so metrics + issues are visible in draft mode too.
+                  const firstDraft = existing[0]?.draft || draftExists.existing_draft_id || ''
+                  const firstRun = existing[0]?.generation_run || draftExists.existing_run_id || ''
+                  setDraftId(firstDraft)
+                  setRunId(firstRun)
+                  if (firstRun) {
+                    loadRunTracking(firstRun, firstDraft)
+                  }
                   setDraftExists(null)
                   toast({
                     title: 'Rascunho carregado',

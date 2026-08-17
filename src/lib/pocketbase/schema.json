@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-17T15:18:35.224Z",
+  "generatedAt": "2026-08-17T15:40:20.326Z",
   "collections": [
     {
       "name": "users",
@@ -771,11 +771,27 @@
           "required": false,
           "system": false,
           "collectionRef": "staff_profiles"
+        },
+        {
+          "name": "draft",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "schedule_drafts"
+        },
+        {
+          "name": "generation_run",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "schedule_generation_runs"
         }
       ],
       "indexes": [
         "CREATE INDEX `idx_shifts_cycle_sector_start` ON `shifts` (cycle, sector, start_time)",
-        "CREATE UNIQUE INDEX `idx_shifts_profile_cycle_start_unique` ON `shifts` (staff_profile, cycle, start_time) WHERE staff_profile != ''"
+        "CREATE UNIQUE INDEX `idx_shifts_profile_cycle_start_unique` ON `shifts` (staff_profile, cycle, start_time) WHERE staff_profile != ''",
+        "CREATE INDEX `idx_shifts_draft` ON `shifts` (draft) WHERE draft != ''",
+        "CREATE INDEX `idx_shifts_run` ON `shifts` (generation_run) WHERE generation_run != ''"
       ]
     },
     {
@@ -916,6 +932,369 @@
       "indexes": [
         "CREATE UNIQUE INDEX `idx_staff_profiles_professional_id_unique` ON `staff_profiles` (professional_id) WHERE professional_id != ''",
         "CREATE INDEX `idx_staff_profiles_sector_active` ON `staff_profiles` (default_sector, active)"
+      ]
+    },
+    {
+      "name": "schedule_generation_runs",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.role = 'Admin'",
+        "update": "@request.auth.role = 'Admin'",
+        "delete": "@request.auth.role = 'Admin'"
+      },
+      "fields": [
+        {
+          "name": "cycle",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "shift_cycles"
+        },
+        {
+          "name": "sector",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "hospital_sectors"
+        },
+        {
+          "name": "requested_by",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "status",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": [
+            "queued",
+            "validating",
+            "generating",
+            "fallback",
+            "saving",
+            "completed",
+            "failed",
+            "cancelled"
+          ]
+        },
+        {
+          "name": "stage",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "progress",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "model",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "generation_source",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["ai", "deterministic", "hybrid"]
+        },
+        {
+          "name": "priority",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "strictness",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "idempotency_key",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "started_at",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "finished_at",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "duration_ms",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "error_code",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "error_detail",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "metrics",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "ai_diagnostics",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_run_idempotency ON schedule_generation_runs (idempotency_key)"
+      ]
+    },
+    {
+      "name": "schedule_drafts",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.role = 'Admin'",
+        "update": "@request.auth.role = 'Admin'",
+        "delete": "@request.auth.role = 'Admin'"
+      },
+      "fields": [
+        {
+          "name": "cycle",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "shift_cycles"
+        },
+        {
+          "name": "sector",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "hospital_sectors"
+        },
+        {
+          "name": "generation_run",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "schedule_generation_runs"
+        },
+        {
+          "name": "status",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["draft", "validated", "published", "rejected", "superseded"]
+        },
+        {
+          "name": "version",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "generated_by",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "generation_source",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["ai", "deterministic", "hybrid"]
+        },
+        {
+          "name": "validation_summary",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created_by",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "validated_by",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "published_by",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "validated_at",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "published_at",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": ["CREATE INDEX idx_draft_cycle_sector_active ON schedule_drafts (cycle, sector)"]
+    },
+    {
+      "name": "schedule_validation_issues",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.role = 'Admin'",
+        "update": "@request.auth.role = 'Admin'",
+        "delete": "@request.auth.role = 'Admin'"
+      },
+      "fields": [
+        {
+          "name": "draft",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "schedule_drafts"
+        },
+        {
+          "name": "run",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "schedule_generation_runs"
+        },
+        {
+          "name": "rule_name",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "severity",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["hard", "preference", "info"]
+        },
+        {
+          "name": "code",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "message",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "issue_date",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "staff_profile",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "staff_profiles"
+        },
+        {
+          "name": "resolved",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "resolution",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_issues_draft ON schedule_validation_issues (draft)",
+        "CREATE INDEX idx_issues_severity ON schedule_validation_issues (severity)",
+        "CREATE INDEX idx_issues_run ON schedule_validation_issues (run)"
       ]
     }
   ]

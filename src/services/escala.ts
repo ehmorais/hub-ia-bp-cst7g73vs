@@ -102,6 +102,31 @@ export const generateShifts = (
     headers: { 'Content-Type': 'application/json' },
   })
 
+// Structured response returned by the AI draft generation endpoint. Includes
+// the run_id + draft_id used to track the generation run and the persisted
+// schedule_draft (for metrics/issues inspection in the UI).
+export type GenerateDraftResponse = {
+  success?: boolean
+  draft_exists?: boolean
+  existing_count?: number
+  existing_run_id?: string
+  existing_draft_id?: string
+  run_id?: string
+  draft_id?: string
+  source?: 'ai' | 'fallback'
+  draft?: any[]
+  warnings?: string[]
+  diagnostics?: any
+  cycle_id?: string
+  sector_id?: string
+  error?: string
+  violations?: string[]
+  suggestion?: string
+  stage?: string
+  detail?: string
+  message?: string
+}
+
 export const generateDraftShifts = (
   cycleId: string,
   sectorId: string,
@@ -109,7 +134,7 @@ export const generateDraftShifts = (
   additionalPrompt?: string,
   currentDraft?: any[],
   replace = false,
-) => {
+): Promise<GenerateDraftResponse> => {
   // Extract priority/strictness onto the top level of the payload — the hook
   // reads them there. The nested context.ai_settings shape is also still
   // accepted by the hook as a fallback, but sending them at the top is the
@@ -129,6 +154,29 @@ export const generateDraftShifts = (
     headers: { 'Content-Type': 'application/json' },
   })
 }
+
+// --- Schedule generation tracking accessors ---
+
+// Fetch a generation run by id (includes status, stage, progress, metrics,
+// ai_diagnostics — the full rastreability record).
+export const getGenerationRun = (id: string) => pb.collection('schedule_generation_runs').getOne(id)
+
+// Fetch a schedule draft by id, expanding its cycle/sector/run relations.
+export const getDraft = (id: string) =>
+  pb.collection('schedule_drafts').getOne(id, { expand: 'cycle,sector,generation_run' })
+
+// Fetch all validation issues attached to a draft (violations + warnings).
+export const getDraftIssues = (draftId: string) =>
+  pb
+    .collection('schedule_validation_issues')
+    .getFullList({ filter: `draft="${draftId}"`, sort: '-severity' })
+
+// Fetch all validation issues attached to a run (used when a run failed
+// validation and no draft was persisted).
+export const getRunIssues = (runId: string) =>
+  pb
+    .collection('schedule_validation_issues')
+    .getFullList({ filter: `run="${runId}"`, sort: '-severity' })
 
 // Draft shifts persisted for a given cycle + sector (read-only fetch).
 export const getDraftShifts = (cycleId: string, sectorId: string) =>

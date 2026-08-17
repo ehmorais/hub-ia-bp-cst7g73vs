@@ -62,12 +62,115 @@ routerAdd(
       } catch (_) {}
     }
 
+    // --- Generation run tracking (schedule_generation_runs) ---
+    // Sanitization helper: strips anything that looks like a name/PII from
+    // a free-text detail before persisting to error_detail (cap 500 chars).
+    var sanitizeDetail = function (text) {
+      var s = typeof text === 'string' ? text : String(text || '')
+      try {
+        // Drop anything inside quotes ("name" or 'name') and collapse runs.
+        s = s.replace(/"[^"]*"/g, '"…"').replace(/'[^']*'/g, "'…'")
+      } catch (_) {}
+      if (s.length > 500) s = s.substring(0, 500)
+      return s
+    }
+
+    // Infer a structured {rule_name, code, date, staff_id} from a free-text
+    // violation/warning message. Used when persisting validation_issues.
+    // `profiles` is the eligible list (built later) — passed in so name→id
+    // resolution works without relying on a closure over a top-level var.
+    var inferIssue = function (message, profiles) {
+      var m = typeof message === 'string' ? message : String(message || '')
+      var result = { rule_name: 'other', code: 'OTHER', date: '', staff_id: '' }
+      try {
+        var dm = m.match(/(\d{4}-\d{2}-\d{2})/)
+        if (dm) result.date = dm[1]
+      } catch (_) {}
+      return result
+    }
+
+    // Update an existing run record to a new status/stage. Safe to call
+    // before runId is set (no-op). Wrapped so a logging failure never
+    // shadows the real error path.
+    var runId = ''
+    var updateRun = function (patch) {
+      if (!runId) return
+      try {
+        var rec = $app.findRecordById('schedule_generation_runs', runId)
+        if (patch.status) rec.set('status', patch.status)
+        if (typeof patch.stage === 'string') rec.set('stage', patch.stage)
+        if (typeof patch.progress === 'number') rec.set('progress', patch.progress)
+        if (typeof patch.generation_source === 'string')
+          rec.set('generation_source', patch.generation_source)
+        if (typeof patch.error_code === 'string') rec.set('error_code', patch.error_code)
+        if (typeof patch.error_detail === 'string')
+          rec.set('error_detail', sanitizeDetail(patch.error_detail))
+        if (typeof patch.finished_at !== 'undefined') rec.set('finished_at', patch.finished_at)
+        if (typeof patch.duration_ms !== 'undefined') rec.set('duration_ms', patch.duration_ms)
+        if (typeof patch.metrics !== 'undefined') rec.set('metrics', patch.metrics)
+        if (typeof patch.ai_diagnostics !== 'undefined')
+          rec.set('ai_diagnostics', patch.ai_diagnostics)
+        $app.saveNoValidate(rec)
+      } catch (_) {}
+    }
+
+    // Create the run now (after cycleId/sectorId validated) so every later
+    // step is traceable. Idempotency: if a non-terminal run already exists
+    // for this cycle+sector pair, reject with 409 so the UI can surface it.
+    var idempotencyKey = cycleId + '|' + sectorId
+    try {
+      var inFlightRuns = $app.findRecordsByFilter(
+        'schedule_generation_runs',
+        'idempotency_key={:k}',
+        '-created',
+        100,
+        0,
+        { k: idempotencyKey },
+      )
+      for (var ri = 0; ri < inFlightRuns.length; ri++) {
+        var st = inFlightRuns[ri].getString('status')
+        if (st !== 'failed' && st !== 'cancelled' && st !== 'completed') {
+          var existingRunId = inFlightRuns[ri].id
+          return e.json(409, {
+            draft_exists: true,
+            existing_run_id: existingRunId,
+            run_id: existingRunId,
+            message: 'Já existe uma geração em andamento para este ciclo/setor.',
+          })
+        }
+      }
+    } catch (_) {}
+
+    try {
+      var runsCol = $app.findCollectionByNameOrId('schedule_generation_runs')
+      var runRec = new Record(runsCol)
+      runRec.set('cycle', cycleId)
+      runRec.set('sector', sectorId)
+      runRec.set('requested_by', e.auth ? e.auth.id : '')
+      runRec.set('status', 'validating')
+      runRec.set('stage', 'Iniciando validação de pré-requisitos')
+      runRec.set('progress', 0)
+      runRec.set('model', 'fast')
+      runRec.set('generation_source', 'ai')
+      runRec.set('priority', priority)
+      runRec.set('strictness', strictness)
+      runRec.set('idempotency_key', idempotencyKey)
+      runRec.set('started_at', new Date().toISOString())
+      $app.saveNoValidate(runRec)
+      runId = runRec.id
+    } catch (runErr) {
+      // If we cannot create the run, we still proceed with the legacy
+      // behavior (no tracking) rather than blocking generation entirely.
+      console.log('[escala/draft] failed to create generation_run: ' + (runErr.message || runErr))
+    }
+
     logAudit('AI_SHIFT_DRAFT_GENERATION', {
       status: 'started',
       cycle_id: cycleId,
       sector_id: sectorId,
       is_refinement: !!additionalPrompt,
       replace: replace,
+      run_id: runId || undefined,
     })
 
     // --- Load cycle + sector (authoritative) ---
@@ -77,15 +180,36 @@ routerAdd(
       cycle = $app.findRecordById('shift_cycles', cycleId)
       sector = $app.findRecordById('hospital_sectors', sectorId)
     } catch (_) {
+      updateRun({
+        status: 'failed',
+        stage: 'invalid_cycle_or_sector',
+        error_code: 'INVALID_CYCLE_OR_SECTOR',
+        error_detail: 'Ciclo ou setor inválido.',
+        finished_at: new Date().toISOString(),
+      })
       return e.badRequestError('Ciclo ou setor inválido.')
     }
 
     var cycleStart = (cycle.getString('start_date') || '').split(' ')[0]
     var cycleEnd = (cycle.getString('end_date') || '').split(' ')[0]
     if (!cycleStart || !cycleEnd || cycleStart > cycleEnd) {
+      updateRun({
+        status: 'failed',
+        stage: 'invalid_cycle_dates',
+        error_code: 'INVALID_CYCLE_DATES',
+        error_detail: 'O ciclo selecionado possui datas inválidas.',
+        finished_at: new Date().toISOString(),
+      })
       return e.badRequestError('O ciclo selecionado possui datas inválidas.')
     }
     if (cycle.getString('status') === 'closed') {
+      updateRun({
+        status: 'failed',
+        stage: 'cycle_closed',
+        error_code: 'CYCLE_CLOSED',
+        error_detail: 'Não é permitido gerar escala para um ciclo encerrado.',
+        finished_at: new Date().toISOString(),
+      })
       return e.badRequestError('Não é permitido gerar escala para um ciclo encerrado.')
     }
 
@@ -103,13 +227,34 @@ routerAdd(
     } catch (_) {}
 
     if (existingShifts.length > 0 && !replace && !additionalPrompt) {
+      // Cancel this run — no work to do, an existing draft is present.
+      updateRun({
+        status: 'cancelled',
+        stage: 'existing_draft',
+        error_code: 'EXISTING_DRAFT',
+        error_detail: 'Já existe um rascunho para este ciclo/setor.',
+        progress: 0,
+        finished_at: new Date().toISOString(),
+      })
+      // Try to surface the run/draft the existing shifts belong to.
+      var existingRunId2 = ''
+      var existingDraftId = ''
+      try {
+        existingRunId2 = existingShifts[0].getString('generation_run') || ''
+        existingDraftId = existingShifts[0].getString('draft') || ''
+      } catch (_) {}
       return e.json(200, {
         draft_exists: true,
         existing_count: existingShifts.length,
         cycle_id: cycleId,
         sector_id: sectorId,
+        run_id: runId || existingRunId2 || undefined,
+        existing_run_id: existingRunId2 || undefined,
+        existing_draft_id: existingDraftId || undefined,
       })
     }
+
+    updateRun({ stage: 'Verificando elegibilidade dos colaboradores...' })
 
     // --- Eligibility: active staff_profiles in this sector ---
     var profiles = $app.findRecordsByFilter(
@@ -225,6 +370,8 @@ routerAdd(
         },
       })
     }
+
+    updateRun({ stage: 'Classificando regras (duras vs preferenciais)...' })
 
     // --- Rules: load + classify (hard vs preferred) + contradictions ---
     var departmentId = sector.getString('department')
@@ -437,6 +584,8 @@ routerAdd(
       'Onde user_id é um dos IDs elegíveis e date é um dia dentro do ciclo.',
     ].join('\n')
 
+    updateRun({ progress: 20 })
+
     // --- Call the AI ---
     // NOTE on model choice + timeout:
     //  - We use the `fast` model alias instead of `reasoning`. The `reasoning`
@@ -451,11 +600,23 @@ routerAdd(
     //    therefore rely on the faster model to stay well within it. If the
     //    gateway still times out OR returns an unparseable reply, we fall
     //    through to the deterministic fallback below (no second AI call).
+    updateRun({ status: 'generating', stage: 'Consultando IA (modelo fast)...', progress: 40 })
+
     var aiContent = ''
     var tokenUsage = 0
     var aiCallFailed = false
     var aiCallError = ''
     var aiTimeout = false
+    // AI diagnostics (sanitized — structural only, never the prompt or PII).
+    var aiDiagnostics = {
+      response_type: 'none',
+      response_keys: [],
+      content_length: 0,
+      content_preview: '',
+      extraction_method: 'none',
+      parse_error_stage: 'none',
+    }
+    var extractionMethod = 'none'
     try {
       var response = $ai.chat({
         model: 'fast',
@@ -471,13 +632,14 @@ routerAdd(
 
       // --- Instrumentation (sanitized: structure + keys only, never PII) ---
       try {
-        var respType = typeof response
-        var respKeys = response && typeof response === 'object' ? Object.keys(response) : []
+        aiDiagnostics.response_type = typeof response
+        aiDiagnostics.response_keys =
+          response && typeof response === 'object' ? Object.keys(response) : []
         console.log(
           '[escala/draft] $ai.chat response typeof=' +
-            respType +
+            aiDiagnostics.response_type +
             ' keys=[' +
-            respKeys.join(',') +
+            aiDiagnostics.response_keys.join(',') +
             ']',
         )
       } catch (_) {}
@@ -493,22 +655,38 @@ routerAdd(
       var extracted = ''
       if (response && typeof response === 'object') {
         try {
-          extracted =
-            (response.choices &&
-              response.choices[0] &&
-              response.choices[0].message &&
-              response.choices[0].message.content) ||
-            response.content ||
-            (response.message && response.message.content) ||
-            response.text ||
-            ''
+          if (
+            response.choices &&
+            response.choices[0] &&
+            response.choices[0].message &&
+            response.choices[0].message.content
+          ) {
+            extracted = response.choices[0].message.content
+            extractionMethod = 'choices[0].message.content'
+          } else if (response.content) {
+            extracted = response.content
+            extractionMethod = 'response.content'
+          } else if (response.message && response.message.content) {
+            extracted = response.message.content
+            extractionMethod = 'response.message.content'
+          } else if (response.text) {
+            extracted = response.text
+            extractionMethod = 'response.text'
+          }
         } catch (_) {
           extracted = ''
         }
       } else if (typeof response === 'string') {
         extracted = response
+        extractionMethod = 'string'
       }
       aiContent = (extracted || '').trim()
+      aiDiagnostics.content_length = aiContent.length
+      // Sanitized preview — the prompt only asks for {user_id, date} JSON
+      // (IDs, not personal data), so a short structural preview is safe.
+      aiDiagnostics.content_preview = aiContent.substring(0, 200)
+      aiDiagnostics.extraction_method = extractionMethod
+      updateRun({ ai_diagnostics: aiDiagnostics })
 
       // Sanitized preview of the actual content. The prompt only ever asked
       // for {user_id, date} JSON — these are IDs, not personal data — so a
@@ -533,6 +711,9 @@ routerAdd(
         error: 'AI call failed: ' + aiCallError,
         stage: aiTimeout ? 'ai_timeout' : 'ai_call',
       })
+      // Record the failure stage on the run diagnostics (no PII).
+      aiDiagnostics.parse_error_stage = aiTimeout ? 'ai_timeout' : 'ai_call_failed'
+      updateRun({ ai_diagnostics: aiDiagnostics })
       // Do NOT return yet — fall through to the deterministic fallback so the
       // user still gets a usable draft. The fallback warning will surface.
     }
@@ -553,8 +734,12 @@ routerAdd(
       // 2. Try parsing the whole thing.
       try {
         draft = JSON.parse(cleanContent)
+        if (parseError === '') {
+          // success on direct parse
+        }
       } catch (e1) {
         parseError = e1.message || String(e1)
+        aiDiagnostics.parse_error_stage = 'direct_parse'
         // 3. Trim to the first '[' ... last ']' span (drop prose around it).
         var firstBracket = cleanContent.indexOf('[')
         var lastBracket = cleanContent.lastIndexOf(']')
@@ -563,8 +748,10 @@ routerAdd(
           try {
             draft = JSON.parse(sliced)
             parseError = ''
+            aiDiagnostics.parse_error_stage = 'none'
           } catch (e2) {
             parseError = e2.message || String(e2)
+            aiDiagnostics.parse_error_stage = 'bracket_slice'
           }
         }
         // 4. Regex match a JSON array anywhere in the text.
@@ -574,8 +761,10 @@ routerAdd(
             try {
               draft = JSON.parse(match[0])
               parseError = ''
+              aiDiagnostics.parse_error_stage = 'none'
             } catch (e3) {
               parseError = e3.message || String(e3)
+              aiDiagnostics.parse_error_stage = 'regex_match'
             }
           }
         }
@@ -593,10 +782,13 @@ routerAdd(
             if (assembled.length) {
               draft = assembled
               parseError = ''
+              aiDiagnostics.parse_error_stage = 'none'
             }
           }
         }
+        if (!draft) aiDiagnostics.parse_error_stage = 'all_failed'
       }
+      updateRun({ ai_diagnostics: aiDiagnostics })
     }
 
     if (!draft || !Array.isArray(draft)) {
@@ -607,6 +799,12 @@ routerAdd(
       // goes through the SAME hard-rule validation below; on success it is
       // returned with a warning so the user knows the AI was bypassed.
       source = 'fallback'
+      updateRun({
+        status: 'fallback',
+        stage: 'IA não retornou JSON válido — usando fallback determinístico',
+        generation_source: 'deterministic',
+        progress: 50,
+      })
       logAudit('AI_SHIFT_DRAFT_GENERATION', {
         status: 'fallback',
         cycle_id: cycleId,
@@ -708,12 +906,33 @@ routerAdd(
       }
 
       if (fbDraft.length === 0) {
+        updateRun({
+          status: 'failed',
+          stage: 'fallback_empty',
+          error_code: 'FALLBACK_EMPTY',
+          error_detail:
+            'Não foi possível gerar o rascunho: a IA retornou JSON inválido e o ' +
+            'fallback determinístico não encontrou colaboradores disponíveis.',
+          metrics: {
+            eligible_count: eligible.length,
+            orphan_contracts_ignored: orphanContractCount,
+            hard_rules_count: hardRules.length,
+            preferred_rules_count: preferredRules.length,
+            contradictions_count: contradictions.length,
+            tokens_used: tokenUsage,
+            shifts_proposed: 0,
+            shifts_accepted: 0,
+            shifts_rejected: 0,
+          },
+          finished_at: new Date().toISOString(),
+        })
         return e.json(400, {
           error:
             'Não foi possível gerar o rascunho: a IA retornou JSON inválido e o ' +
             'fallback determinístico não encontrou colaboradores disponíveis.',
           stage: 'fallback_empty',
           detail: aiCallFailed ? aiCallError : parseError,
+          run_id: runId || undefined,
           diagnostics: {
             eligible_count: eligible.length,
             excluded: excluded,
@@ -763,9 +982,28 @@ routerAdd(
     })
 
     if (cleanDraft.length === 0) {
+      updateRun({
+        status: 'failed',
+        stage: 'no_valid_shifts',
+        error_code: 'NO_VALID_SHIFTS',
+        error_detail: 'A IA não retornou nenhum plantão válido.',
+        metrics: {
+          eligible_count: eligible.length,
+          orphan_contracts_ignored: orphanContractCount,
+          hard_rules_count: hardRules.length,
+          preferred_rules_count: preferredRules.length,
+          contradictions_count: contradictions.length,
+          tokens_used: tokenUsage,
+          shifts_proposed: draft ? draft.length : 0,
+          shifts_accepted: 0,
+          shifts_rejected: draft ? draft.length : 0,
+        },
+        finished_at: new Date().toISOString(),
+      })
       return e.json(400, {
         error: 'A IA não retornou nenhum plantão válido.',
         violations: schemaErrors,
+        run_id: runId || undefined,
         diagnostics: {
           eligible_count: eligible.length,
           excluded: excluded,
@@ -944,6 +1182,9 @@ routerAdd(
     }
 
     if (violations.length > 0) {
+      // AI path with hard violations: DO NOT save a draft. Finalize the
+      // run as failed (stage validation_failed, error_code VIOLATIONS).
+      var firstViolations = violations.slice(0, 3)
       logAudit('AI_SHIFT_DRAFT_GENERATION', {
         status: 'validation_failed',
         cycle_id: cycleId,
@@ -965,16 +1206,86 @@ routerAdd(
         suggestion = helper.content || ''
       } catch (_) {}
 
+      // Persist validation_issues even though no draft was saved, so the
+      // violations are traceable. draft is empty here; run carries them.
+      try {
+        var issuesCol = $app.findCollectionByNameOrId('schedule_validation_issues')
+        for (var vi = 0; vi < violations.length; vi++) {
+          try {
+            var issue = new Record(issuesCol)
+            issue.set('run', runId)
+            issue.set('severity', 'hard')
+            issue.set('message', sanitizeDetail(violations[vi]))
+            var inferred = inferIssue(violations[vi], eligible)
+            issue.set('rule_name', inferred.rule_name)
+            issue.set('code', inferred.code)
+            if (inferred.date) issue.set('issue_date', inferred.date)
+            if (inferred.staff_id) issue.set('staff_profile', inferred.staff_id)
+            issue.set('resolved', false)
+            $app.saveNoValidate(issue)
+          } catch (_) {}
+        }
+      } catch (_) {}
+
+      updateRun({
+        status: 'failed',
+        stage: 'validation_failed',
+        error_code: 'VIOLATIONS',
+        error_detail: firstViolations.join(' | '),
+        metrics: {
+          eligible_count: eligible.length,
+          orphan_contracts_ignored: orphanContractCount,
+          hard_rules_count: hardRules.length,
+          preferred_rules_count: preferredRules.length,
+          contradictions_count: contradictions.length,
+          tokens_used: tokenUsage,
+          shifts_proposed: draft.length,
+          shifts_accepted: cleanDraft.length,
+          shifts_rejected: draft.length - cleanDraft.length,
+        },
+        finished_at: new Date().toISOString(),
+      })
+
       return e.json(400, {
         error: 'O rascunho viola regras obrigatórias e não foi salvo.',
         violations: violations,
         warnings: warnings,
+        run_id: runId || undefined,
         diagnostics: diagnostics,
         suggestion: suggestion || undefined,
       })
     }
 
-    // --- Persist as draft (shifts). Cycle status is NEVER changed. ---
+    // --- Create the schedule_draft (before shifts, so shifts can link to it) ---
+    updateRun({ status: 'saving', stage: 'Persistindo rascunho...', progress: 90 })
+
+    var draftId = ''
+    try {
+      var draftsCol = $app.findCollectionByNameOrId('schedule_drafts')
+      var draftRec = new Record(draftsCol)
+      draftRec.set('cycle', cycleId)
+      draftRec.set('sector', sectorId)
+      draftRec.set('generation_run', runId)
+      draftRec.set('status', 'draft')
+      draftRec.set('version', 1)
+      draftRec.set('generation_source', source === 'fallback' ? 'deterministic' : 'ai')
+      draftRec.set('generated_by', e.auth ? e.auth.id : '')
+      draftRec.set('created_by', e.auth ? e.auth.id : '')
+      draftRec.set('validation_summary', {
+        violations_count: violations.length,
+        warnings_count: warnings.length,
+        hard_violations: [],
+        warnings: warnings.slice(0, 20),
+      })
+      $app.saveNoValidate(draftRec)
+      draftId = draftRec.id
+    } catch (draftErr) {
+      console.log(
+        '[escala/draft] failed to create schedule_draft: ' + (draftErr.message || draftErr),
+      )
+    }
+
+    // --- Persist shifts (linked to draft + run). Cycle status is NEVER changed. ---
     var persisted = []
     try {
       $app.runInTransaction(function (txApp) {
@@ -1006,6 +1317,8 @@ routerAdd(
           record.set('cycle', cycleId)
           record.set('start_time', startStr)
           record.set('end_time', endStr)
+          if (draftId) record.set('draft', draftId)
+          if (runId) record.set('generation_run', runId)
           txApp.save(record)
           persisted.push({
             staff_profile: entry.user_id,
@@ -1014,6 +1327,8 @@ routerAdd(
             cycle: cycleId,
             start_time: startStr,
             end_time: endStr,
+            draft: draftId,
+            generation_run: runId,
           })
         })
       })
@@ -1024,11 +1339,70 @@ routerAdd(
         sector_id: sectorId,
         error: 'Persist failed: ' + (persistErr.message || String(persistErr)),
       })
+      updateRun({
+        status: 'failed',
+        stage: 'persist_failed',
+        error_code: 'PERSIST_FAILED',
+        error_detail: 'Falha ao salvar o rascunho. Nenhum dado anterior foi alterado.',
+        finished_at: new Date().toISOString(),
+      })
       return e.json(500, {
         error: 'Falha ao salvar o rascunho. Nenhum dado anterior foi alterado.',
         detail: persistErr.message || String(persistErr),
+        run_id: runId || undefined,
       })
     }
+
+    // --- Persist validation_issues (warnings + any violations already recorded) ---
+    try {
+      var issuesCol2 = $app.findCollectionByNameOrId('schedule_validation_issues')
+      for (var wi = 0; wi < warnings.length; wi++) {
+        try {
+          var issue2 = new Record(issuesCol2)
+          issue2.set('draft', draftId)
+          issue2.set('run', runId)
+          issue2.set('severity', 'preference')
+          issue2.set('message', sanitizeDetail(warnings[wi]))
+          var inferred2 = inferIssue(warnings[wi], eligible)
+          issue2.set('rule_name', inferred2.rule_name)
+          issue2.set('code', inferred2.code)
+          if (inferred2.date) issue2.set('issue_date', inferred2.date)
+          if (inferred2.staff_id) issue2.set('staff_profile', inferred2.staff_id)
+          issue2.set('resolved', false)
+          $app.saveNoValidate(issue2)
+        } catch (_) {}
+      }
+    } catch (_) {}
+
+    // --- Finalize the run: completed + metrics + ai_diagnostics ---
+    var runDurationMs = 0
+    try {
+      var startedRec = $app.findRecordById('schedule_generation_runs', runId)
+      var startedIso = startedRec.getString('started_at')
+      if (startedIso) {
+        runDurationMs = new Date().getTime() - new Date(startedIso).getTime()
+      }
+    } catch (_) {}
+
+    updateRun({
+      status: 'completed',
+      stage: 'Rascunho gerado e salvo',
+      progress: 100,
+      generation_source: source === 'fallback' ? 'deterministic' : 'ai',
+      finished_at: new Date().toISOString(),
+      duration_ms: runDurationMs,
+      metrics: {
+        eligible_count: eligible.length,
+        orphan_contracts_ignored: orphanContractCount,
+        hard_rules_count: hardRules.length,
+        preferred_rules_count: preferredRules.length,
+        contradictions_count: contradictions.length,
+        tokens_used: tokenUsage,
+        shifts_proposed: draft.length,
+        shifts_accepted: cleanDraft.length,
+        shifts_rejected: draft.length - cleanDraft.length,
+      },
+    })
 
     logAudit(
       'AI_SHIFT_DRAFT_GENERATION',
@@ -1038,6 +1412,8 @@ routerAdd(
         sector_id: sectorId,
         draft_count: persisted.length,
         warnings: warnings,
+        run_id: runId || undefined,
+        draft_id: draftId || undefined,
       },
       tokenUsage,
     )
@@ -1050,6 +1426,8 @@ routerAdd(
       diagnostics: diagnostics,
       cycle_id: cycleId,
       sector_id: sectorId,
+      run_id: runId || undefined,
+      draft_id: draftId || undefined,
     })
   },
   $apis.requireAuth(),
