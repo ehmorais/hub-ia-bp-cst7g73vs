@@ -177,7 +177,10 @@ export function ShiftCalendar({
       const minRestRule = sectorRules.find((r) => r.rule_type === 'min_rest_hours')
       const restHours = minRestRule ? minRestRule.value : baseRestHours
 
-      const maxHoursRule = sectorRules.find((r) => r.rule_type === 'max_hours')
+      // The cycle spans roughly one month, so the authoritative hours cap is
+      // the collaborator's contract. A department rule such as 44h/week must
+      // never be compared with the full-cycle total.
+      const contractHoursLimit = Number(contract?.monthly_hour_limit || 0)
       const maxConsecutiveRule = sectorRules.find((r) => r.rule_type === 'max_consecutive')
 
       const userName =
@@ -244,10 +247,10 @@ export function ShiftCalendar({
         }
       }
 
-      if (maxHoursRule && totalHoursInPeriod > maxHoursRule.value) {
+      if (contractHoursLimit > 0 && totalHoursInPeriod > contractHoursLimit) {
         newAlerts.push({
           type: 'warning',
-          message: `${userName}: Total de horas excede o limite do período (${Math.floor(totalHoursInPeriod)}h > ${maxHoursRule.value}h)`,
+          message: `${userName}: Total de horas excede o limite contratual mensal (${Math.floor(totalHoursInPeriod)}h > ${contractHoursLimit}h)`,
         })
       }
     })
