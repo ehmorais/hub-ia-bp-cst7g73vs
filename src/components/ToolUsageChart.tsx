@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { format, subDays, startOfDay, isSameDay } from 'date-fns'
-import { Bar, BarChart, ResponsiveContainer, XAxis } from 'recharts'
+import { Bar, BarChart, LabelList, ResponsiveContainer, XAxis } from 'recharts'
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
 
 export function ToolUsageChart({ tool, logs }: { tool: any; logs: any[] }) {
@@ -54,13 +54,13 @@ export function ToolUsageChart({ tool, logs }: { tool: any; logs: any[] }) {
         config={{
           count: {
             label: 'Usos',
-            color: 'hsl(var(--primary))',
+            color: '#86efac',
           },
         }}
         className="h-full w-full"
       >
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} margin={{ top: 10, right: 10, bottom: 0, left: 10 }}>
+          <BarChart data={data} margin={{ top: 24, right: 10, bottom: 0, left: 10 }}>
             <XAxis
               dataKey="label"
               fontSize={10}
@@ -69,7 +69,15 @@ export function ToolUsageChart({ tool, logs }: { tool: any; logs: any[] }) {
               fontFamily="Manrope, sans-serif"
             />
             <ChartTooltip content={<ChartTooltipContent />} cursor={{ fill: 'var(--muted)' }} />
-            <Bar dataKey="count" fill="var(--color-count)" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="count" fill="var(--color-count)" radius={[4, 4, 0, 0]}>
+              <LabelList
+                dataKey="count"
+                position="top"
+                fill="#166534"
+                fontSize={11}
+                fontWeight={700}
+              />
+            </Bar>
           </BarChart>
         </ResponsiveContainer>
       </ChartContainer>
