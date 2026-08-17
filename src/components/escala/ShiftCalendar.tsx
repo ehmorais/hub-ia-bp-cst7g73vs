@@ -12,7 +12,7 @@ import {
   endOfMonth,
   parseISO,
   isWithinInterval,
-  differenceInDays,
+  differenceInCalendarDays,
 } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import {
@@ -308,7 +308,11 @@ export function ShiftCalendar({
     const newEnd = new Date(shift.end_time)
 
     // adjust dates to targetDay
-    const diffDays = differenceInDays(targetDay, new Date(shift.start_time.split(' ')[0]))
+    // Compare calendar dates in the same local-date domain. Parsing the
+    // original YYYY-MM-DD with Date() treated it as UTC and made backward
+    // moves resolve to zero/incorrect offsets in negative time zones.
+    const originalDay = parseISO(shift.start_time.split(' ')[0])
+    const diffDays = differenceInCalendarDays(targetDay, originalDay)
     newStart.setDate(newStart.getDate() + diffDays)
     newEnd.setDate(newEnd.getDate() + diffDays)
 
