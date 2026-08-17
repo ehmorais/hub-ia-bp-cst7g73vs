@@ -50,7 +50,7 @@ import { Badge } from '@/components/ui/badge'
 import { AlertCircle } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
-export function StaffContracts({ departmentId }: { departmentId?: string }) {
+export function StaffContracts({ departmentId }: { departmentId?: string; projectId?: string }) {
   const [contracts, setContracts] = useState<any[]>([])
   const [profiles, setProfiles] = useState<any[]>([])
   const [shiftTypes, setShiftTypes] = useState<any[]>([])
@@ -269,7 +269,7 @@ export function StaffContracts({ departmentId }: { departmentId?: string }) {
             {contracts.map((c) => (
               <TableRow key={c.id}>
                 <TableCell className="font-medium">
-                  {c.expand?.staff_profile?.name || c.expand?.user?.name || 'Colaborador'}
+                  {c.expand?.staff_profile?.name || 'Colaborador sem perfil'}
                 </TableCell>
                 <TableCell>{c.contract_type}</TableCell>
                 <TableCell>

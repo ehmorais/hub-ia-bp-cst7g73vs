@@ -42,7 +42,9 @@ export function SystemHealthMonitor() {
 
         const hasStaffGaps =
           usersAccessible && contractsAccessible
-            ? results[3].value.totalItems < results[2].value.totalItems
+            ? results[3].status === 'fulfilled' &&
+              results[2].status === 'fulfilled' &&
+              results[3].value.totalItems < results[2].value.totalItems
             : false
 
         const dbIntact = usersAccessible && departmentsAccessible && sectorsAccessible

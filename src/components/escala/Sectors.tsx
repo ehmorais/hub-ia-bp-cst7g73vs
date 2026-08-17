@@ -22,7 +22,7 @@ import {
 } from '@/services/escala'
 import { useRealtime } from '@/hooks/use-realtime'
 
-export function Sectors({ departmentId }: { departmentId?: string }) {
+export function Sectors({ departmentId }: { departmentId?: string; projectId?: string }) {
   const [sectors, setSectors] = useState<any[]>([])
   const [name, setName] = useState('')
   const [min, setMin] = useState(0)

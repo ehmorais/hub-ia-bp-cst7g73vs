@@ -65,6 +65,9 @@ type ProfileForm = {
   default_sector: string
   rules: string[]
   active: boolean
+  contract_type: string
+  monthly_hour_limit: string
+  shift_type: string
 }
 
 const emptyForm: ProfileForm = {
@@ -74,7 +77,12 @@ const emptyForm: ProfileForm = {
   default_sector: 'none',
   rules: [],
   active: true,
+  contract_type: 'none',
+  monthly_hour_limit: '',
+  shift_type: 'none',
 }
+
+const CONTRACT_TYPES = ['CLT 180h', 'PJ', 'Autônomo'] as const
 
 export function StaffProfiles({ departmentId }: { departmentId?: string; projectId?: string }) {
   const [profiles, setProfiles] = useState<any[]>([])
@@ -133,6 +141,10 @@ export function StaffProfiles({ departmentId }: { departmentId?: string; project
   }
 
   const openEdit = (profile: any) => {
+    const linked =
+      contracts.find((contract) => contract.staff_profile === profile.id) ||
+      profile.expand?.staff_contracts
+    const contract = Array.isArray(linked) ? linked[0] : linked
     setEditingProfile(profile)
     setFormData({
       name: profile.name || '',
@@ -141,6 +153,10 @@ export function StaffProfiles({ departmentId }: { departmentId?: string; project
       default_sector: profile.default_sector || 'none',
       rules: profile.rules || [],
       active: profile.active !== false,
+      contract_type: contract?.contract_type || 'none',
+      monthly_hour_limit:
+        contract && contract.monthly_hour_limit != null ? String(contract.monthly_hour_limit) : '',
+      shift_type: contract?.shift_type || 'none',
     })
     setIsFormOpen(true)
   }
@@ -171,12 +187,42 @@ export function StaffProfiles({ departmentId }: { departmentId?: string; project
       active: formData.active,
     }
 
+    // Contract data entered inline on the collaborator form. When a contract
+    // type is selected we upsert a staff_contracts record linked to THIS
+    // staff_profile (never to a portal user id). When "none" is selected and a
+    // contract already exists for the profile, it is left untouched here (the
+    // dedicated Contratos tab is the place to manage/remove it).
+    const hasContract = formData.contract_type !== 'none'
+    const contractPayload = {
+      staff_profile: editingProfile ? editingProfile.id : '',
+      contract_type: formData.contract_type,
+      monthly_hour_limit: Number(formData.monthly_hour_limit) || 0,
+      shift_type: formData.shift_type === 'none' ? null : formData.shift_type,
+    }
+
     try {
       if (editingProfile) {
         await updateStaffProfile(editingProfile.id, payload)
+        if (hasContract) {
+          const existing = contracts.find(
+            (contract) => contract.staff_profile === editingProfile.id,
+          )
+          if (existing) {
+            await updateStaffContract(existing.id, {
+              ...contractPayload,
+              staff_profile: editingProfile.id,
+            })
+          } else {
+            await createStaffContract(contractPayload)
+          }
+        }
         toast({ title: 'Cadastro atualizado com sucesso' })
       } else {
-        await createStaffProfile(payload)
+        const created = await createStaffProfile(payload)
+        const createdId = created?.id
+        if (hasContract && createdId) {
+          await createStaffContract({ ...contractPayload, staff_profile: createdId })
+        }
         toast({ title: 'Colaborador cadastrado com sucesso' })
       }
       setIsFormOpen(false)
@@ -635,6 +681,68 @@ export function StaffProfiles({ departmentId }: { departmentId?: string; project
                   ))
                 )}
               </ScrollArea>
+            </div>
+            <div className="space-y-3 pt-3 border-t">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-semibold">Contrato e Regime de Escala</Label>
+                <span className="text-[11px] text-slate-400">
+                  Vinculado ao colaborador operacional
+                </span>
+              </div>
+              <div className="space-y-2">
+                <Label>Tipo de Contrato</Label>
+                <Select
+                  value={formData.contract_type}
+                  onValueChange={(value) => setFormData({ ...formData, contract_type: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Sem contrato" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sem contrato</SelectItem>
+                    {CONTRACT_TYPES.map((type) => (
+                      <SelectItem key={type} value={type}>
+                        {type}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {formData.contract_type !== 'none' && (
+                <>
+                  <div className="space-y-2">
+                    <Label>Limite Mensal de Horas</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      value={formData.monthly_hour_limit}
+                      onChange={(event) =>
+                        setFormData({ ...formData, monthly_hour_limit: event.target.value })
+                      }
+                      placeholder="Ex.: 180"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Regime de Escala (Tipo de Turno)</Label>
+                    <Select
+                      value={formData.shift_type}
+                      onValueChange={(value) => setFormData({ ...formData, shift_type: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione o tipo de turno" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Não associado</SelectItem>
+                        {shiftTypes.map((shiftType) => (
+                          <SelectItem key={shiftType.id} value={shiftType.id}>
+                            {shiftType.name} ({shiftType.work_hours}h/{shiftType.rest_hours}h)
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </>
+              )}
             </div>
           </div>
           <DialogFooter>
