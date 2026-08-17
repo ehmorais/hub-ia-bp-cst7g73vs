@@ -382,10 +382,21 @@ function AutoGenerateInner({
         }
         setGenStatus('success')
         setGenDiagnostics(res.diagnostics || null)
+        const isFallback = res.source === 'fallback'
         toast({
-          title: 'Rascunho Gerado',
-          description: `${res.draft.length} plantões gerados e salvos como rascunho (não publicado).`,
+          title: isFallback ? 'Rascunho gerado (fallback)' : 'Rascunho Gerado',
+          description: isFallback
+            ? `${res.draft.length} plantões gerados por fallback determinístico (a IA não retornou JSON válido). Revise antes de publicar.`
+            : `${res.draft.length} plantões gerados e salvos como rascunho (não publicado).`,
+          variant: isFallback ? 'destructive' : 'default',
         })
+        // Surface any warnings (rest/staffing notes, or the fallback notice).
+        if (Array.isArray(res.warnings) && res.warnings.length > 0) {
+          toast({
+            title: 'Avisos',
+            description: res.warnings.slice(0, 3).join(' • '),
+          })
+        }
         return
       }
 

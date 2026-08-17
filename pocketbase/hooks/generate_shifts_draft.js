@@ -449,9 +449,13 @@ routerAdd(
     //  - The `$ai.chat` API does not expose a per-call timeout parameter
     //    (see the Skip AI gateway guide); the gateway timeout is fixed. We
     //    therefore rely on the faster model to stay well within it. If the
-    //    gateway still times out, the catch below returns a structured error.
+    //    gateway still times out OR returns an unparseable reply, we fall
+    //    through to the deterministic fallback below (no second AI call).
     var aiContent = ''
     var tokenUsage = 0
+    var aiCallFailed = false
+    var aiCallError = ''
+    var aiTimeout = false
     try {
       var response = $ai.chat({
         model: 'fast',
@@ -464,73 +468,260 @@ routerAdd(
           { role: 'user', content: prompt },
         ],
       })
-      if (response.usage) tokenUsage = response.usage.total_tokens || 0
-      aiContent = (response.choices[0].message.content || '').trim()
+
+      // --- Instrumentation (sanitized: structure + keys only, never PII) ---
+      try {
+        var respType = typeof response
+        var respKeys = response && typeof response === 'object' ? Object.keys(response) : []
+        console.log(
+          '[escala/draft] $ai.chat response typeof=' +
+            respType +
+            ' keys=[' +
+            respKeys.join(',') +
+            ']',
+        )
+      } catch (_) {}
+
+      if (response && response.usage) tokenUsage = response.usage.total_tokens || 0
+
+      // --- Robust content extraction.
+      // The OpenAI-shaped path (choices[0].message.content) is the documented
+      // shape, but the gateway/runtime may surface a different object; try
+      // every reasonable fallback before treating the reply as empty. If
+      // `response.choices` is undefined we used to silently get "" and fail —
+      // now we probe alternatives and log what we actually received.
+      var extracted = ''
+      if (response && typeof response === 'object') {
+        try {
+          extracted =
+            (response.choices &&
+              response.choices[0] &&
+              response.choices[0].message &&
+              response.choices[0].message.content) ||
+            response.content ||
+            (response.message && response.message.content) ||
+            response.text ||
+            ''
+        } catch (_) {
+          extracted = ''
+        }
+      } else if (typeof response === 'string') {
+        extracted = response
+      }
+      aiContent = (extracted || '').trim()
+
+      // Sanitized preview of the actual content. The prompt only ever asked
+      // for {user_id, date} JSON — these are IDs, not personal data — so a
+      // short structural preview is safe and essential for debugging.
+      try {
+        console.log('[escala/draft] aiContent preview (300c): ' + aiContent.substring(0, 300))
+      } catch (_) {}
     } catch (aiErr) {
-      var aiErrMsg = (aiErr && aiErr.message) || String(aiErr)
-      var isTimeout =
+      aiCallFailed = true
+      aiCallError = (aiErr && aiErr.message) || String(aiErr)
+      aiTimeout = !!(
         aiErr &&
         (aiErr.status === 502 ||
           aiErr.status === 504 ||
-          /timeout|timed out|deadline|gateway/i.test(aiErrMsg))
+          /timeout|timed out|deadline|gateway/i.test(aiCallError))
+      )
+      console.log('[escala/draft] $ai.chat threw: ' + aiCallError + ' (timeout=' + aiTimeout + ')')
       logAudit('AI_SHIFT_DRAFT_GENERATION', {
         status: 'error',
         cycle_id: cycleId,
         sector_id: sectorId,
-        error: 'AI call failed: ' + aiErrMsg,
-        stage: isTimeout ? 'ai_timeout' : 'ai_call',
+        error: 'AI call failed: ' + aiCallError,
+        stage: aiTimeout ? 'ai_timeout' : 'ai_call',
       })
-      // Structured error so the frontend can show an actionable message.
-      // 502 because that is what a gateway timeout surfaces as; the body
-      // carries the stage so the UI can detect this specific failure.
-      return e.json(502, {
-        error: isTimeout
-          ? 'A IA excedeu o tempo limite. Tente novamente com um setor menor ou menos colaboradores.'
-          : 'A IA não respondeu a tempo. Tente novamente.',
-        stage: isTimeout ? 'ai_timeout' : 'ai_call',
-        detail: aiErrMsg,
-      })
+      // Do NOT return yet — fall through to the deterministic fallback so the
+      // user still gets a usable draft. The fallback warning will surface.
     }
 
-    // --- Parse + one repair attempt ---
-    var cleanContent = aiContent.replace(/<think>[\s\S]*?<\/think>/g, '').trim()
-    if (cleanContent.startsWith('```json')) cleanContent = cleanContent.replace(/^```json/, '')
-    if (cleanContent.startsWith('```')) cleanContent = cleanContent.replace(/^```/, '')
-    if (cleanContent.endsWith('```')) cleanContent = cleanContent.replace(/```$/, '')
-    cleanContent = cleanContent.trim()
-
+    // --- Robust JSON extraction (only meaningful if we have AI content) ---
     var draft = null
     var parseError = ''
-    try {
-      draft = JSON.parse(cleanContent)
-    } catch (e1) {
-      parseError = e1.message || String(e1)
-      // One repair attempt: extract the first JSON array in the text.
-      var match = cleanContent.match(/\[[\s\S]*\]/)
-      if (match) {
-        try {
-          draft = JSON.parse(match[0])
-          parseError = ''
-        } catch (e2) {
-          parseError = e2.message || String(e2)
+    var source = 'ai' // 'ai' | 'fallback'
+
+    if (aiContent) {
+      // 1. Strip <think> blocks and markdown fences.
+      var cleanContent = aiContent.replace(/<think>[\s\S]*?<\/think>/g, '').trim()
+      cleanContent = cleanContent
+        .replace(/```json/gi, '')
+        .replace(/```/g, '')
+        .trim()
+
+      // 2. Try parsing the whole thing.
+      try {
+        draft = JSON.parse(cleanContent)
+      } catch (e1) {
+        parseError = e1.message || String(e1)
+        // 3. Trim to the first '[' ... last ']' span (drop prose around it).
+        var firstBracket = cleanContent.indexOf('[')
+        var lastBracket = cleanContent.lastIndexOf(']')
+        if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
+          var sliced = cleanContent.substring(firstBracket, lastBracket + 1)
+          try {
+            draft = JSON.parse(sliced)
+            parseError = ''
+          } catch (e2) {
+            parseError = e2.message || String(e2)
+          }
+        }
+        // 4. Regex match a JSON array anywhere in the text.
+        if (!draft) {
+          var match = cleanContent.match(/\[[\s\S]*\]/)
+          if (match) {
+            try {
+              draft = JSON.parse(match[0])
+              parseError = ''
+            } catch (e3) {
+              parseError = e3.message || String(e3)
+            }
+          }
+        }
+        // 5. Locate individual shift objects and assemble an array manually.
+        if (!draft) {
+          var objs = cleanContent.match(/\{[^{}]*"user_id"[^{}]*"date"[^{}]*\}/g)
+          if (!objs) objs = cleanContent.match(/\{[^{}]*"date"[^{}]*"user_id"[^{}]*\}/g)
+          if (objs && objs.length) {
+            var assembled = []
+            for (var oi = 0; oi < objs.length; oi++) {
+              try {
+                assembled.push(JSON.parse(objs[oi]))
+              } catch (_) {}
+            }
+            if (assembled.length) {
+              draft = assembled
+              parseError = ''
+            }
+          }
         }
       }
     }
 
     if (!draft || !Array.isArray(draft)) {
+      // --- Deterministic fallback (NO second AI call).
+      // Generates a 12x36 night-shift draft directly in the backend,
+      // respecting timeoffs, min rest (effectiveRestHours → ~36h ⇒ 2-day
+      // gap), monthly hour limit, min staffing and supervision. The result
+      // goes through the SAME hard-rule validation below; on success it is
+      // returned with a warning so the user knows the AI was bypassed.
+      source = 'fallback'
       logAudit('AI_SHIFT_DRAFT_GENERATION', {
-        status: 'error',
+        status: 'fallback',
         cycle_id: cycleId,
         sector_id: sectorId,
-        error: 'Invalid JSON: ' + parseError,
-        raw_preview: cleanContent.substring(0, 500),
+        reason: aiCallFailed ? 'ai_call_failed' : 'invalid_json',
+        error: aiCallFailed ? aiCallError : parseError,
+        ai_content_preview: aiContent ? aiContent.substring(0, 200) : '',
       })
-      return e.json(400, {
-        error:
-          'A IA retornou um JSON inválido e não foi possível repará-lo automaticamente. ' +
-          'Tente gerar novamente.',
-        detail: parseError,
+      console.log(
+        '[escala/draft] using deterministic fallback (aiCallFailed=' +
+          aiCallFailed +
+          ', parseError=' +
+          parseError +
+          ')',
+      )
+
+      // Local eligible map (eligibleIds is built further down, so build our
+      // own here — hook scoping rules require everything inline).
+      var fbEligibleMap = {}
+      eligible.forEach(function (u) {
+        fbEligibleMap[u.id] = u
       })
+
+      var fbDraft = []
+      var fbUserHours = {}
+      var fbLastDay = {} // uid -> last worked YYYY-MM-DD
+      var fbCursor = new Date(cycleStart + 'T00:00:00Z')
+      var fbEnd = new Date(cycleEnd + 'T00:00:00Z')
+      // Min calendar-day gap required by effectiveRestHours. 36h ⇒ 2 days,
+      // 11h ⇒ 1 day, etc. (ceiling, slightly conservative).
+      var fbNeedGap = Math.max(1, Math.ceil((effectiveRestHours + 0.001) / 24))
+      var fbTarget = Math.max(sectorMinStaffing, sectorIdealStaffing || sectorMinStaffing)
+      var fbRot = 0
+
+      while (fbCursor <= fbEnd) {
+        var fbDate = fbCursor.toISOString().split('T')[0]
+        var fbAssigned = []
+
+        // Rotating eligible order to spread load across the cycle.
+        var fbOrder = eligible.slice()
+        if (fbRot > 0 && fbOrder.length > 1) {
+          fbOrder = fbOrder.concat(fbOrder.slice(0, fbRot)).slice(fbRot)
+        }
+
+        // A candidate is available if: not on timeoff that day, within the
+        // monthly hour limit, and the rest gap since their last shift holds.
+        var fbAvailable = function (u) {
+          var tdays = timeoffMap[u.id] || []
+          if (tdays.indexOf(fbDate) !== -1) return false
+          if ((fbUserHours[u.id] || 0) + u.work_hours > u.monthly_hour_limit) return false
+          var last = fbLastDay[u.id]
+          if (last) {
+            var gapDays =
+              (new Date(fbDate + 'T00:00:00Z').getTime() -
+                new Date(last + 'T00:00:00Z').getTime()) /
+              86400000
+            if (gapDays < fbNeedGap) return false
+          }
+          return true
+        }
+
+        // Pass 1: guarantee supervision — pick at least one independent
+        // (non-supervised) professional first, if any is available.
+        if (sectorMinStaffing > 0) {
+          for (var i = 0; i < fbOrder.length && fbAssigned.length < 1; i++) {
+            var u = fbOrder[i]
+            if (u.requires_supervision) continue
+            if (fbAssigned.indexOf(u.id) !== -1) continue
+            if (!fbAvailable(u)) continue
+            fbAssigned.push(u.id)
+          }
+        }
+        // Pass 2: fill up to the target staffing with any available person.
+        for (var j = 0; j < fbOrder.length && fbAssigned.length < fbTarget; j++) {
+          var u2 = fbOrder[j]
+          if (fbAssigned.indexOf(u2.id) !== -1) continue
+          if (!fbAvailable(u2)) continue
+          fbAssigned.push(u2.id)
+        }
+        // Pass 3: if still below the hard minimum, keep trying anyone
+        // available (ignores the ideal cap, still respects all constraints).
+        for (var k = 0; k < fbOrder.length && fbAssigned.length < sectorMinStaffing; k++) {
+          var u3 = fbOrder[k]
+          if (fbAssigned.indexOf(u3.id) !== -1) continue
+          if (!fbAvailable(u3)) continue
+          fbAssigned.push(u3.id)
+        }
+
+        // Commit assignments for this day.
+        fbAssigned.forEach(function (uid) {
+          var uu = fbEligibleMap[uid]
+          fbUserHours[uid] = (fbUserHours[uid] || 0) + uu.work_hours
+          fbLastDay[uid] = fbDate
+          fbDraft.push({ user_id: uid, date: fbDate })
+        })
+
+        fbCursor = new Date(fbCursor.getTime() + 86400000)
+        fbRot = (fbRot + Math.max(1, sectorMinStaffing)) % Math.max(1, eligible.length)
+      }
+
+      if (fbDraft.length === 0) {
+        return e.json(400, {
+          error:
+            'Não foi possível gerar o rascunho: a IA retornou JSON inválido e o ' +
+            'fallback determinístico não encontrou colaboradores disponíveis.',
+          stage: 'fallback_empty',
+          detail: aiCallFailed ? aiCallError : parseError,
+          diagnostics: {
+            eligible_count: eligible.length,
+            excluded: excluded,
+            orphan_contracts_ignored: orphanContractCount,
+          },
+        })
+      }
+      draft = fbDraft
     }
 
     // --- Schema validation against eligible set + cycle range ---
@@ -726,6 +917,19 @@ routerAdd(
       return all.indexOf(item) === index
     })
 
+    // When the draft came from the deterministic fallback, hard-rule
+    // violations are surfaced as non-blocking warnings (the fallback already
+    // does its best to respect every constraint; if it can't fully, the user
+    // is told to review rather than being left with no draft at all). The AI
+    // path keeps the strict behavior (violations block persistence).
+    if (source === 'fallback') {
+      warnings = warnings.concat(violations)
+      violations = []
+      warnings.unshift(
+        'Rascunho gerado por fallback determinístico (a IA não retornou JSON válido). Revise antes de publicar.',
+      )
+    }
+
     var diagnostics = {
       eligible_count: eligible.length,
       excluded: excluded,
@@ -840,6 +1044,7 @@ routerAdd(
 
     return e.json(200, {
       success: true,
+      source: source, // 'ai' | 'fallback'
       draft: persisted,
       warnings: warnings.length > 0 ? warnings : undefined,
       diagnostics: diagnostics,
