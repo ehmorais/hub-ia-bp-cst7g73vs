@@ -34,9 +34,17 @@ routerAdd(
     const additionalPrompt = body.additional_prompt || ''
     const currentDraft = body.current_draft || null
     const replace = body.replace === true
-    const priority = body.priority || 'timeoff'
-    const strictness =
-      typeof body.strictness === 'number' ? body.strictness : parseInt(body.strictness || '50', 10)
+    // Priority/strictness may arrive at the top level (authoritative format)
+    // or nested under body.context.ai_settings (legacy format the frontend
+    // used to send). Resolve both so neither format silently drops values.
+    var aiSettings = (body.context && body.context.ai_settings) || {}
+    var priority = body.priority || aiSettings.priority || 'timeoff'
+    var strictness =
+      typeof body.strictness === 'number'
+        ? body.strictness
+        : typeof aiSettings.strictness === 'number'
+          ? aiSettings.strictness
+          : parseInt(body.strictness || aiSettings.strictness || '50', 10)
 
     if (!cycleId || !sectorId) {
       return e.badRequestError('cycle_id e sector_id são obrigatórios.')
@@ -430,11 +438,23 @@ routerAdd(
     ].join('\n')
 
     // --- Call the AI ---
+    // NOTE on model choice + timeout:
+    //  - We use the `fast` model alias instead of `reasoning`. The `reasoning`
+    //    model has a thinking budget and on a prompt this large (all eligible
+    //    staff + contracts + rules + timeoffs) it consistently took ~240s,
+    //    which the gateway kills with a 502 before the JS try/catch can fire.
+    //    `fast` is orders of magnitude quicker and perfectly adequate here:
+    //    the heavy correctness enforcement (rest hours, staffing, supervision,
+    //    hour limits, timeoffs) is done in JS after the reply, not by the LLM.
+    //  - The `$ai.chat` API does not expose a per-call timeout parameter
+    //    (see the Skip AI gateway guide); the gateway timeout is fixed. We
+    //    therefore rely on the faster model to stay well within it. If the
+    //    gateway still times out, the catch below returns a structured error.
     var aiContent = ''
     var tokenUsage = 0
     try {
       var response = $ai.chat({
-        model: 'reasoning',
+        model: 'fast',
         messages: [
           {
             role: 'system',
@@ -447,15 +467,28 @@ routerAdd(
       if (response.usage) tokenUsage = response.usage.total_tokens || 0
       aiContent = (response.choices[0].message.content || '').trim()
     } catch (aiErr) {
+      var aiErrMsg = (aiErr && aiErr.message) || String(aiErr)
+      var isTimeout =
+        aiErr &&
+        (aiErr.status === 502 ||
+          aiErr.status === 504 ||
+          /timeout|timed out|deadline|gateway/i.test(aiErrMsg))
       logAudit('AI_SHIFT_DRAFT_GENERATION', {
         status: 'error',
         cycle_id: cycleId,
         sector_id: sectorId,
-        error: 'AI call failed: ' + (aiErr.message || String(aiErr)),
+        error: 'AI call failed: ' + aiErrMsg,
+        stage: isTimeout ? 'ai_timeout' : 'ai_call',
       })
+      // Structured error so the frontend can show an actionable message.
+      // 502 because that is what a gateway timeout surfaces as; the body
+      // carries the stage so the UI can detect this specific failure.
       return e.json(502, {
-        error: 'A IA não respondeu a tempo. Tente novamente.',
-        detail: aiErr.message || String(aiErr),
+        error: isTimeout
+          ? 'A IA excedeu o tempo limite. Tente novamente com um setor menor ou menos colaboradores.'
+          : 'A IA não respondeu a tempo. Tente novamente.',
+        stage: isTimeout ? 'ai_timeout' : 'ai_call',
+        detail: aiErrMsg,
       })
     }
 

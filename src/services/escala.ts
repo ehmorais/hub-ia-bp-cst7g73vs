@@ -109,19 +109,26 @@ export const generateDraftShifts = (
   additionalPrompt?: string,
   currentDraft?: any[],
   replace = false,
-) =>
-  pb.send('/backend/v1/escala/draft', {
+) => {
+  // Extract priority/strictness onto the top level of the payload — the hook
+  // reads them there. The nested context.ai_settings shape is also still
+  // accepted by the hook as a fallback, but sending them at the top is the
+  // authoritative contract.
+  const aiSettings = context?.ai_settings || {}
+  return pb.send('/backend/v1/escala/draft', {
     method: 'POST',
     body: JSON.stringify({
       cycle_id: cycleId,
       sector_id: sectorId,
-      context,
-      additional_prompt: additionalPrompt,
-      current_draft: currentDraft,
-      replace,
+      priority: aiSettings.priority || 'timeoff',
+      strictness: aiSettings.strictness ?? 50,
+      additional_prompt: additionalPrompt || '',
+      current_draft: currentDraft || null,
+      replace: replace || false,
     }),
     headers: { 'Content-Type': 'application/json' },
   })
+}
 
 // Draft shifts persisted for a given cycle + sector (read-only fetch).
 export const getDraftShifts = (cycleId: string, sectorId: string) =>

@@ -407,13 +407,27 @@ function AutoGenerateInner({
       console.error('Error during AI draft generation:', err)
       const isPBError = err && typeof err === 'object' && 'response' in err
       const respData = isPBError ? err.response : null
-      const msg = respData?.error || respData?.message || err.message || 'Falha na geração.'
+      // A 502/gateway timeout surfaces from the SDK as a generic
+      // "Something went wrong." message (and err.status === 502), which is
+      // useless to the user. Detect that specific case and show an
+      // actionable, friendly message instead. The hook also returns a
+      // structured body with stage='ai_timeout' when it can — prefer that.
+      const isTimeout =
+        err?.status === 502 ||
+        err?.status === 504 ||
+        respData?.stage === 'ai_timeout' ||
+        err?.message === 'Something went wrong.' ||
+        (typeof err?.message === 'string' && /timeout|timed out|gateway/i.test(err.message))
+      const fallbackTimeoutMsg =
+        'O servidor de IA excedeu o tempo limite. Isto pode ocorrer com muitos colaboradores ou regras complexas. Tente novamente — a segunda tentativa costuma ser mais rápida.'
+      const rawMsg = respData?.error || respData?.message || err.message || 'Falha na geração.'
+      const msg = isTimeout ? respData?.error || fallbackTimeoutMsg : rawMsg
       setGenError(typeof msg === 'string' ? msg : JSON.stringify(msg))
       setGenDiagnostics(respData?.diagnostics || null)
       setGenSuggestion(respData?.suggestion || '')
       setGenStatus('error')
       toast({
-        title: 'Falha na geração do draft',
+        title: isTimeout ? 'Tempo limite da IA' : 'Falha na geração do draft',
         description: typeof msg === 'string' ? msg : JSON.stringify(msg),
         variant: 'destructive',
       })
