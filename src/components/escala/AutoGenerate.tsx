@@ -616,7 +616,21 @@ function AutoGenerateInner({
 
       if (res && res.success && Array.isArray(res.draft)) {
         setRawDraft(res.draft)
-        setDraftShifts(res.draft)
+
+        // Reload the records persisted by the backend with their relations
+        // expanded. The generation response intentionally contains only IDs;
+        // rendering it directly caused every card to show "Sem nome".
+        let hydratedDraft = res.draft
+        try {
+          hydratedDraft = await pb.collection('shifts').getFullList({
+            filter: `cycle="${selectedCycle}" && sector="${selectedSector}"`,
+            expand: 'staff_profile,staff_profile.staff_role,sector,cycle',
+            sort: 'start_time',
+          })
+        } catch (hydrateError) {
+          console.error('Falha ao carregar nomes do rascunho:', hydrateError)
+        }
+        setDraftShifts(hydratedDraft)
         setIsDraftMode(true)
         if (isRefinement) {
           setDraftIteration((p) => p + 1)

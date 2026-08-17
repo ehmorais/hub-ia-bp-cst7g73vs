@@ -40,7 +40,7 @@ import { useToast } from '@/components/ui/use-toast'
 import pb from '@/lib/pocketbase/client'
 import { useRealtime } from '@/hooks/use-realtime'
 
-type ViewMode = 'month' | 'week' | 'day'
+type ViewMode = 'cycle' | 'month' | 'week' | 'day'
 
 export function ShiftCalendar({
   shifts,
@@ -53,7 +53,7 @@ export function ShiftCalendar({
   contracts: any[]
   onShiftUpdate?: () => void
 }) {
-  const [view, setView] = useState<ViewMode>('week')
+  const [view, setView] = useState<ViewMode>('cycle')
   const cycleStart = cycle ? parseISO(cycle.start_date.split(' ')[0]) : new Date()
   const cycleEnd = cycle ? parseISO(cycle.end_date.split(' ')[0]) : new Date()
   const cycleInterval = { start: cycleStart, end: cycleEnd }
@@ -93,6 +93,7 @@ export function ShiftCalendar({
   }, [shifts, selectedSectorId])
 
   const days = useMemo(() => {
+    if (view === 'cycle') return eachDayOfInterval(cycleInterval)
     if (view === 'day') return [currentDate]
     if (view === 'week') {
       const start = startOfWeek(currentDate, { weekStartsOn: 0 }) // Sunday
@@ -371,7 +372,9 @@ export function ShiftCalendar({
             <Button variant="outline" size="icon" onClick={prev}>
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <span className="font-semibold w-[180px] text-center capitalize text-slate-700">
+            <span className="font-semibold w-[220px] text-center capitalize text-slate-700">
+              {view === 'cycle' &&
+                `${format(cycleStart, 'dd/MM/yyyy')} a ${format(cycleEnd, 'dd/MM/yyyy')}`}
               {view === 'day' && format(currentDate, "dd 'de' MMMM, yyyy", { locale: ptBR })}
               {view === 'week' &&
                 `${format(days[0], 'dd/MM')} a ${format(days[days.length - 1], 'dd/MM')}`}
@@ -401,6 +404,7 @@ export function ShiftCalendar({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="cycle">Ciclo completo</SelectItem>
                 <SelectItem value="month">Mês</SelectItem>
                 <SelectItem value="week">Semana</SelectItem>
                 <SelectItem value="day">Dia</SelectItem>
@@ -410,7 +414,7 @@ export function ShiftCalendar({
         </div>
 
         <ScrollArea className="flex-1 bg-slate-50/30">
-          {view === 'month' && (
+          {(view === 'month' || view === 'cycle') && (
             <div className="grid grid-cols-7 border-b sticky top-0 bg-slate-100 z-10">
               {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((d) => (
                 <div
@@ -426,7 +430,7 @@ export function ShiftCalendar({
           <div
             className={cn(
               'grid',
-              view === 'month' && 'grid-cols-7 auto-rows-[130px]',
+              (view === 'month' || view === 'cycle') && 'grid-cols-7 auto-rows-[240px]',
               view === 'week' && 'grid-cols-7 min-h-full',
               view === 'day' && 'grid-cols-1 min-h-full',
             )}
@@ -453,9 +457,13 @@ export function ShiftCalendar({
                   >
                     <div className="flex items-center justify-between">
                       <span>
-                        {format(day, view === 'month' ? 'd' : 'dd/MM (EEEE)', { locale: ptBR })}
+                        {format(
+                          day,
+                          view === 'month' || view === 'cycle' ? 'dd/MM' : 'dd/MM (EEEE)',
+                          { locale: ptBR },
+                        )}
                       </span>
-                      {dayShifts.length > 0 && view === 'month' && (
+                      {dayShifts.length > 0 && (view === 'month' || view === 'cycle') && (
                         <Badge variant="secondary" className="text-[10px] h-4 px-1">
                           {dayShifts.length}
                         </Badge>
@@ -465,7 +473,7 @@ export function ShiftCalendar({
                   <div
                     className={cn(
                       'flex-1 overflow-y-auto space-y-1.5 pr-1',
-                      view === 'month' ? 'scrollbar-none' : '',
+                      view === 'month' || view === 'cycle' ? 'scrollbar-thin' : '',
                     )}
                   >
                     {dayShifts.map((s) => {
@@ -482,9 +490,14 @@ export function ShiftCalendar({
                         >
                           <div
                             className="font-semibold text-slate-800 truncate"
-                            title={s.expand?.staff_profile?.name || s.expand?.user?.name}
+                            title={
+                              s.expand?.staff_profile?.name || s.expand?.user?.name || s.name || ''
+                            }
                           >
-                            {s.expand?.staff_profile?.name || s.expand?.user?.name || 'Sem nome'}
+                            {s.expand?.staff_profile?.name ||
+                              s.expand?.user?.name ||
+                              s.name ||
+                              'Sem nome'}
                           </div>
                           <div className="flex justify-between items-center text-slate-500 text-[10px]">
                             <span className="flex items-center gap-1">
@@ -519,7 +532,7 @@ export function ShiftCalendar({
                         </div>
                       )
                     })}
-                    {dayShifts.length === 0 && view !== 'month' && (
+                    {dayShifts.length === 0 && view !== 'month' && view !== 'cycle' && (
                       <div className="text-xs text-slate-400 italic p-4 text-center mt-4 border-2 border-dashed rounded-lg border-slate-200">
                         Nenhum plantão agendado
                       </div>
