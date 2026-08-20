@@ -110,7 +110,9 @@ export function StaffProfiles({ departmentId }: { departmentId?: string; project
         await Promise.all([
           getStaffProfiles().catch(() => []),
           getStaffRoles().catch(() => []),
-          getHospitalSectors(departmentId).catch(() => []),
+          // Colaboradores podem ser realocados entre setores de qualquer
+          // departamento; o combo deve usar o cadastro mestre completo.
+          getHospitalSectors().catch(() => []),
           departmentId
             ? getShiftRules(departmentId).catch(() => [])
             : getShiftRules().catch(() => []),
@@ -133,6 +135,7 @@ export function StaffProfiles({ departmentId }: { departmentId?: string; project
   }, [departmentId])
 
   useRealtime('staff_profiles', loadData)
+  useRealtime('hospital_sectors', loadData)
 
   const openAdd = () => {
     setEditingProfile(null)
