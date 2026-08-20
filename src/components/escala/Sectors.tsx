@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import {
   Table,
@@ -95,23 +95,33 @@ export function Sectors({ departmentId }: { departmentId?: string; projectId?: s
   const [deactivating, setDeactivating] = useState(false)
 
   const { toast } = useToast()
+  const loadRequestRef = useRef(0)
 
   const loadData = useCallback(async () => {
+    const requestId = ++loadRequestRef.current
     try {
       const [sectorRecords, deptRecords] = await Promise.all([
         getHospitalSectors(departmentId),
         getDepartments(),
       ])
-      setSectors(sectorRecords)
-      setDepartments(deptRecords)
+      // Requisições anteriores podem terminar depois de uma inclusão e não
+      // devem sobrescrever a lista mais recente com um snapshot obsoleto.
+      if (requestId === loadRequestRef.current) {
+        setSectors(sectorRecords)
+        setDepartments(deptRecords)
+      }
     } catch {
-      toast({
-        title: 'Erro',
-        description: 'Falha ao carregar setores.',
-        variant: 'destructive',
-      })
+      if (requestId === loadRequestRef.current) {
+        toast({
+          title: 'Erro',
+          description: 'Falha ao carregar setores.',
+          variant: 'destructive',
+        })
+      }
     } finally {
-      setLoading(false)
+      if (requestId === loadRequestRef.current) {
+        setLoading(false)
+      }
     }
   }, [departmentId, toast])
 
@@ -176,13 +186,23 @@ export function Sectors({ departmentId }: { departmentId?: string; projectId?: s
         is_critical: form.is_critical,
         active: form.active,
       }
-      if (editingId) {
-        await updateHospitalSector(editingId, payload)
-        toast({ title: 'Setor atualizado', description: form.name })
-      } else {
-        await createHospitalSector(payload)
-        toast({ title: 'Setor criado', description: form.name })
-      }
+      const savedSector = editingId
+        ? await updateHospitalSector(editingId, payload)
+        : await createHospitalSector(payload)
+
+      // Confirma imediatamente a resposta persistida na interface. A recarga
+      // seguinte reconcilia a lista completa, mesmo se o realtime estiver fora.
+      setSectors((current) =>
+        [...current.filter((sector) => sector.id !== savedSector.id), savedSector].sort((a, b) =>
+          String(a.name).localeCompare(String(b.name), 'pt-BR'),
+        ),
+      )
+      await loadData()
+
+      toast({
+        title: editingId ? 'Setor atualizado' : 'Setor criado',
+        description: savedSector.name,
+      })
       setDialogOpen(false)
       setEditingId(null)
     } catch (e: any) {

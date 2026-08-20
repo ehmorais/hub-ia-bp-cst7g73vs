@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import {
   Table,
@@ -100,23 +100,33 @@ export default function Sectors() {
   const [showInactive, setShowInactive] = useState(false)
 
   const { toast } = useToast()
+  const loadRequestRef = useRef(0)
 
   const loadData = useCallback(async () => {
+    const requestId = ++loadRequestRef.current
     try {
       const [sectorRecords, deptRecords] = await Promise.all([
         getHospitalSectors(),
         getDepartments(),
       ])
-      setSectors(sectorRecords)
-      setDepartments(deptRecords)
+      // Evita que uma leitura antiga, ainda em andamento, apague visualmente
+      // um setor que acabou de ser confirmado pelo servidor.
+      if (requestId === loadRequestRef.current) {
+        setSectors(sectorRecords)
+        setDepartments(deptRecords)
+      }
     } catch {
-      toast({
-        title: 'Erro',
-        description: 'Falha ao carregar setores.',
-        variant: 'destructive',
-      })
+      if (requestId === loadRequestRef.current) {
+        toast({
+          title: 'Erro',
+          description: 'Falha ao carregar setores.',
+          variant: 'destructive',
+        })
+      }
     } finally {
-      setLoading(false)
+      if (requestId === loadRequestRef.current) {
+        setLoading(false)
+      }
     }
   }, [toast])
 
@@ -174,13 +184,21 @@ export default function Sectors() {
         is_critical: form.is_critical,
         active: form.active,
       }
-      if (editingId) {
-        await updateHospitalSector(editingId, payload)
-        toast({ title: 'Setor atualizado', description: form.name })
-      } else {
-        await createHospitalSector(payload)
-        toast({ title: 'Setor criado', description: form.name })
-      }
+      const savedSector = editingId
+        ? await updateHospitalSector(editingId, payload)
+        : await createHospitalSector(payload)
+
+      setSectors((current) =>
+        [...current.filter((sector) => sector.id !== savedSector.id), savedSector].sort((a, b) =>
+          String(a.name).localeCompare(String(b.name), 'pt-BR'),
+        ),
+      )
+      await loadData()
+
+      toast({
+        title: editingId ? 'Setor atualizado' : 'Setor criado',
+        description: savedSector.name,
+      })
       setDialogOpen(false)
       setForm(emptyForm)
       setEditingId(null)
