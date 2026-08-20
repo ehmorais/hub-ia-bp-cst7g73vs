@@ -162,15 +162,19 @@ routerAdd(
     // Create the run now (after cycleId/sectorId validated) so every later
     // step is traceable. Idempotency: if a non-terminal run already exists
     // for this cycle+sector pair, reject with 409 so the UI can surface it.
-    var idempotencyKey = cycleId + '|' + sectorId
+    // Each attempt needs its own unique key. The database index is globally
+    // unique, so reusing only cycle|sector prevented every retry after the
+    // first terminal run. In-flight detection is instead based on the
+    // authoritative cycle+sector fields.
+    var idempotencyKey = cycleId + '|' + sectorId + '|' + new Date().getTime()
     try {
       var inFlightRuns = $app.findRecordsByFilter(
         'schedule_generation_runs',
-        'idempotency_key={:k}',
+        'cycle={:cyc} && sector={:sec}',
         '-created',
         100,
         0,
-        { k: idempotencyKey },
+        { cyc: cycleId, sec: sectorId },
       )
       for (var ri = 0; ri < inFlightRuns.length; ri++) {
         var st = inFlightRuns[ri].getString('status')
@@ -538,6 +542,41 @@ routerAdd(
       }
     })
 
+    // Existing shifts in another sector make the collaborator unavailable on
+    // that date. Ignoring them allowed validation to pass and then hit the
+    // unique staff_profile+cycle+start_time index during persistence.
+    var otherSectorShiftMap = {}
+    try {
+      var otherSectorShifts = $app.findRecordsByFilter(
+        'shifts',
+        "cycle={:cyc} && sector!={:sec} && staff_profile!=''",
+        'start_time',
+        10000,
+        0,
+        { cyc: cycleId, sec: sectorId },
+      )
+      otherSectorShifts.forEach(function (shift) {
+        var shiftedProfile = shift.getString('staff_profile')
+        var shiftedDate = (shift.getString('start_time') || '').split(' ')[0]
+        if (!shiftedProfile || !shiftedDate) return
+        if (!otherSectorShiftMap[shiftedProfile]) otherSectorShiftMap[shiftedProfile] = []
+        if (otherSectorShiftMap[shiftedProfile].indexOf(shiftedDate) === -1) {
+          otherSectorShiftMap[shiftedProfile].push(shiftedDate)
+        }
+      })
+    } catch (_) {}
+
+    var unavailableMap = {}
+    eligible.forEach(function (u) {
+      unavailableMap[u.id] = []
+      ;(timeoffMap[u.id] || []).forEach(function (date) {
+        if (unavailableMap[u.id].indexOf(date) === -1) unavailableMap[u.id].push(date)
+      })
+      ;(otherSectorShiftMap[u.id] || []).forEach(function (date) {
+        if (unavailableMap[u.id].indexOf(date) === -1) unavailableMap[u.id].push(date)
+      })
+    })
+
     // --- Build the prompt ---
     var eligibleForPrompt = eligible.map(function (u) {
       return {
@@ -555,6 +594,7 @@ routerAdd(
         rest_hours: u.rest_hours,
         shift_start_time: u.shift_start_time,
         timeoffs: timeoffMap[u.id] || [],
+        other_sector_shifts: otherSectorShiftMap[u.id] || [],
       }
     })
 
@@ -603,7 +643,8 @@ routerAdd(
       '1. Cada plantão deve respeitar o tipo de turno do contrato do colaborador ' +
         '(work_hours, rest_hours, shift_start_time). O backend aplicará os horários ' +
         'a partir do contrato — você deve informar apenas user_id e date.',
-      '2. Não aloque um colaborador em qualquer dia de folga (timeoffs).',
+      '2. Não aloque um colaborador em qualquer dia de folga (timeoffs) nem em ' +
+        'datas já ocupadas em outro setor (other_sector_shifts).',
       '3. Respeite o descanso mínimo entre plantões do mesmo colaborador ' +
         '(' +
         effectiveRestHours +
@@ -854,6 +895,7 @@ routerAdd(
         if (!preliminaryEligibleIds[preliminaryUid]) return
         if (!/^\d{4}-\d{2}-\d{2}$/.test(preliminaryDate)) return
         if (preliminaryDate < cycleStart || preliminaryDate > cycleEnd) return
+        if ((unavailableMap[preliminaryUid] || []).indexOf(preliminaryDate) !== -1) return
         var preliminaryKey = preliminaryUid + '|' + preliminaryDate
         if (preliminarySeen[preliminaryKey]) return
         preliminarySeen[preliminaryKey] = true
@@ -942,8 +984,8 @@ routerAdd(
         // A candidate is available if: not on timeoff that day, within the
         // monthly hour limit, and the rest gap since their last shift holds.
         var fbAvailable = function (u) {
-          var tdays = timeoffMap[u.id] || []
-          if (tdays.indexOf(fbDate) !== -1) return false
+          var unavailableDays = unavailableMap[u.id] || []
+          if (unavailableDays.indexOf(fbDate) !== -1) return false
           if ((fbUserHours[u.id] || 0) + u.work_hours > u.monthly_hour_limit) return false
           var last = fbLastDay[u.id]
           if (last) {
@@ -1123,6 +1165,10 @@ routerAdd(
       var tdays = timeoffMap[u.id] || []
       if (tdays.indexOf(entry.date) !== -1) {
         violations.push('Folga não respeitada: ' + u.name + ' em ' + entry.date + '.')
+      }
+      var occupiedDays = otherSectorShiftMap[u.id] || []
+      if (occupiedDays.indexOf(entry.date) !== -1) {
+        violations.push(u.name + ' já possui plantão em outro setor em ' + entry.date + '.')
       }
 
       // Hours accumulation
@@ -1423,6 +1469,7 @@ routerAdd(
         })
       })
     } catch (persistErr) {
+      console.log('[escala/draft] persist failed: ' + (persistErr.message || String(persistErr)))
       logAudit('AI_SHIFT_DRAFT_GENERATION', {
         status: 'error',
         cycle_id: cycleId,
