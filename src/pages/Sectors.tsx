@@ -46,6 +46,7 @@ import {
   updateHospitalSector,
   deleteHospitalSector,
   checkSectorReferences,
+  getStaffProfiles,
 } from '@/services/escala'
 import { getDepartments } from '@/services/admin'
 import { useRealtime } from '@/hooks/use-realtime'
@@ -76,6 +77,7 @@ const emptyForm: SectorForm = {
 export default function Sectors() {
   const [sectors, setSectors] = useState<any[]>([])
   const [departments, setDepartments] = useState<any[]>([])
+  const [staffCounts, setStaffCounts] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -105,15 +107,23 @@ export default function Sectors() {
   const loadData = useCallback(async () => {
     const requestId = ++loadRequestRef.current
     try {
-      const [sectorRecords, deptRecords] = await Promise.all([
+      const [sectorRecords, deptRecords, staffRecords] = await Promise.all([
         getHospitalSectors(),
         getDepartments(),
+        getStaffProfiles(),
       ])
+      const counts = staffRecords.reduce<Record<string, number>>((result, profile) => {
+        if (profile.default_sector) {
+          result[profile.default_sector] = (result[profile.default_sector] || 0) + 1
+        }
+        return result
+      }, {})
       // Evita que uma leitura antiga, ainda em andamento, apague visualmente
       // um setor que acabou de ser confirmado pelo servidor.
       if (requestId === loadRequestRef.current) {
         setSectors(sectorRecords)
         setDepartments(deptRecords)
+        setStaffCounts(counts)
       }
     } catch {
       if (requestId === loadRequestRef.current) {
@@ -134,9 +144,8 @@ export default function Sectors() {
     loadData()
   }, [loadData])
 
-  useRealtime('hospital_sectors', () => {
-    loadData()
-  })
+  useRealtime('hospital_sectors', loadData)
+  useRealtime('staff_profiles', loadData)
 
   const openCreate = () => {
     setForm(emptyForm)
@@ -339,6 +348,7 @@ export default function Sectors() {
             <TableHeader>
               <TableRow>
                 <TableHead>Setor</TableHead>
+                <TableHead>Colaboradores</TableHead>
                 <TableHead>Departamento</TableHead>
                 <TableHead>Leitos</TableHead>
                 <TableHead>Ratio (1:X)</TableHead>
@@ -352,13 +362,13 @@ export default function Sectors() {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8">
+                  <TableCell colSpan={10} className="text-center py-8">
                     <Loader2 className="h-5 w-5 animate-spin mx-auto text-slate-400" />
                   </TableCell>
                 </TableRow>
               ) : visibleSectors.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                     {showInactive
                       ? 'Nenhum setor cadastrado.'
                       : 'Nenhum setor ativo. Ative "Mostrar inativos" para ver todos.'}
@@ -373,6 +383,12 @@ export default function Sectors() {
                     <TableCell className="font-medium flex items-center gap-2">
                       {s.is_critical && <ShieldAlert className="h-4 w-4 text-orange-500" />}
                       {s.name}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="secondary">
+                        {staffCounts[s.id] || 0}{' '}
+                        {(staffCounts[s.id] || 0) === 1 ? 'colaborador' : 'colaboradores'}
+                      </Badge>
                     </TableCell>
                     <TableCell>
                       <span className="text-sm text-slate-600">{getDeptName(s.department)}</span>
