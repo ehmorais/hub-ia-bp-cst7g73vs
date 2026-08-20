@@ -159,10 +159,10 @@ export function ScalePlanner({
     ]).then(([c, sRaw, u, cont, to]) => {
       setCycles(c)
 
-      let s = sRaw
-      if (projectDeps.length > 0) {
-        s = sRaw.filter((sec: any) => projectDeps.includes(sec.department))
-      }
+      // O planejamento é uma operação central da Gestão de Escalas e deve
+      // permitir selecionar qualquer setor cadastrado, independentemente do
+      // departamento principal ou dos departamentos associados ao projeto.
+      const s = sRaw
       setSectors(s)
 
       setUsers(u.filter((profile: any) => profile.active !== false))

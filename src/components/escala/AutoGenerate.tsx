@@ -499,45 +499,15 @@ function AutoGenerateInner({
   }, [cyclesStatus, cycles, selectedCycle])
 
   // --- Load sectors: route-independent, always terminates ---
-  // The project/department narrows the sector list, but if no department
-  // is resolvable we fall back to ALL sectors so the selector is never
-  // stuck in "Carregando setores..." forever.
+  // A geração é centralizada e pode operar em qualquer setor cadastrado.
+  // Restringir pelo departamento do projeto ocultava setores válidos, como
+  // a UTI Adulto, quando havia ao menos outro setor no filtro.
   const loadSectors = useCallback(async () => {
     setSectorsStatus('loading')
     setSectorsError('')
 
-    // Resolve the department filter (project -> department + associated_departments).
-    let depIds: string[] = []
-    if (projectId) {
-      try {
-        const p = await pb.collection('projects').getOne(projectId, {
-          expand: 'associated_departments',
-        })
-        depIds = [p.department, ...(p.associated_departments || [])].filter(Boolean)
-      } catch {
-        // fall through to departmentId or all
-      }
-    }
-    if (depIds.length === 0 && departmentId) {
-      depIds = [departmentId]
-    }
-
     try {
-      let result: any[]
-      if (depIds.length > 0) {
-        const filter = depIds.map((d) => `department="${d}"`).join(' || ')
-        result = await pb.collection('hospital_sectors').getFullList({
-          filter,
-          sort: 'name',
-        })
-        // If the department filter returned nothing, fall back to all
-        // sectors rather than leaving the user stuck.
-        if (result.length === 0) {
-          result = await pb.collection('hospital_sectors').getFullList({ sort: 'name' })
-        }
-      } else {
-        result = await pb.collection('hospital_sectors').getFullList({ sort: 'name' })
-      }
+      const result = await pb.collection('hospital_sectors').getFullList({ sort: 'name' })
       setSectors(result)
       if (result.length > 0) {
         setSelectedSector((prev) => prev || result[0].id)
@@ -548,7 +518,7 @@ function AutoGenerateInner({
       setSectorsError(err?.message || 'Não foi possível carregar os setores.')
       setSectorsStatus('error')
     }
-  }, [projectId, departmentId])
+  }, [])
 
   useEffect(() => {
     loadSectors()
