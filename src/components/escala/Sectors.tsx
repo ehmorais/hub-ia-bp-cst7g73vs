@@ -101,7 +101,9 @@ export function Sectors({ departmentId }: { departmentId?: string; projectId?: s
     const requestId = ++loadRequestRef.current
     try {
       const [sectorRecords, deptRecords] = await Promise.all([
-        getHospitalSectors(departmentId),
+        // Este é o cadastro mestre de setores: precisa exibir todos os registros,
+        // inclusive os vinculados a departamentos diferentes do projeto atual.
+        getHospitalSectors(),
         getDepartments(),
       ])
       // Requisições anteriores podem terminar depois de uma inclusão e não
@@ -123,7 +125,7 @@ export function Sectors({ departmentId }: { departmentId?: string; projectId?: s
         setLoading(false)
       }
     }
-  }, [departmentId, toast])
+  }, [toast])
 
   useEffect(() => {
     loadData()
