@@ -52,33 +52,13 @@ import { Badge } from '@/components/ui/badge'
 
 type DraftCell = 'D' | 'N' | 'M' | 'T' | 'F' | ''
 
-export function ScalePlanner({
-  departmentId,
-  projectId,
-}: {
-  departmentId?: string
-  projectId?: string
-}) {
+export function ScalePlanner(_props: { departmentId?: string; projectId?: string }) {
   const [cycles, setCycles] = useState<any[]>([])
   const [sectors, setSectors] = useState<any[]>([])
   const [users, setUsers] = useState<any[]>([])
   const [contracts, setContracts] = useState<any[]>([])
   const [timeoffs, setTimeoffs] = useState<any[]>([])
   const [allShifts, setAllShifts] = useState<any[]>([])
-
-  const [projectDeps, setProjectDeps] = useState<string[]>([])
-
-  useEffect(() => {
-    if (projectId) {
-      pb.collection('projects')
-        .getOne(projectId)
-        .then((p) => {
-          setProjectDeps([p.department, ...(p.associated_departments || [])])
-        })
-    } else if (departmentId) {
-      setProjectDeps([departmentId])
-    }
-  }, [projectId, departmentId])
 
   const [selectedCycleId, setSelectedCycleId] = useState<string>('')
   const [selectedSectorId, setSelectedSectorId] = useState<string>('')
@@ -172,9 +152,11 @@ export function ScalePlanner({
         setSelectedCycleId(
           c.find((x: any) => x.status === 'draft' || x.status === 'active')?.id || c[0].id,
         )
-      if (s.length > 0) setSelectedSectorId(s[0].id)
+      setSelectedSectorId((current) =>
+        current && s.some((sector: any) => sector.id === current) ? current : s[0]?.id || '',
+      )
     })
-  }, [projectDeps])
+  }, [])
 
   useEffect(() => {
     if (selectedCycleId) {
@@ -212,11 +194,16 @@ export function ScalePlanner({
     const newDraft: Record<string, Record<string, DraftCell>> = {}
     const newUsers = new Map<string, any>()
 
-    // Initialize all existing draft users to empty records so deleted shifts are removed
-    draftUsers.forEach((u) => {
-      newUsers.set(u.id, u)
-      newDraft[u.id] = {}
-    })
+    // The planner must start from the active collaborators linked to the selected
+    // sector. A new sector may not have shifts yet, so deriving this grid only
+    // from existing shifts would leave it empty and could retain another sector's
+    // collaborators after changing the selection.
+    users
+      .filter((user) => user.active !== false && user.default_sector === selectedSectorId)
+      .forEach((user) => {
+        newUsers.set(user.id, user)
+        newDraft[user.id] = {}
+      })
 
     sectorShifts.forEach((s) => {
       const collaboratorId = s.staff_profile || s.user
@@ -245,8 +232,7 @@ export function ScalePlanner({
 
     setDraftUsers(Array.from(newUsers.values()))
     setDraft(newDraft)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allShifts, selectedSectorId, selectedCycleId])
+  }, [allShifts, selectedSectorId, selectedCycleId, users])
 
   const selectedCycle = useMemo(
     () => cycles.find((c) => c.id === selectedCycleId),

@@ -419,6 +419,34 @@ function AutoGenerateInner({
 
   const { toast } = useToast()
 
+  const resetGenerationState = useCallback(() => {
+    setGenStatus('idle')
+    setGenError('')
+    setGenDiagnostics(null)
+    setGenSuggestion('')
+    setDraftExists(null)
+    setDraftShifts([])
+    setRawDraft([])
+    setRefinementPrompt('')
+    setIsDraftMode(false)
+    setDraftIteration(1)
+    setRunId('')
+    setDraftId('')
+    setGenSource('')
+    setRunMetrics(null)
+    setValidationIssues([])
+  }, [])
+
+  const handleCycleChange = (value: string) => {
+    resetGenerationState()
+    setSelectedCycle(value)
+  }
+
+  const handleSectorChange = (value: string) => {
+    resetGenerationState()
+    setSelectedSector(value)
+  }
+
   useEffect(() => {
     if (isDraftMode && draftShifts.length > 0) {
       calendarRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -509,9 +537,9 @@ function AutoGenerateInner({
     try {
       const result = await pb.collection('hospital_sectors').getFullList({ sort: 'name' })
       setSectors(result)
-      if (result.length > 0) {
-        setSelectedSector((prev) => prev || result[0].id)
-      }
+      setSelectedSector((prev) =>
+        prev && result.some((sector: any) => sector.id === prev) ? prev : result[0]?.id || '',
+      )
       setSectorsStatus('success')
     } catch (err: any) {
       console.error('Failed to load sectors:', err)
@@ -824,7 +852,7 @@ function AutoGenerateInner({
               <label className="text-sm font-medium">Ciclo Alvo</label>
               <Select
                 value={selectedCycle}
-                onValueChange={setSelectedCycle}
+                onValueChange={handleCycleChange}
                 disabled={isDraftMode || cyclesStatus === 'loading'}
               >
                 <SelectTrigger>
@@ -874,7 +902,7 @@ function AutoGenerateInner({
               <label className="text-sm font-medium">Setor Específico</label>
               <Select
                 value={selectedSector}
-                onValueChange={setSelectedSector}
+                onValueChange={handleSectorChange}
                 disabled={isDraftMode || sectorsStatus === 'loading'}
               >
                 <SelectTrigger>
