@@ -836,7 +836,46 @@ routerAdd(
       updateRun({ ai_diagnostics: aiDiagnostics })
     }
 
-    if (!draft || !Array.isArray(draft)) {
+    // A syntactically valid AI array may still be unusable (for example,
+    // every date can be outside the selected cycle). Treat a draft with no
+    // valid entry or without minimum daily coverage exactly like invalid JSON,
+    // so the deterministic fallback can still deliver a usable schedule.
+    var preliminaryEligibleIds = {}
+    eligible.forEach(function (u) {
+      preliminaryEligibleIds[u.id] = true
+    })
+    var preliminaryDayCounts = {}
+    var preliminarySeen = {}
+    if (Array.isArray(draft)) {
+      draft.forEach(function (entry) {
+        if (!entry || typeof entry !== 'object') return
+        var preliminaryUid = entry.user_id || entry.staff_profile || ''
+        var preliminaryDate = (entry.date || '').split(' ')[0]
+        if (!preliminaryEligibleIds[preliminaryUid]) return
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(preliminaryDate)) return
+        if (preliminaryDate < cycleStart || preliminaryDate > cycleEnd) return
+        var preliminaryKey = preliminaryUid + '|' + preliminaryDate
+        if (preliminarySeen[preliminaryKey]) return
+        preliminarySeen[preliminaryKey] = true
+        preliminaryDayCounts[preliminaryDate] = (preliminaryDayCounts[preliminaryDate] || 0) + 1
+      })
+    }
+
+    var preliminaryCoverageOk = Array.isArray(draft) && Object.keys(preliminarySeen).length > 0
+    if (preliminaryCoverageOk && sectorMinStaffing > 0) {
+      var preliminaryCursor = new Date(cycleStart + 'T00:00:00Z')
+      var preliminaryEnd = new Date(cycleEnd + 'T00:00:00Z')
+      while (preliminaryCursor <= preliminaryEnd) {
+        var preliminaryDay = preliminaryCursor.toISOString().split('T')[0]
+        if ((preliminaryDayCounts[preliminaryDay] || 0) < sectorMinStaffing) {
+          preliminaryCoverageOk = false
+          break
+        }
+        preliminaryCursor = new Date(preliminaryCursor.getTime() + 86400000)
+      }
+    }
+
+    if (!draft || !Array.isArray(draft) || !preliminaryCoverageOk) {
       // --- Deterministic fallback (NO second AI call).
       // Generates a 12x36 night-shift draft directly in the backend,
       // respecting timeoffs, min rest (effectiveRestHours → ~36h ⇒ 2-day
@@ -854,13 +893,19 @@ routerAdd(
         status: 'fallback',
         cycle_id: cycleId,
         sector_id: sectorId,
-        reason: aiCallFailed ? 'ai_call_failed' : 'invalid_json',
+        reason: aiCallFailed
+          ? 'ai_call_failed'
+          : !preliminaryCoverageOk
+            ? 'invalid_cycle_coverage'
+            : 'invalid_json',
         error: aiCallFailed ? aiCallError : parseError,
         ai_content_preview: aiContent ? aiContent.substring(0, 200) : '',
       })
       console.log(
         '[escala/draft] using deterministic fallback (aiCallFailed=' +
           aiCallFailed +
+          ', coverageOk=' +
+          preliminaryCoverageOk +
           ', parseError=' +
           parseError +
           ')',
