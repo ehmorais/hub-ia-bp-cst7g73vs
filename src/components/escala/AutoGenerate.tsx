@@ -884,8 +884,15 @@ function AutoGenerateInner({
           const profileId = shift.staff_profile || shift.user
           const contract = contracts.find((item) => (item.staff_profile || item.user) === profileId)
           const shiftType = contract?.expand?.shift_type
-          const start = new Date(shift.start_time)
-          const end = new Date(shift.end_time)
+          const startValue = String(shift.start_time || '')
+          const endValue = String(shift.end_time || '')
+          const dateKey = startValue.split(/[ T]/)[0]
+          const startTime = (startValue.split(/[ T]/)[1] || '').substring(0, 5)
+          const endTime = (endValue.split(/[ T]/)[1] || '').substring(0, 5)
+          const displayDate = dateKey ? new Date(`${dateKey}T12:00:00`) : new Date('')
+          const start = new Date(startValue)
+          const end = new Date(endValue)
+          const validDate = !isNaN(displayDate.getTime())
           const validStart = !isNaN(start.getTime())
           const validEnd = !isNaN(end.getTime())
           const durationHours =
@@ -900,10 +907,10 @@ function AutoGenerateInner({
               shift.name ||
               'Sem nome',
             Setor: shift.expand?.sector?.name || sectorObj?.name || 'Sem setor',
-            Data: validStart ? format(start, 'dd/MM/yyyy') : '',
-            'Dia da semana': validStart ? format(start, 'EEEE', { locale: ptBR }) : '',
-            Início: validStart ? format(start, 'HH:mm') : '',
-            Fim: validEnd ? format(end, 'HH:mm') : '',
+            Data: validDate ? format(displayDate, 'dd/MM/yyyy') : '',
+            'Dia da semana': validDate ? format(displayDate, 'EEEE', { locale: ptBR }) : '',
+            Início: startTime,
+            Fim: endTime,
             'Duração (horas)': durationHours,
             'Tipo de plantão': shiftType?.name || shiftType?.code || 'Padrão',
             Ciclo: cycleObj?.name || 'Sem ciclo',
@@ -926,8 +933,86 @@ function AutoGenerateInner({
       ]
       worksheet['!autofilter'] = { ref: worksheet['!ref'] || 'A1:J1' }
 
+      const collaboratorNames = new Map<string, string>()
+      draftShifts.forEach((shift) => {
+        const profileId = shift.staff_profile || shift.user
+        if (!profileId) return
+        collaboratorNames.set(
+          profileId,
+          shift.expand?.staff_profile?.name || shift.expand?.user?.name || shift.name || 'Sem nome',
+        )
+      })
+
+      const duplicateNames = new Map<string, number>()
+      const collaborators = Array.from(collaboratorNames.entries())
+        .sort((a, b) => a[1].localeCompare(b[1], 'pt-BR'))
+        .map(([id, name]) => {
+          const occurrence = (duplicateNames.get(name) || 0) + 1
+          duplicateNames.set(name, occurrence)
+          return {
+            id,
+            header: occurrence === 1 ? name : `${name} (${occurrence})`,
+          }
+        })
+
+      const assignmentsByDayAndProfile = new Map<string, string[]>()
+      const shiftDateKeys = new Set<string>()
+      draftShifts.forEach((shift) => {
+        const profileId = shift.staff_profile || shift.user
+        const startValue = String(shift.start_time || '')
+        const endValue = String(shift.end_time || '')
+        const dateKey = startValue.split(/[ T]/)[0]
+        if (!profileId || !dateKey) return
+
+        shiftDateKeys.add(dateKey)
+        const contract = contracts.find((item) => (item.staff_profile || item.user) === profileId)
+        const shiftType = contract?.expand?.shift_type
+        const shiftTypeName = shiftType?.name || shiftType?.code || 'Plantão'
+        const startTime = (startValue.split(/[ T]/)[1] || '').substring(0, 5)
+        const endTime = (endValue.split(/[ T]/)[1] || '').substring(0, 5)
+        const assignment = `${shiftTypeName} (${startTime}–${endTime})`
+        const assignmentKey = `${dateKey}|${profileId}`
+        const existing = assignmentsByDayAndProfile.get(assignmentKey) || []
+        existing.push(assignment)
+        assignmentsByDayAndProfile.set(assignmentKey, existing)
+      })
+
+      const sortedShiftDateKeys = Array.from(shiftDateKeys).sort()
+      const matrixDateKeys: string[] = []
+      if (sortedShiftDateKeys.length > 0) {
+        const cursor = new Date(`${sortedShiftDateKeys[0]}T12:00:00`)
+        const lastDate = new Date(`${sortedShiftDateKeys[sortedShiftDateKeys.length - 1]}T12:00:00`)
+        while (cursor <= lastDate) {
+          matrixDateKeys.push(format(cursor, 'yyyy-MM-dd'))
+          cursor.setDate(cursor.getDate() + 1)
+        }
+      }
+
+      const matrixRows = matrixDateKeys.map((dateKey) => {
+        const date = new Date(`${dateKey}T12:00:00`)
+        const row: Record<string, string> = {
+          Data: format(date, 'dd/MM/yyyy'),
+          'Dia da semana': format(date, 'EEEE', { locale: ptBR }),
+        }
+        collaborators.forEach(({ id, header }) => {
+          row[header] = (assignmentsByDayAndProfile.get(`${dateKey}|${id}`) || []).join(' | ')
+        })
+        return row
+      })
+
+      const matrixWorksheet = XLSX.utils.json_to_sheet(matrixRows)
+      matrixWorksheet['!cols'] = [
+        { wch: 12 },
+        { wch: 18 },
+        ...collaborators.map(() => ({ wch: 32 })),
+      ]
+      matrixWorksheet['!autofilter'] = {
+        ref: matrixWorksheet['!ref'] || 'A1:B1',
+      }
+
       const workbook = XLSX.utils.book_new()
       XLSX.utils.book_append_sheet(workbook, worksheet, 'Escala')
+      XLSX.utils.book_append_sheet(workbook, matrixWorksheet, 'Dias x Colaboradores')
       workbook.Props = {
         Title: `Escala - ${sectorObj?.name || 'Setor'}`,
         Subject: 'Rascunho de escala gerado por IA',
@@ -950,7 +1035,7 @@ function AutoGenerateInner({
       XLSX.writeFile(workbook, `escala-rascunho-${safeSector}-${safeCycle}.xlsx`)
       toast({
         title: 'Planilha exportada',
-        description: `${rows.length} plantão(ões) do rascunho foram exportados para o Excel.`,
+        description: `${rows.length} plantão(ões) exportados com as guias detalhada e Dias x Colaboradores.`,
       })
     } catch (error: any) {
       toast({
