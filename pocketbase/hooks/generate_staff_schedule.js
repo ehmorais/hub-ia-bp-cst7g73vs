@@ -25,106 +25,6 @@ routerAdd(
       $app.saveNoValidate(audit)
     }
 
-    var sectorRecord = $app.findRecordById('hospital_sectors', targetSector)
-    var requiredStaffing = sectorRecord.getInt('min_staffing') || 0
-    var bedCapacity = sectorRecord.getInt('bed_capacity') || 0
-    var staffingRatio = sectorRecord.getInt('staffing_ratio') || 0
-    if (!sectorRecord.getBool('is_critical') && bedCapacity > 0 && staffingRatio > 0) {
-      requiredStaffing = Math.max(requiredStaffing, Math.ceil(bedCapacity / staffingRatio), 2)
-    }
-
-    var assignmentsByDay = {}
-    var addAssignment = function (profile, day) {
-      if (!assignmentsByDay[day]) assignmentsByDay[day] = []
-      var roleId = profile.getString('staff_role')
-      var rank = 0
-      var requires = true
-      if (roleId) {
-        try {
-          var role = $app.findRecordById('staff_roles', roleId)
-          rank = role.getInt('hierarchy_rank') || 0
-          requires = role.getBool('requires_supervision')
-        } catch (_) {}
-      }
-      assignmentsByDay[day].push({
-        id: profile.id,
-        name: profile.getString('name') || profile.id,
-        rank: rank,
-        requires_supervision: requires,
-      })
-    }
-
-    allSectorShifts.forEach(function (shift) {
-      var existingProfileId = shift.getString('staff_profile')
-      if (!existingProfileId || existingProfileId === profileId) return
-      try {
-        addAssignment(
-          $app.findRecordById('staff_profiles', existingProfileId),
-          shift.getString('start_time').split(' ')[0],
-        )
-      } catch (_) {}
-    })
-    createdShifts.forEach(function (shift) {
-      addAssignment(user, shift.start_time.split(' ')[0])
-    })
-
-    var scheduleViolations = []
-    var validationDay = new Date(startDateRaw + 'T00:00:00Z')
-    while (validationDay <= endObj) {
-      var validationDate = validationDay.toISOString().split('T')[0]
-      var dayAssignments = assignmentsByDay[validationDate] || []
-      if (dayAssignments.length < requiredStaffing) {
-        scheduleViolations.push(
-          validationDate + ': efetivo ' + dayAssignments.length + '/' + requiredStaffing + '.',
-        )
-      }
-      dayAssignments.forEach(function (assignment) {
-        if (!assignment.requires_supervision) return
-        var hasSupervisor = dayAssignments.some(function (candidate) {
-          return candidate.id !== assignment.id && candidate.rank > assignment.rank
-        })
-        if (!hasSupervisor) {
-          scheduleViolations.push(
-            validationDate + ': supervisão ausente para ' + assignment.name + '.',
-          )
-        }
-      })
-      validationDay = new Date(validationDay.getTime() + 86400000)
-    }
-
-    if (scheduleViolations.length > 0) {
-      return e.json(400, {
-        error: 'A escala individual deixaria o setor em condição inválida.',
-        violations: scheduleViolations.filter(function (item, index, all) {
-          return all.indexOf(item) === index
-        }),
-      })
-    }
-
-    $app.runInTransaction((txApp) => {
-      var previous = txApp.findRecordsByFilter(
-        'shifts',
-        "staff_profile='" + profileId + "' && cycle='" + cycleId + "'",
-        '',
-        10000,
-        0,
-      )
-      previous.forEach(function (record) {
-        txApp.delete(record)
-      })
-
-      var shiftsCol = txApp.findCollectionByNameOrId('shifts')
-      createdShifts.forEach(function (shift) {
-        var record = new Record(shiftsCol)
-        record.set('staff_profile', profileId)
-        record.set('sector', targetSector)
-        record.set('cycle', cycleId)
-        record.set('start_time', shift.start_time)
-        record.set('end_time', shift.end_time)
-        txApp.save(record)
-      })
-    })
-
     logAudit('AI_STAFF_SCHEDULE_GENERATION', {
       status: 'started',
       target_user: profileId,
@@ -391,6 +291,30 @@ routerAdd(
 
       current = new Date(current.getTime() + stepDays * 24 * 3600000)
     }
+
+    $app.runInTransaction((txApp) => {
+      var previous = txApp.findRecordsByFilter(
+        'shifts',
+        "staff_profile='" + profileId + "' && cycle='" + cycleId + "'",
+        '',
+        10000,
+        0,
+      )
+      previous.forEach(function (record) {
+        txApp.delete(record)
+      })
+
+      var shiftsCol = txApp.findCollectionByNameOrId('shifts')
+      createdShifts.forEach(function (shift) {
+        var record = new Record(shiftsCol)
+        record.set('staff_profile', profileId)
+        record.set('sector', targetSector)
+        record.set('cycle', cycleId)
+        record.set('start_time', shift.start_time)
+        record.set('end_time', shift.end_time)
+        txApp.save(record)
+      })
+    })
 
     logAudit('AI_STAFF_SCHEDULE_GENERATION', {
       status: 'success',

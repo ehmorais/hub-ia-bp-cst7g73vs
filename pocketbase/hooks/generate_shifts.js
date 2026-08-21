@@ -101,7 +101,8 @@ routerAdd(
 
         var sTypeName = 'Padrão',
           sTypeHours = 12,
-          sTypeRest = 36
+          sTypeRest = 36,
+          sTypeStart = '07:00'
         var sTypeId = c.getString('shift_type')
         if (sTypeId) {
           for (var j = 0; j < shiftTypes.length; j++) {
@@ -109,6 +110,7 @@ routerAdd(
               sTypeName = shiftTypes[j].getString('name')
               sTypeHours = shiftTypes[j].getInt('work_hours')
               sTypeRest = shiftTypes[j].getInt('rest_hours')
+              sTypeStart = shiftTypes[j].getString('start_time') || '07:00'
               break
             }
           }
@@ -144,6 +146,7 @@ routerAdd(
         usersWithContracts.push({
           id: u.id,
           name: u.getString('name'),
+          sector_id: u.getString('default_sector'),
           contract_type: c.getString('contract_type') || 'Não definido',
           hour_limit: c.getInt('monthly_hour_limit') || 0,
           role: rName,
@@ -153,6 +156,7 @@ routerAdd(
           shift_type: sTypeName,
           shift_work_hours: sTypeHours,
           shift_rest_hours: sTypeRest,
+          shift_start_time: sTypeStart,
           assigned_rules: userRules.length > 0 ? userRules : undefined,
         })
       } catch (_) {}
@@ -234,7 +238,8 @@ routerAdd(
       '6. Hours & Shifts: Respect shift_type work hours and rest hours. Total hours must not exceed hour_limit.',
       '7. Individual Rules: assigned_rules override general department rules for this specific professional.',
       '8. Custom AI Rules have MAXIMUM OVERRIDE PRIORITY. Follow their prompt precisely. When a custom rule conflicts with rest hours, 12x36, monthly hours or sequence rules, the custom rule wins; reorganize the remaining shifts to minimize the exception. Valid IDs, cycle dates, minimum staffing, supervision and formally registered timeoffs remain mandatory.',
-      '9. Output strictly a JSON array. Assume default shifts start at 07:00:00.000Z.',
+      '9. Every collaborator with a 12x36 contract must receive the complete alternating-day sequence for the whole cycle, up to the monthly hour limit. Do not stop after reaching only the sector minimum or ideal staffing.',
+      '10. Output strictly a JSON array. Assume default shifts start at 07:00:00.000Z.',
       '',
       'Output FORMAT (strictly JSON array):',
       '[{"user_id":"...","sector_id":"...","start_time":"YYYY-MM-DD 07:00:00.000Z","end_time":"YYYY-MM-DD 19:00:00.000Z"}]',
@@ -309,6 +314,104 @@ routerAdd(
           cursor = new Date(cursor.getTime() + 86400000)
         }
       })
+
+      // Complete all regular 12x36 contracts instead of stopping when only the
+      // sector minimum was reached. Named custom-rule targets keep the dates
+      // proposed by the AI because custom rules have override priority.
+      var customPromptText = ruleData
+        .filter(function (rule) {
+          return rule.type === 'custom_prompt'
+        })
+        .map(function (rule) {
+          return (rule.prompt || '').toLowerCase()
+        })
+        .join(' ')
+      var completedShifts = []
+      var completedDayCount = {}
+      var completedIndependentCount = {}
+
+      generatedShifts.forEach(function (shift) {
+        var info = usersWithContracts.filter(function (u) {
+          return u.id === shift.user_id
+        })[0]
+        if (!info) return
+        var isRegular12x36 = info.shift_work_hours === 12 && info.shift_rest_hours >= 36
+        var namedOverride =
+          customPromptText && info.name && customPromptText.indexOf(info.name.toLowerCase()) !== -1
+        if (isRegular12x36 && !namedOverride) return
+        completedShifts.push(shift)
+        var existingDate = (shift.start_time || '').split(' ')[0]
+        completedDayCount[existingDate] = (completedDayCount[existingDate] || 0) + 1
+        if (!info.requires_supervision) {
+          completedIndependentCount[existingDate] =
+            (completedIndependentCount[existingDate] || 0) + 1
+        }
+      })
+
+      var completionOrder = usersWithContracts.slice().sort(function (a, b) {
+        if (a.requires_supervision === b.requires_supervision) {
+          return a.name < b.name ? -1 : 1
+        }
+        return a.requires_supervision ? 1 : -1
+      })
+      var generationStart = (cycle.getString('start_date') || '').split(' ')[0]
+      var generationEnd = (cycle.getString('end_date') || '').split(' ')[0]
+
+      completionOrder.forEach(function (u) {
+        var isRegular12x36 = u.shift_work_hours === 12 && u.shift_rest_hours >= 36
+        var namedOverride =
+          customPromptText && u.name && customPromptText.indexOf(u.name.toLowerCase()) !== -1
+        if (!isRegular12x36 || namedOverride) return
+
+        var stepDays = Math.max(2, Math.round((u.shift_work_hours + u.shift_rest_hours) / 24))
+        var maxShifts = Math.floor((u.hour_limit || 0) / u.shift_work_hours)
+        var bestDates = []
+        var bestScore = Number.MAX_SAFE_INTEGER
+
+        for (var offset = 0; offset < stepDays; offset++) {
+          var dates = []
+          var dateCursor = new Date(generationStart + 'T00:00:00Z')
+          dateCursor = new Date(dateCursor.getTime() + offset * 86400000)
+          while (dateCursor <= new Date(generationEnd + 'T00:00:00Z') && dates.length < maxShifts) {
+            var candidateDate = dateCursor.toISOString().split('T')[0]
+            if ((timeoffMap[u.id] || []).indexOf(candidateDate) === -1) {
+              dates.push(candidateDate)
+            }
+            dateCursor = new Date(dateCursor.getTime() + stepDays * 86400000)
+          }
+
+          var score = -dates.length * 1000
+          dates.forEach(function (date) {
+            score += (completedDayCount[date] || 0) * 10
+            if (u.requires_supervision && !(completedIndependentCount[date] > 0)) {
+              score += 100
+            }
+          })
+          if (score < bestScore) {
+            bestScore = score
+            bestDates = dates
+          }
+        }
+
+        bestDates.forEach(function (date) {
+          var startTime = u.shift_start_time || '07:00'
+          if (startTime.length === 5) startTime += ':00'
+          var start = new Date(date + 'T' + startTime + '.000Z')
+          var end = new Date(start.getTime() + u.shift_work_hours * 3600000)
+          completedShifts.push({
+            user_id: u.id,
+            sector_id: u.sector_id,
+            start_time: start.toISOString().replace('T', ' ').substring(0, 23) + 'Z',
+            end_time: end.toISOString().replace('T', ' ').substring(0, 23) + 'Z',
+          })
+          completedDayCount[date] = (completedDayCount[date] || 0) + 1
+          if (!u.requires_supervision) {
+            completedIndependentCount[date] = (completedIndependentCount[date] || 0) + 1
+          }
+        })
+      })
+
+      generatedShifts = completedShifts
 
       var userHourMap = {}
       var userContractMap = {}

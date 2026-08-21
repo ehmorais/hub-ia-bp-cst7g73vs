@@ -674,8 +674,9 @@ routerAdd(
       '5. Garanta o efetivo mínimo diário (min_staffing) no setor.',
       '6. Um colaborador com requires_supervision=true não pode ficar sozinho no turno; ' +
         'deve haver outro colaborador que não exija supervisão no mesmo dia.',
-      '7. Distribua a carga de forma equilibrada entre os elegíveis.',
-      '8. NÃO invente IDs, pessoas, datas ou turnos. Use somente os IDs fornecidos. ' +
+      '7. Para cada colaborador com contrato 12x36, preencha a sequência completa de dias alternados durante todo o ciclo, até o limite mensal. Não pare ao atingir apenas o efetivo mínimo ou ideal do setor.',
+      '8. Distribua as duas alternâncias do 12x36 de forma equilibrada entre os dias pares e ímpares.',
+      '9. NÃO invente IDs, pessoas, datas ou turnos. Use somente os IDs fornecidos. ' +
         'Datas devem estar dentro do intervalo do ciclo.',
       '',
       'RASCUNHO ATUAL (para refinamento, se houver):',
@@ -1094,6 +1095,96 @@ routerAdd(
       }
       draft = fbDraft
     }
+
+    // --- Complete every regular 12x36 contract across the whole cycle.
+    // The generator previously stopped as soon as the sector minimum/ideal was
+    // reached, leaving several collaborators with only half of their contractual
+    // sequence. Custom rules that explicitly mention a collaborator keep their
+    // AI-proposed dates and remain the highest-priority override.
+    var customPromptText = customRules
+      .map(function (rule) {
+        return (rule.prompt || '').toLowerCase()
+      })
+      .join(' ')
+    var rebuiltDraft = []
+    var rebuiltDayCount = {}
+    var rebuiltIndependentCount = {}
+
+    ;(Array.isArray(draft) ? draft : []).forEach(function (entry) {
+      if (!entry || typeof entry !== 'object') return
+      var uid = entry.user_id || entry.staff_profile || ''
+      var date = (entry.date || '').split(' ')[0]
+      var candidate = eligible.filter(function (u) {
+        return u.id === uid
+      })[0]
+      if (!candidate || !date || date < cycleStart || date > cycleEnd) return
+      var isRegular12x36 = candidate.work_hours === 12 && candidate.rest_hours >= 36
+      var hasNamedOverride =
+        customPromptText &&
+        candidate.name &&
+        customPromptText.indexOf(candidate.name.toLowerCase()) !== -1
+      if (isRegular12x36 && !hasNamedOverride) return
+
+      rebuiltDraft.push({ user_id: uid, date: date })
+      rebuiltDayCount[date] = (rebuiltDayCount[date] || 0) + 1
+      if (!candidate.requires_supervision) {
+        rebuiltIndependentCount[date] = (rebuiltIndependentCount[date] || 0) + 1
+      }
+    })
+
+    var completionOrder = eligible.slice().sort(function (a, b) {
+      if (a.requires_supervision === b.requires_supervision) {
+        return a.name < b.name ? -1 : 1
+      }
+      return a.requires_supervision ? 1 : -1
+    })
+
+    completionOrder.forEach(function (u) {
+      var isRegular12x36 = u.work_hours === 12 && u.rest_hours >= 36
+      var hasNamedOverride =
+        customPromptText && u.name && customPromptText.indexOf(u.name.toLowerCase()) !== -1
+      if (!isRegular12x36 || hasNamedOverride) return
+
+      var stepDays = Math.max(2, Math.round((u.work_hours + u.rest_hours) / 24))
+      var maxShifts = Math.floor((u.monthly_hour_limit || 0) / u.work_hours)
+      var bestDates = []
+      var bestScore = Number.MAX_SAFE_INTEGER
+
+      for (var offset = 0; offset < stepDays; offset++) {
+        var dates = []
+        var offsetCursor = new Date(cycleStart + 'T00:00:00Z')
+        offsetCursor = new Date(offsetCursor.getTime() + offset * 86400000)
+        while (offsetCursor <= new Date(cycleEnd + 'T00:00:00Z') && dates.length < maxShifts) {
+          var offsetDate = offsetCursor.toISOString().split('T')[0]
+          if ((unavailableMap[u.id] || []).indexOf(offsetDate) === -1) {
+            dates.push(offsetDate)
+          }
+          offsetCursor = new Date(offsetCursor.getTime() + stepDays * 86400000)
+        }
+
+        var score = -dates.length * 1000
+        dates.forEach(function (date) {
+          score += (rebuiltDayCount[date] || 0) * 10
+          if (u.requires_supervision && !(rebuiltIndependentCount[date] > 0)) {
+            score += 100
+          }
+        })
+        if (score < bestScore) {
+          bestScore = score
+          bestDates = dates
+        }
+      }
+
+      bestDates.forEach(function (date) {
+        rebuiltDraft.push({ user_id: u.id, date: date })
+        rebuiltDayCount[date] = (rebuiltDayCount[date] || 0) + 1
+        if (!u.requires_supervision) {
+          rebuiltIndependentCount[date] = (rebuiltIndependentCount[date] || 0) + 1
+        }
+      })
+    })
+
+    draft = rebuiltDraft
 
     // --- Schema validation against eligible set + cycle range ---
     var eligibleIds = {}
