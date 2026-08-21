@@ -45,6 +45,7 @@ import {
   Activity,
   ListChecks,
   Cpu,
+  Download,
 } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { format } from 'date-fns'
@@ -409,6 +410,7 @@ function AutoGenerateInner({
   const [isDraftMode, setIsDraftMode] = useState(false)
   const [draftIteration, setDraftIteration] = useState(1)
   const [selectedShiftType, setSelectedShiftType] = useState('all')
+  const [isExporting, setIsExporting] = useState(false)
 
   // Generation run/draft tracking (schedule_generation_runs + schedule_drafts).
   const [runId, setRunId] = useState<string>('')
@@ -870,6 +872,97 @@ function AutoGenerateInner({
     }
   }, [selectedShiftType, shiftTypeOptions])
 
+  const handleExportDraft = async () => {
+    if (!draftShifts.length || isExporting) return
+
+    setIsExporting(true)
+    try {
+      const XLSX = await import('xlsx')
+      const rows = [...draftShifts]
+        .sort((a, b) => String(a.start_time).localeCompare(String(b.start_time)))
+        .map((shift) => {
+          const profileId = shift.staff_profile || shift.user
+          const contract = contracts.find((item) => (item.staff_profile || item.user) === profileId)
+          const shiftType = contract?.expand?.shift_type
+          const start = new Date(shift.start_time)
+          const end = new Date(shift.end_time)
+          const validStart = !isNaN(start.getTime())
+          const validEnd = !isNaN(end.getTime())
+          const durationHours =
+            validStart && validEnd
+              ? Math.round(((end.getTime() - start.getTime()) / (1000 * 60 * 60)) * 100) / 100
+              : ''
+
+          return {
+            Colaborador:
+              shift.expand?.staff_profile?.name ||
+              shift.expand?.user?.name ||
+              shift.name ||
+              'Sem nome',
+            Setor: shift.expand?.sector?.name || sectorObj?.name || 'Sem setor',
+            Data: validStart ? format(start, 'dd/MM/yyyy') : '',
+            'Dia da semana': validStart ? format(start, 'EEEE', { locale: ptBR }) : '',
+            Início: validStart ? format(start, 'HH:mm') : '',
+            Fim: validEnd ? format(end, 'HH:mm') : '',
+            'Duração (horas)': durationHours,
+            'Tipo de plantão': shiftType?.name || shiftType?.code || 'Padrão',
+            Ciclo: cycleObj?.name || 'Sem ciclo',
+            Status: 'Rascunho',
+          }
+        })
+
+      const worksheet = XLSX.utils.json_to_sheet(rows)
+      worksheet['!cols'] = [
+        { wch: 34 },
+        { wch: 24 },
+        { wch: 12 },
+        { wch: 18 },
+        { wch: 10 },
+        { wch: 10 },
+        { wch: 17 },
+        { wch: 22 },
+        { wch: 28 },
+        { wch: 12 },
+      ]
+      worksheet['!autofilter'] = { ref: worksheet['!ref'] || 'A1:J1' }
+
+      const workbook = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Escala')
+      workbook.Props = {
+        Title: `Escala - ${sectorObj?.name || 'Setor'}`,
+        Subject: 'Rascunho de escala gerado por IA',
+        Author: 'Gestão de Escalas',
+      }
+
+      const safeSector = (sectorObj?.name || 'setor')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-zA-Z0-9]+/g, '-')
+        .replace(/^-|-$/g, '')
+        .toLowerCase()
+      const safeCycle = (cycleObj?.name || 'ciclo')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-zA-Z0-9]+/g, '-')
+        .replace(/^-|-$/g, '')
+        .toLowerCase()
+
+      XLSX.writeFile(workbook, `escala-rascunho-${safeSector}-${safeCycle}.xlsx`)
+      toast({
+        title: 'Planilha exportada',
+        description: `${rows.length} plantão(ões) do rascunho foram exportados para o Excel.`,
+      })
+    } catch (error: any) {
+      toast({
+        title: 'Erro ao exportar',
+        description: error?.message || 'Não foi possível gerar a planilha do rascunho.',
+        variant: 'destructive',
+      })
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
   const statusLabel: Record<GenStatus, string> = {
     idle: '',
     validating: 'Validando pré-requisitos...',
@@ -1134,6 +1227,20 @@ function AutoGenerateInner({
                     </SelectContent>
                   </Select>
                 </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleExportDraft}
+                  disabled={isExporting || draftShifts.length === 0}
+                  className="gap-2 bg-white w-full sm:w-auto"
+                >
+                  {isExporting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Download className="h-4 w-4" />
+                  )}
+                  Exportar Excel
+                </Button>
                 <Button
                   size="sm"
                   onClick={handleSaveScale}
