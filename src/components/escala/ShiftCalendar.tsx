@@ -44,11 +44,13 @@ type ViewMode = 'cycle' | 'month' | 'week' | 'day'
 
 export function ShiftCalendar({
   shifts,
+  validationShifts,
   cycle,
   contracts,
   onShiftUpdate,
 }: {
   shifts: any[]
+  validationShifts?: any[]
   cycle: any
   contracts: any[]
   onShiftUpdate?: (updatedShift: any) => void
@@ -92,6 +94,15 @@ export function ShiftCalendar({
     )
   }, [shifts, selectedSectorId])
 
+  // A shift-type selection filters only what is rendered. Staffing, rest and
+  // hour validations must continue to consider the complete schedule.
+  const validationVisibleShifts = useMemo(() => {
+    if (!selectedSectorId) return []
+    return (validationShifts || shifts).filter(
+      (s) => s.sector === selectedSectorId || s.expand?.sector?.id === selectedSectorId,
+    )
+  }, [selectedSectorId, shifts, validationShifts])
+
   const days = useMemo(() => {
     if (view === 'cycle') return eachDayOfInterval(cycleInterval)
     if (view === 'day') return [currentDate]
@@ -121,7 +132,7 @@ export function ShiftCalendar({
       days.forEach((day) => {
         if (!isWithinInterval(day, cycleInterval)) return // outside the cycle
 
-        const dayShifts = visibleShifts.filter((s) =>
+        const dayShifts = validationVisibleShifts.filter((s) =>
           isSameDay(parseISO(s.start_time.split(' ')[0]), day),
         )
         const count = dayShifts.length
@@ -131,7 +142,7 @@ export function ShiftCalendar({
         // content at all, we never raise a coverage alert — there is nothing
         // to validate. We detect "no content" by checking the full shifts list
         // (the calendar can be rendered with an empty draft).
-        if (visibleShifts.length === 0) {
+        if (validationVisibleShifts.length === 0) {
           // No shifts for this sector in the selected cycle: nothing to
           // validate. Surface an informational note instead of a hard
           // "below minimum" violation.
@@ -166,11 +177,11 @@ export function ShiftCalendar({
 
     // Compute user specific alerts (rest hours, overlaps) for users in this sector
     const usersInSector = Array.from(
-      new Set(visibleShifts.map((shift) => shift.staff_profile || shift.user)),
+      new Set(validationVisibleShifts.map((shift) => shift.staff_profile || shift.user)),
     ).filter(Boolean)
 
     usersInSector.forEach((profileId) => {
-      const userShifts = shifts
+      const userShifts = (validationShifts || shifts)
         .filter((shift) => (shift.staff_profile || shift.user) === profileId)
         .sort((a, b) => a.start_time.localeCompare(b.start_time))
       const contract = contracts.find((item) => (item.staff_profile || item.user) === profileId)
@@ -258,7 +269,9 @@ export function ShiftCalendar({
 
     return newAlerts
   }, [
+    validationVisibleShifts,
     visibleShifts,
+    validationShifts,
     shifts,
     days,
     sectors,

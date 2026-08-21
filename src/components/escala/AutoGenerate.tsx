@@ -408,6 +408,7 @@ function AutoGenerateInner({
   const [refinementPrompt, setRefinementPrompt] = useState('')
   const [isDraftMode, setIsDraftMode] = useState(false)
   const [draftIteration, setDraftIteration] = useState(1)
+  const [selectedShiftType, setSelectedShiftType] = useState('all')
 
   // Generation run/draft tracking (schedule_generation_runs + schedule_drafts).
   const [runId, setRunId] = useState<string>('')
@@ -430,6 +431,7 @@ function AutoGenerateInner({
     setRefinementPrompt('')
     setIsDraftMode(false)
     setDraftIteration(1)
+    setSelectedShiftType('all')
     setRunId('')
     setDraftId('')
     setGenSource('')
@@ -822,6 +824,52 @@ function AutoGenerateInner({
 
   const draftAlerts = dailyStaffing.filter((d) => d.status !== 'optimal')
 
+  const shiftTypeOptions = useMemo(() => {
+    const profileIds = new Set(
+      draftShifts.map((shift) => shift.staff_profile || shift.user).filter(Boolean),
+    )
+    const options = new Map<string, { id: string; name: string }>()
+
+    contracts.forEach((contract) => {
+      const profileId = contract.staff_profile || contract.user
+      const shiftType = contract.expand?.shift_type
+      if (!profileIds.has(profileId) || !shiftType?.id) return
+      options.set(shiftType.id, {
+        id: shiftType.id,
+        name: shiftType.name || shiftType.code || 'Tipo de plantão',
+      })
+    })
+
+    return Array.from(options.values()).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
+  }, [contracts, draftShifts])
+
+  const contractShiftTypeByProfile = useMemo(() => {
+    const result = new Map<string, string>()
+    contracts.forEach((contract) => {
+      const profileId = contract.staff_profile || contract.user
+      const shiftTypeId = contract.shift_type || contract.expand?.shift_type?.id
+      if (profileId && shiftTypeId) result.set(profileId, shiftTypeId)
+    })
+    return result
+  }, [contracts])
+
+  const filteredDraftShifts = useMemo(() => {
+    if (selectedShiftType === 'all') return draftShifts
+    return draftShifts.filter((shift) => {
+      const profileId = shift.staff_profile || shift.user
+      return contractShiftTypeByProfile.get(profileId) === selectedShiftType
+    })
+  }, [contractShiftTypeByProfile, draftShifts, selectedShiftType])
+
+  useEffect(() => {
+    if (
+      selectedShiftType !== 'all' &&
+      !shiftTypeOptions.some((option) => option.id === selectedShiftType)
+    ) {
+      setSelectedShiftType('all')
+    }
+  }, [selectedShiftType, shiftTypeOptions])
+
   const statusLabel: Record<GenStatus, string> = {
     idle: '',
     validating: 'Validando pré-requisitos...',
@@ -1069,24 +1117,43 @@ function AutoGenerateInner({
                   Não Publicado
                 </Badge>
               </CardTitle>
-              <Button
-                size="sm"
-                onClick={handleSaveScale}
-                disabled={genStatus === 'saving' || genStatus === 'generating'}
-                className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white w-full sm:w-auto shadow-sm"
-              >
-                {genStatus === 'saving' ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Save className="h-4 w-4" />
-                )}
-                Publicar Escala Definitiva
-              </Button>
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-3 w-full sm:w-auto">
+                <div className="space-y-1 min-w-[210px]">
+                  <label className="text-xs font-medium text-slate-600">Visualizar plantão</label>
+                  <Select value={selectedShiftType} onValueChange={setSelectedShiftType}>
+                    <SelectTrigger className="h-9 bg-white">
+                      <SelectValue placeholder="Todos os plantões" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos</SelectItem>
+                      {shiftTypeOptions.map((option) => (
+                        <SelectItem key={option.id} value={option.id}>
+                          {option.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button
+                  size="sm"
+                  onClick={handleSaveScale}
+                  disabled={genStatus === 'saving' || genStatus === 'generating'}
+                  className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white w-full sm:w-auto shadow-sm"
+                >
+                  {genStatus === 'saving' ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Save className="h-4 w-4" />
+                  )}
+                  Publicar Escala Definitiva
+                </Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="p-0">
             <ShiftCalendar
-              shifts={draftShifts}
+              shifts={filteredDraftShifts}
+              validationShifts={draftShifts}
               cycle={cycleObj}
               contracts={contracts}
               onShiftUpdate={handleDraftShiftUpdate}
