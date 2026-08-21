@@ -170,6 +170,7 @@ routerAdd(
       }
     })
 
+    var customRuleCount = 0
     var ruleData = dbRules.map(function (r) {
       var type = r.getString('rule_type') || 'other'
       var entry = {
@@ -177,7 +178,11 @@ routerAdd(
         type: type,
         value: r.getInt('value') || 0,
       }
-      if (type === 'custom_prompt') entry.prompt = r.getString('prompt') || ''
+      if (type === 'custom_prompt') {
+        entry.prompt = r.getString('prompt') || ''
+        entry.priority = 'override'
+        customRuleCount++
+      }
       return entry
     })
 
@@ -228,7 +233,7 @@ routerAdd(
       '5. Time-off Requests: You MUST NOT schedule a user on any day from date through end_date, inclusive.',
       '6. Hours & Shifts: Respect shift_type work hours and rest hours. Total hours must not exceed hour_limit.',
       '7. Individual Rules: assigned_rules override general department rules for this specific professional.',
-      '8. Custom AI Rules: Apply all rules of type "custom_prompt" by following their prompt field precisely.',
+      '8. Custom AI Rules have MAXIMUM OVERRIDE PRIORITY. Follow their prompt precisely. When a custom rule conflicts with rest hours, 12x36, monthly hours or sequence rules, the custom rule wins; reorganize the remaining shifts to minimize the exception. Valid IDs, cycle dates, minimum staffing, supervision and formally registered timeoffs remain mandatory.',
       '9. Output strictly a JSON array. Assume default shifts start at 07:00:00.000Z.',
       '',
       'Output FORMAT (strictly JSON array):',
@@ -315,6 +320,7 @@ routerAdd(
       var userShiftDates = {}
       var dayAssignments = {}
       var violations = []
+      var overrideWarnings = []
       var cycleStart = (cycle.getString('start_date') || '').split(' ')[0]
       var cycleEnd = (cycle.getString('end_date') || '').split(' ')[0]
 
@@ -382,15 +388,19 @@ routerAdd(
           userHourMap[gs.user_id] += shiftHours
 
           if (userHourMap[gs.user_id] > uInfo.hour_limit) {
-            violations.push(
+            var hourMessage =
               'Violação de Carga Horária: ' +
-                uInfo.name +
-                ' excede o limite mensal (' +
-                Math.round(userHourMap[gs.user_id]) +
-                'h / ' +
-                uInfo.hour_limit +
-                'h)',
-            )
+              uInfo.name +
+              ' excede o limite mensal (' +
+              Math.round(userHourMap[gs.user_id]) +
+              'h / ' +
+              uInfo.hour_limit +
+              'h)'
+            if (customRuleCount > 0) {
+              overrideWarnings.push('Exceção por regra customizada: ' + hourMessage)
+            } else {
+              violations.push(hourMessage)
+            }
           }
 
           // Check rest hours between consecutive shifts
@@ -401,15 +411,19 @@ routerAdd(
             if (gapHours < 0) {
               violations.push('Sobreposição de plantões: ' + uInfo.name)
             } else if (gapHours < uInfo.shift_rest_hours) {
-              violations.push(
+              var restMessage =
                 'Violação de Descanso: ' +
-                  uInfo.name +
-                  ' tem apenas ' +
-                  Math.round(gapHours) +
-                  'h de descanso (mínimo: ' +
-                  uInfo.shift_rest_hours +
-                  'h)',
-              )
+                uInfo.name +
+                ' tem apenas ' +
+                Math.round(gapHours) +
+                'h de descanso (mínimo: ' +
+                uInfo.shift_rest_hours +
+                'h)'
+              if (customRuleCount > 0) {
+                overrideWarnings.push('Exceção por regra customizada: ' + restMessage)
+              } else {
+                violations.push(restMessage)
+              }
             }
           }
           userShiftDates[gs.user_id] = { end: shiftEnd }
@@ -574,7 +588,12 @@ routerAdd(
         tokenUsage,
       )
 
-      return e.json(200, { success: true, count: savedCount })
+      return e.json(200, {
+        success: true,
+        count: savedCount,
+        warnings: overrideWarnings,
+        custom_override_applied: customRuleCount > 0,
+      })
     } catch (err) {
       var isTimeout =
         err.message &&

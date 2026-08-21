@@ -446,6 +446,7 @@ routerAdd(
     }
     var hardRules = []
     var preferredRules = []
+    var customRules = []
     var contradictions = []
     var restValues = {}
     var minStaffValues = {}
@@ -459,9 +460,11 @@ routerAdd(
         type: type,
         value: r.getInt('value') || 0,
       }
-      if (type === 'custom_prompt') entry.prompt = r.getString('prompt') || ''
-
-      if (HARD_TYPES[type]) {
+      if (type === 'custom_prompt') {
+        entry.prompt = r.getString('prompt') || ''
+        entry.priority = 'override'
+        customRules.push(entry)
+      } else if (HARD_TYPES[type]) {
         hardRules.push(entry)
         if (type === 'min_rest_hours') restValues[entry.value] = true
         if (type === 'min_staff') minStaffValues[entry.value] = true
@@ -470,6 +473,14 @@ routerAdd(
         preferredRules.push(entry)
       }
     })
+
+    if (customRules.length > 0) {
+      contradictions.push(
+        'Há ' +
+          customRules.length +
+          ' regra(s) customizada(s) de prioridade máxima. Em conflitos, elas prevalecem sobre descanso, carga horária e sequência; a exceção será registrada como aviso.',
+      )
+    }
 
     if (Object.keys(restValues).length > 1) {
       contradictions.push(
@@ -622,7 +633,13 @@ routerAdd(
       'COLABORADORES ELEGÍVEIS (use EXATAMENTE estes IDs; não invente pessoas nem IDs):',
       JSON.stringify(eligibleForPrompt, null, 2),
       '',
-      'REGRAS DURAS (NUNCA violar):',
+      'REGRAS CUSTOMIZADAS DE PRIORIDADE MÁXIMA (SOBRESCRITAS EXPLÍCITAS):',
+      customRules.length > 0 ? JSON.stringify(customRules, null, 2) : 'nenhuma',
+      'Se houver conflito entre uma regra customizada e uma regra geral de descanso, 12x36, ' +
+        'carga horária ou sequência, cumpra a regra customizada. Reorganize os demais plantões ' +
+        'para reduzir o impacto da exceção.',
+      '',
+      'REGRAS DURAS DE SEGURANÇA E INTEGRIDADE:',
       JSON.stringify(hardRules, null, 2),
       '',
       'REGRAS PREFERENCIAIS (otimizar quando possível):',
@@ -640,6 +657,9 @@ routerAdd(
       '  - Efetivo mínimo diário no setor: ' + sectorMinStaffing,
       '',
       'INSTRUÇÕES OBRIGATÓRIAS:',
+      '0. Regras customizadas têm prioridade máxima. Elas podem sobrescrever descanso, ' +
+        'padrão 12x36, carga horária e sequência quando necessário. Nunca invente IDs/datas e ' +
+        'mantenha efetivo mínimo, supervisão e folgas formalmente registradas.',
       '1. Cada plantão deve respeitar o tipo de turno do contrato do colaborador ' +
         '(work_hours, rest_hours, shift_start_time). O backend aplicará os horários ' +
         'a partir do contrato — você deve informar apenas user_id e date.',
@@ -1174,14 +1194,18 @@ routerAdd(
       // Hours accumulation
       userHours[u.id] = (userHours[u.id] || 0) + u.work_hours
       if (userHours[u.id] > u.monthly_hour_limit) {
-        violations.push(
+        var hoursMessage =
           u.name +
-            ' excede o limite mensal: ' +
-            userHours[u.id] +
-            'h de ' +
-            u.monthly_hour_limit +
-            'h.',
-        )
+          ' excede o limite mensal: ' +
+          userHours[u.id] +
+          'h de ' +
+          u.monthly_hour_limit +
+          'h.'
+        if (customRules.length > 0) {
+          warnings.push('Exceção por regra customizada: ' + hoursMessage)
+        } else {
+          violations.push(hoursMessage)
+        }
       }
 
       if (!userShifts[u.id]) userShifts[u.id] = []
@@ -1210,14 +1234,18 @@ routerAdd(
           if (gap < 0) {
             violations.push(u.name + ' possui plantões sobrepostos.')
           } else if (gap < effectiveRestHours) {
-            violations.push(
+            var restMessage =
               u.name +
-                ' tem apenas ' +
-                Math.round(gap * 10) / 10 +
-                'h de descanso (mínimo ' +
-                effectiveRestHours +
-                'h).',
-            )
+              ' tem apenas ' +
+              Math.round(gap * 10) / 10 +
+              'h de descanso (mínimo ' +
+              effectiveRestHours +
+              'h).'
+            if (customRules.length > 0) {
+              warnings.push('Exceção por regra customizada: ' + restMessage)
+            } else {
+              violations.push(restMessage)
+            }
           }
         }
         // consecutive-day count (calendar days)
@@ -1234,7 +1262,13 @@ routerAdd(
         }
         prevDate = dStr
         if (effectiveMaxConsecutive > 0 && consecutive > effectiveMaxConsecutive) {
-          violations.push(u.name + ' excede ' + effectiveMaxConsecutive + ' plantões consecutivos.')
+          var consecutiveMessage =
+            u.name + ' excede ' + effectiveMaxConsecutive + ' plantões consecutivos.'
+          if (customRules.length > 0) {
+            warnings.push('Exceção por regra customizada: ' + consecutiveMessage)
+          } else {
+            violations.push(consecutiveMessage)
+          }
         }
       }
     })
@@ -1310,6 +1344,7 @@ routerAdd(
       orphan_contracts_ignored: orphanContractCount,
       hard_rules: hardRules,
       preferred_rules: preferredRules,
+      custom_rules: customRules,
       contradictions: contradictions,
       effective_rest_hours: effectiveRestHours,
       effective_min_staffing: sectorMinStaffing,

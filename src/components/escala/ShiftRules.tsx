@@ -111,21 +111,38 @@ export function ShiftRules({ departmentId, readOnly = false }: ShiftRulesProps) 
 
     setErrors({})
     try {
-      await pb.collection('shift_rules').create({
+      const ruleData: Record<string, string | number> = {
         name,
         rule_type: type,
-        value: type === 'custom_prompt' ? 0 : Number(value),
-        prompt: type === 'custom_prompt' ? prompt : '',
+        prompt: type === 'custom_prompt' ? prompt.trim() : '',
         department: deptToSave,
-      })
+      }
+      if (type !== 'custom_prompt') {
+        ruleData.value = Number(value)
+      }
+      await pb.collection('shift_rules').create(ruleData)
       setName('')
       setValue('')
       setPrompt('')
       setSelectedDeptId(departmentId || '')
       setIsDialogOpen(false)
       toast({ title: 'Regra criada com sucesso' })
-    } catch {
-      toast({ title: 'Erro ao criar regra', variant: 'destructive' })
+    } catch (error: any) {
+      const fieldErrors = error?.response?.data
+      const firstFieldError =
+        fieldErrors &&
+        Object.values(fieldErrors).find(
+          (item: any) => typeof item?.message === 'string' && item.message,
+        )
+      toast({
+        title: 'Erro ao criar regra',
+        description:
+          (firstFieldError as any)?.message ||
+          error?.response?.message ||
+          error?.message ||
+          'Não foi possível salvar a regra.',
+        variant: 'destructive',
+      })
     }
   }
 
@@ -146,7 +163,7 @@ export function ShiftRules({ departmentId, readOnly = false }: ShiftRulesProps) 
       max_hours: 'Máximo de Horas/Mês',
       min_rest_hours: 'Mínimo Horas Descanso',
       other: 'Outra Regra',
-      custom_prompt: 'Customizada (IA)',
+      custom_prompt: 'Customizada (IA) · Prioridade máxima',
     }
     return labels[t] || t
   }
@@ -277,9 +294,12 @@ export function ShiftRules({ departmentId, readOnly = false }: ShiftRulesProps) 
                     {errors.prompt ? (
                       <p className="text-xs text-red-500">{errors.prompt}</p>
                     ) : (
-                      <p className="text-xs text-muted-foreground">
-                        O modelo de IA interpretará este prompt para ajustar a escala.
-                      </p>
+                      <div className="rounded-md border border-indigo-200 bg-indigo-50 p-3 text-xs text-indigo-800">
+                        <strong>Prioridade máxima:</strong> o modelo de IA interpretará este prompt
+                        como uma sobrescrita das regras gerais. Conflitos com descanso, carga
+                        horária ou sequência serão registrados como avisos para revisão, sem impedir
+                        o rascunho.
+                      </div>
                     )}
                   </div>
                 )}
