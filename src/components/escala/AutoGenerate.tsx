@@ -411,6 +411,7 @@ function AutoGenerateInner({
   const [draftIteration, setDraftIteration] = useState(1)
   const [selectedShiftType, setSelectedShiftType] = useState('all')
   const [isExporting, setIsExporting] = useState(false)
+  const [isExportingPdf, setIsExportingPdf] = useState(false)
 
   // Generation run/draft tracking (schedule_generation_runs + schedule_drafts).
   const [runId, setRunId] = useState<string>('')
@@ -1048,6 +1049,140 @@ function AutoGenerateInner({
     }
   }
 
+  const handleExportDraftPdf = async () => {
+    if (!draftShifts.length || isExportingPdf) return
+
+    setIsExportingPdf(true)
+    try {
+      const [{ jsPDF }, { autoTable }] = await Promise.all([
+        import('jspdf'),
+        import('jspdf-autotable'),
+      ])
+      const sortedShifts = [...draftShifts].sort((a, b) =>
+        String(a.start_time).localeCompare(String(b.start_time)),
+      )
+
+      const body = sortedShifts.map((shift) => {
+        const profileId = shift.staff_profile || shift.user
+        const contract = contracts.find((item) => (item.staff_profile || item.user) === profileId)
+        const shiftType = contract?.expand?.shift_type
+        const startValue = String(shift.start_time || '')
+        const endValue = String(shift.end_time || '')
+        const dateKey = startValue.split(/[ T]/)[0]
+        const displayDate = dateKey ? new Date(`${dateKey}T12:00:00`) : new Date('')
+        const startTime = (startValue.split(/[ T]/)[1] || '').substring(0, 5)
+        const endTime = (endValue.split(/[ T]/)[1] || '').substring(0, 5)
+
+        return [
+          !isNaN(displayDate.getTime()) ? format(displayDate, 'dd/MM/yyyy') : '',
+          !isNaN(displayDate.getTime()) ? format(displayDate, 'EEE', { locale: ptBR }) : '',
+          shift.expand?.staff_profile?.name || shift.expand?.user?.name || shift.name || 'Sem nome',
+          shiftType?.name || shiftType?.code || 'Padrão',
+          startTime,
+          endTime,
+          shift.expand?.sector?.name || sectorObj?.name || 'Sem setor',
+        ]
+      })
+
+      const doc = new jsPDF({
+        orientation: 'landscape',
+        unit: 'mm',
+        format: 'a4',
+      })
+      doc.setProperties({
+        title: `Escala - ${sectorObj?.name || 'Setor'}`,
+        subject: 'Rascunho de escala gerado por IA',
+        author: 'Gestão de Escalas',
+      })
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(16)
+      doc.text('Escala de Plantões — Rascunho', 14, 15)
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(9)
+      doc.text(
+        `Setor: ${sectorObj?.name || 'Sem setor'}   |   Ciclo: ${cycleObj?.name || 'Sem ciclo'}   |   Total: ${body.length} plantões`,
+        14,
+        21,
+      )
+      doc.setTextColor(180, 83, 9)
+      doc.text('Documento não publicado', 14, 26)
+      doc.setTextColor(0, 0, 0)
+
+      autoTable(doc, {
+        startY: 31,
+        head: [['Data', 'Dia', 'Colaborador', 'Tipo', 'Início', 'Fim', 'Setor']],
+        body,
+        theme: 'grid',
+        styles: {
+          font: 'helvetica',
+          fontSize: 7.5,
+          cellPadding: 1.6,
+          overflow: 'linebreak',
+          valign: 'middle',
+        },
+        headStyles: {
+          fillColor: [5, 150, 105],
+          textColor: [255, 255, 255],
+          fontStyle: 'bold',
+        },
+        alternateRowStyles: {
+          fillColor: [241, 245, 249],
+        },
+        columnStyles: {
+          0: { cellWidth: 23 },
+          1: { cellWidth: 14 },
+          2: { cellWidth: 67 },
+          3: { cellWidth: 43 },
+          4: { cellWidth: 17 },
+          5: { cellWidth: 17 },
+          6: { cellWidth: 55 },
+        },
+        margin: { top: 12, right: 14, bottom: 14, left: 14 },
+      })
+
+      const pageCount = doc.getNumberOfPages()
+      for (let page = 1; page <= pageCount; page++) {
+        doc.setPage(page)
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(8)
+        doc.setTextColor(100, 116, 139)
+        doc.text(
+          `Página ${page} de ${pageCount}`,
+          doc.internal.pageSize.getWidth() - 14,
+          doc.internal.pageSize.getHeight() - 7,
+          { align: 'right' },
+        )
+      }
+
+      const safeSector = (sectorObj?.name || 'setor')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-zA-Z0-9]+/g, '-')
+        .replace(/^-|-$/g, '')
+        .toLowerCase()
+      const safeCycle = (cycleObj?.name || 'ciclo')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-zA-Z0-9]+/g, '-')
+        .replace(/^-|-$/g, '')
+        .toLowerCase()
+
+      doc.save(`escala-rascunho-${safeSector}-${safeCycle}.pdf`)
+      toast({
+        title: 'PDF exportado',
+        description: `${body.length} plantão(ões) do rascunho foram exportados para PDF.`,
+      })
+    } catch (error: any) {
+      toast({
+        title: 'Erro ao exportar PDF',
+        description: error?.message || 'Não foi possível gerar o PDF do rascunho.',
+        variant: 'destructive',
+      })
+    } finally {
+      setIsExportingPdf(false)
+    }
+  }
+
   const statusLabel: Record<GenStatus, string> = {
     idle: '',
     validating: 'Validando pré-requisitos...',
@@ -1325,6 +1460,20 @@ function AutoGenerateInner({
                     <Download className="h-4 w-4" />
                   )}
                   Exportar Excel
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleExportDraftPdf}
+                  disabled={isExportingPdf || draftShifts.length === 0}
+                  className="gap-2 bg-white w-full sm:w-auto"
+                >
+                  {isExportingPdf ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <FileText className="h-4 w-4" />
+                  )}
+                  Exportar PDF
                 </Button>
                 <Button
                   size="sm"
