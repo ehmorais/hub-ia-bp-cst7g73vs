@@ -143,6 +143,27 @@ routerAdd(
           }
         })
 
+        var is12x36User = sTypeHours === 12 && sTypeRest >= 36
+        var weekendOffSundays = []
+        if (is12x36User && cycle) {
+          var cStartGen = (cycle.getString('start_date') || '').split(' ')[0]
+          var cEndGen = (cycle.getString('end_date') || '').split(' ')[0]
+          if (cStartGen && cEndGen) {
+            var stepDaysGen = Math.max(2, Math.round((sTypeHours + sTypeRest) / 24))
+            var curGen = new Date(cStartGen + 'T00:00:00Z')
+            var endGen = new Date(cEndGen + 'T00:00:00Z')
+            var dayIdxGen = 0
+            while (curGen <= endGen) {
+              var dowGen = curGen.getUTCDay()
+              if (dowGen === 0 && dayIdxGen % stepDaysGen === 0) {
+                weekendOffSundays.push(curGen.toISOString().split('T')[0])
+              }
+              curGen = new Date(curGen.getTime() + 86400000)
+              dayIdxGen++
+            }
+          }
+        }
+
         usersWithContracts.push({
           id: u.id,
           name: u.getString('name'),
@@ -157,6 +178,7 @@ routerAdd(
           shift_work_hours: sTypeHours,
           shift_rest_hours: sTypeRest,
           shift_start_time: sTypeStart,
+          weekend_off_sundays: weekendOffSundays.length > 0 ? weekendOffSundays : undefined,
           assigned_rules: userRules.length > 0 ? userRules : undefined,
         })
       } catch (_) {}
@@ -240,6 +262,7 @@ routerAdd(
       '8. Custom AI Rules have MAXIMUM OVERRIDE PRIORITY. Follow their prompt precisely. When a custom rule conflicts with rest hours, 12x36, monthly hours or sequence rules, the custom rule wins; reorganize the remaining shifts to minimize the exception. Valid IDs, cycle dates, minimum staffing, supervision and formally registered timeoffs remain mandatory.',
       '9. Every collaborator with a 12x36 contract must receive the complete alternating-day sequence for the whole cycle, up to the monthly hour limit. Do not stop after reaching only the sector minimum or ideal staffing.',
       '10. Output strictly a JSON array. Assume default shifts start at 07:00:00.000Z.',
+      '11. Every collaborator must have at least 1 full weekend (Saturday AND Sunday) off per calendar month. For 12x36 collaborators, the chosen Sunday must be one that would normally be worked in the alternating pattern — a naturally free Sunday does not count.',
       '',
       'Output FORMAT (strictly JSON array):',
       '[{"user_id":"...","sector_id":"...","start_time":"YYYY-MM-DD 07:00:00.000Z","end_time":"YYYY-MM-DD 19:00:00.000Z"}]',
@@ -579,6 +602,112 @@ routerAdd(
           })
           dayCursor = new Date(dayCursor.getTime() + 86400000)
         }
+      })
+
+      // Weekend-off validation
+      var computeNaturalPatternGen = function (userShiftsList, cStart, cEnd, wHours, rHours) {
+        var sDays = Math.max(2, Math.round((wHours + rHours) / 24))
+        var natDays = {}
+        if (userShiftsList.length === 0) return natDays
+        var sorted = userShiftsList.slice().sort()
+        var firstDate = sorted[0]
+        var cur = new Date(firstDate + 'T00:00:00Z')
+        var eDate = new Date(cEnd + 'T00:00:00Z')
+        while (cur <= eDate) {
+          natDays[cur.toISOString().split('T')[0]] = true
+          cur = new Date(cur.getTime() + sDays * 86400000)
+        }
+        cur = new Date(firstDate + 'T00:00:00Z')
+        cur = new Date(cur.getTime() - sDays * 86400000)
+        var sDate = new Date(cStart + 'T00:00:00Z')
+        while (cur >= sDate) {
+          natDays[cur.toISOString().split('T')[0]] = true
+          cur = new Date(cur.getTime() - sDays * 86400000)
+        }
+        return natDays
+      }
+
+      var genMonths = {}
+      var genMonthCursor = new Date(cycleStart + 'T00:00:00Z')
+      var genMonthEnd = new Date(cycleEnd + 'T00:00:00Z')
+      while (genMonthCursor <= genMonthEnd) {
+        var gMKey =
+          genMonthCursor.getUTCFullYear() +
+          '-' +
+          String(genMonthCursor.getUTCMonth() + 1).padStart(2, '0')
+        genMonths[gMKey] = true
+        genMonthCursor = new Date(genMonthCursor.getTime() + 86400000)
+      }
+
+      usersWithContracts.forEach(function (u) {
+        var is12x36 = u.shift_work_hours === 12 && u.shift_rest_hours >= 36
+        var uShifts = generatedShifts
+          .filter(function (s) {
+            return s.user_id === u.id
+          })
+          .map(function (s) {
+            return s.start_time.split(' ')[0]
+          })
+        var uShiftSet = {}
+        uShifts.forEach(function (d) {
+          uShiftSet[d] = true
+        })
+
+        var naturalDays = is12x36
+          ? computeNaturalPatternGen(
+              uShifts,
+              cycleStart,
+              cycleEnd,
+              u.shift_work_hours,
+              u.shift_rest_hours,
+            )
+          : null
+
+        Object.keys(genMonths).forEach(function (monthKey) {
+          var parts = monthKey.split('-')
+          var y = Number(parts[0])
+          var m = Number(parts[1])
+          var dCur = new Date(Date.UTC(y, m - 1, 1))
+          var dLast = new Date(Date.UTC(y, m, 0))
+          var cStart = new Date(cycleStart + 'T00:00:00Z')
+          var cEnd = new Date(cycleEnd + 'T00:00:00Z')
+          if (dCur < cStart) dCur = new Date(cStart)
+          if (dLast > cEnd) dLast = new Date(cEnd)
+
+          var foundValidWeekend = false
+          while (dCur <= dLast) {
+            if (dCur.getUTCDay() === 6) {
+              // Sat
+              var satStr = dCur.toISOString().split('T')[0]
+              var sunDate = new Date(dCur.getTime() + 86400000)
+              var sunStr = sunDate.toISOString().split('T')[0]
+              if (sunDate <= cEnd && sunDate >= cStart) {
+                var satFree = !uShiftSet[satStr]
+                var sunFree = !uShiftSet[sunStr]
+                if (satFree && sunFree) {
+                  if (is12x36) {
+                    if (naturalDays && naturalDays[sunStr]) {
+                      foundValidWeekend = true
+                    }
+                  } else {
+                    foundValidWeekend = true
+                  }
+                }
+              }
+            }
+            dCur = new Date(dCur.getTime() + 86400000)
+          }
+
+          if (!foundValidWeekend) {
+            violations.push(
+              'Fim de semana obrigatório não atendido: ' +
+                u.name +
+                ' não tem sábado+domingo livres em ' +
+                monthKey +
+                '.',
+            )
+          }
+        })
       })
 
       violations = violations.filter(function (item, index, all) {

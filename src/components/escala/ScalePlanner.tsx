@@ -323,12 +323,26 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
       }
     })
 
+    // Group covered calendar months
+    const cycleMonths: string[] = []
+    days.forEach((d) => {
+      const mKey = format(d, 'yyyy-MM')
+      if (!cycleMonths.includes(mKey)) cycleMonths.push(mKey)
+    })
+
+    const cycleStartStr = days.length > 0 ? format(days[0], 'yyyy-MM-dd') : ''
+    const cycleEndStr = days.length > 0 ? format(days[days.length - 1], 'yyyy-MM-dd') : ''
+
     draftUsers.forEach((user) => {
       const contract = contracts.find((c) => (c.staff_profile || c.user) === user.id)
       const maxH = contract?.monthly_hour_limit || 180
-      const stName = contract?.expand?.shift_type?.name || ''
+      const wh = contract?.expand?.shift_type?.work_hours || 12
+      const restH = contract?.expand?.shift_type?.rest_hours || 36
+      const is12x36 = wh === 12 && restH >= 36
       let uh = 0,
         lastEnd: Date | null = null
+
+      const workedDays: string[] = []
 
       days.forEach((day) => {
         const dateStr = format(day, 'yyyy-MM-dd')
@@ -342,15 +356,13 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
         const isTO = !!matchingTimeoff
 
         if (cell && cell !== 'F') {
+          workedDays.push(dateStr)
           if (isTO) {
             const reqStatus = matchingTimeoff?.status
             alerts.push(
               `${user.name} alocado em dia de folga ${reqStatus === 'pending' ? '(pendente)' : ''} (${format(day, 'dd/MM')})`,
             )
           }
-
-          const wh = contract?.expand?.shift_type?.work_hours || 12
-          const restH = contract?.expand?.shift_type?.rest_hours || 36
 
           let duration = wh
           let stHour = 7
@@ -381,6 +393,68 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
         }
       })
       if (uh > maxH) alerts.push(`${user.name} excede o limite mensal (Total: ${uh}h / ${maxH}h)`)
+
+      // Weekend-off validation
+      const stepDays = Math.max(2, Math.round((wh + restH) / 24))
+      const naturalWorkDays: Record<string, boolean> = {}
+      if (is12x36 && workedDays.length > 0 && cycleStartStr && cycleEndStr) {
+        const sortedWorked = [...workedDays].sort()
+        const firstDate = sortedWorked[0]
+        let cur = new Date(firstDate + 'T00:00:00Z')
+        const eDate = new Date(cycleEndStr + 'T00:00:00Z')
+        while (cur <= eDate) {
+          naturalWorkDays[cur.toISOString().split('T')[0]] = true
+          cur = new Date(cur.getTime() + stepDays * 86400000)
+        }
+        cur = new Date(firstDate + 'T00:00:00Z')
+        cur = new Date(cur.getTime() - stepDays * 86400000)
+        const sDate = new Date(cycleStartStr + 'T00:00:00Z')
+        while (cur >= sDate) {
+          naturalWorkDays[cur.toISOString().split('T')[0]] = true
+          cur = new Date(cur.getTime() - stepDays * 86400000)
+        }
+      }
+
+      cycleMonths.forEach((mKey) => {
+        const [yStr, mStr] = mKey.split('-')
+        const y = Number(yStr)
+        const m = Number(mStr)
+        let dCur = new Date(Date.UTC(y, m - 1, 1))
+        let dLast = new Date(Date.UTC(y, m, 0))
+        const cStart = new Date(cycleStartStr + 'T00:00:00Z')
+        const cEnd = new Date(cycleEndStr + 'T00:00:00Z')
+        if (dCur < cStart) dCur = new Date(cStart)
+        if (dLast > cEnd) dLast = new Date(cEnd)
+
+        let foundValidWeekend = false
+        while (dCur <= dLast) {
+          if (dCur.getUTCDay() === 6) {
+            const satStr = dCur.toISOString().split('T')[0]
+            const sunDate = new Date(dCur.getTime() + 86400000)
+            const sunStr = sunDate.toISOString().split('T')[0]
+            if (sunDate <= cEnd && sunDate >= cStart) {
+              const satCell = draft[user.id]?.[satStr]
+              const sunCell = draft[user.id]?.[sunStr]
+              const satFree = !satCell || satCell === 'F'
+              const sunFree = !sunCell || sunCell === 'F'
+              if (satFree && sunFree) {
+                if (is12x36) {
+                  if (naturalWorkDays[sunStr]) {
+                    foundValidWeekend = true
+                  }
+                } else {
+                  foundValidWeekend = true
+                }
+              }
+            }
+          }
+          dCur = new Date(dCur.getTime() + 86400000)
+        }
+
+        if (!foundValidWeekend) {
+          alerts.push(`${user.name} sem fim de semana completo de folga em ${mKey}.`)
+        }
+      })
     })
     return Array.from(new Set(alerts))
   }, [days, draft, draftUsers, selectedSector, contracts, timeoffsForCycle])
@@ -978,7 +1052,8 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
                   v.toLowerCase().includes('abaixo do efetivo mínimo') ||
                   v.toLowerCase().includes('< mínimo') ||
                   v.toLowerCase().includes('excede') ||
-                  v.toLowerCase().includes('sem descanso')
+                  v.toLowerCase().includes('sem descanso') ||
+                  v.toLowerCase().includes('sem fim de semana completo de folga')
                 return (
                   <Alert
                     key={i}

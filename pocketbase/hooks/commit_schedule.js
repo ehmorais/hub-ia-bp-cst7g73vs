@@ -287,6 +287,118 @@ routerAdd(
       cursor = new Date(cursor.getTime() + 86400000)
     }
 
+    // Weekend-off validation
+    var computeNaturalPatternCommit = function (userShiftsList, cStart, cEnd, wHours, rHours) {
+      var sDays = Math.max(2, Math.round((wHours + rHours) / 24))
+      var natDays = {}
+      if (userShiftsList.length === 0) return natDays
+      var sorted = userShiftsList.slice().sort()
+      var firstDate = sorted[0]
+      var cur = new Date(firstDate + 'T00:00:00Z')
+      var eDate = new Date(cEnd + 'T00:00:00Z')
+      while (cur <= eDate) {
+        natDays[cur.toISOString().split('T')[0]] = true
+        cur = new Date(cur.getTime() + sDays * 86400000)
+      }
+      cur = new Date(firstDate + 'T00:00:00Z')
+      cur = new Date(cur.getTime() - sDays * 86400000)
+      var sDate = new Date(cStart + 'T00:00:00Z')
+      while (cur >= sDate) {
+        natDays[cur.toISOString().split('T')[0]] = true
+        cur = new Date(cur.getTime() - sDays * 86400000)
+      }
+      return natDays
+    }
+
+    var commitMonths = {}
+    var commitMonthCursor = new Date(cycleStart + 'T00:00:00Z')
+    var commitMonthEnd = new Date(cycleEnd + 'T00:00:00Z')
+    while (commitMonthCursor <= commitMonthEnd) {
+      var cMKey =
+        commitMonthCursor.getUTCFullYear() +
+        '-' +
+        String(commitMonthCursor.getUTCMonth() + 1).padStart(2, '0')
+      commitMonths[cMKey] = true
+      commitMonthCursor = new Date(commitMonthCursor.getTime() + 86400000)
+    }
+
+    Object.keys(profileMap).forEach(function (profileId) {
+      var profile = profileMap[profileId]
+      var contract = contractMap[profileId]
+      if (!contract) return
+
+      var workHours = 12
+      var restHours = 36
+      try {
+        var shiftType = $app.findRecordById('shift_types', contract.getString('shift_type'))
+        workHours = shiftType.getInt('work_hours') || 12
+        restHours = shiftType.getInt('rest_hours') || 36
+      } catch (_) {}
+
+      var is12x36 = workHours === 12 && restHours >= 36
+      var uShifts = normalized
+        .filter(function (s) {
+          return s.staff_profile === profileId
+        })
+        .map(function (s) {
+          return s.start_time.split(' ')[0]
+        })
+      var uShiftSet = {}
+      uShifts.forEach(function (d) {
+        uShiftSet[d] = true
+      })
+
+      var naturalDays = is12x36
+        ? computeNaturalPatternCommit(uShifts, cycleStart, cycleEnd, workHours, restHours)
+        : null
+
+      Object.keys(commitMonths).forEach(function (monthKey) {
+        var parts = monthKey.split('-')
+        var y = Number(parts[0])
+        var m = Number(parts[1])
+        var dCur = new Date(Date.UTC(y, m - 1, 1))
+        var dLast = new Date(Date.UTC(y, m, 0))
+        var cStart = new Date(cycleStart + 'T00:00:00Z')
+        var cEnd = new Date(cycleEnd + 'T00:00:00Z')
+        if (dCur < cStart) dCur = new Date(cStart)
+        if (dLast > cEnd) dLast = new Date(cEnd)
+
+        var foundValidWeekend = false
+        while (dCur <= dLast) {
+          if (dCur.getUTCDay() === 6) {
+            // Sat
+            var satStr = dCur.toISOString().split('T')[0]
+            var sunDate = new Date(dCur.getTime() + 86400000)
+            var sunStr = sunDate.toISOString().split('T')[0]
+            if (sunDate <= cEnd && sunDate >= cStart) {
+              var satFree = !uShiftSet[satStr]
+              var sunFree = !uShiftSet[sunStr]
+              if (satFree && sunFree) {
+                if (is12x36) {
+                  if (naturalDays && naturalDays[sunStr]) {
+                    foundValidWeekend = true
+                  }
+                } else {
+                  foundValidWeekend = true
+                }
+              }
+            }
+          }
+          dCur = new Date(dCur.getTime() + 86400000)
+        }
+
+        if (!foundValidWeekend) {
+          violations.push(
+            'Fim de semana obrigatório não atendido: ' +
+              profile.name +
+              ' não tem sábado+domingo livres em ' +
+              monthKey +
+              '.',
+          )
+        }
+      })
+    })
+
     violations = violations.filter(function (item, index, all) {
       return all.indexOf(item) === index
     })
