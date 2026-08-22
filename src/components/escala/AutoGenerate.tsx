@@ -390,6 +390,7 @@ function AutoGenerateInner({
   const [sectorsError, setSectorsError] = useState<string>('')
 
   const [contracts, setContracts] = useState<any[]>([])
+  const [staffProfiles, setStaffProfiles] = useState<any[]>([])
 
   const [genStatus, setGenStatus] = useState<GenStatus>('idle')
   const [genError, setGenError] = useState<string>('')
@@ -505,7 +506,7 @@ function AutoGenerateInner({
     }
   }, [])
 
-  // --- Load contracts (for the calendar display) ---
+  // --- Load contracts and staff profiles (for the calendar display) ---
   const loadContracts = useCallback(async () => {
     try {
       const conts = await pb.collection('staff_contracts').getFullList({
@@ -518,10 +519,22 @@ function AutoGenerateInner({
     }
   }, [])
 
+  const loadStaffProfiles = useCallback(async () => {
+    try {
+      const profiles = await pb.collection('staff_profiles').getFullList({
+        sort: 'name',
+      })
+      setStaffProfiles(profiles)
+    } catch (err) {
+      console.error('Failed to load staff profiles:', err)
+    }
+  }, [])
+
   useEffect(() => {
     loadCycles()
     loadContracts()
-  }, [loadCycles, loadContracts])
+    loadStaffProfiles()
+  }, [loadCycles, loadContracts, loadStaffProfiles])
 
   // Auto-select first active cycle once loaded
   useEffect(() => {
@@ -559,6 +572,7 @@ function AutoGenerateInner({
 
   useRealtime('shift_cycles', loadCycles)
   useRealtime('hospital_sectors', loadSectors)
+  useRealtime('staff_profiles', loadStaffProfiles)
 
   const cycleObj = cycles.find((c) => c.id === selectedCycle)
   const sectorObj = sectors.find((s) => s.id === selectedSector)
@@ -1497,6 +1511,7 @@ function AutoGenerateInner({
               validationShifts={draftShifts}
               cycle={cycleObj}
               contracts={contracts}
+              staffProfiles={staffProfiles}
               onShiftUpdate={handleDraftShiftUpdate}
             />
 

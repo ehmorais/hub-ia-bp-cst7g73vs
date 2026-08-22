@@ -39,6 +39,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { useToast } from '@/components/ui/use-toast'
 import pb from '@/lib/pocketbase/client'
 import { useRealtime } from '@/hooks/use-realtime'
+import { computeWeekendOffAssignments } from '@/lib/escala-weekend-off'
 
 type ViewMode = 'cycle' | 'month' | 'week' | 'day'
 
@@ -70,12 +71,14 @@ export function ShiftCalendar({
   validationShifts,
   cycle,
   contracts,
+  staffProfiles = [],
   onShiftUpdate,
 }: {
   shifts: any[]
   validationShifts?: any[]
   cycle: any
   contracts: any[]
+  staffProfiles?: Array<{ id: string; name: string; default_sector?: string; [key: string]: any }>
   onShiftUpdate?: (updatedShift: any) => void
 }) {
   const [view, setView] = useState<ViewMode>('cycle')
@@ -116,6 +119,47 @@ export function ShiftCalendar({
       (s) => s.sector === selectedSectorId || s.expand?.sector?.id === selectedSectorId,
     )
   }, [shifts, selectedSectorId])
+
+  // Identifica os colaboradores elegíveis para o setor selecionado (seja por default_sector ou que aparecem nos shifts)
+  const sectorStaffProfiles = useMemo(() => {
+    if (!selectedSectorId) return []
+    const map = new Map<string, { id: string; name: string }>()
+
+    // 1. Staff profiles cadastrados com default_sector igual ao selecionado
+    staffProfiles.forEach((sp) => {
+      if (sp.default_sector === selectedSectorId || !selectedSectorId) {
+        map.set(sp.id, { id: sp.id, name: sp.name || 'Sem nome' })
+      }
+    })
+
+    // 2. Staff profiles que aparecem nos shifts visíveis do setor
+    visibleShifts.forEach((s) => {
+      const pid = s.staff_profile || s.user_id || s.user
+      if (pid && !map.has(pid)) {
+        const name =
+          s.expand?.staff_profile?.name ||
+          s.expand?.user?.name ||
+          s.name ||
+          staffProfiles.find((sp) => sp.id === pid)?.name ||
+          'Sem nome'
+        map.set(pid, { id: pid, name })
+      }
+    })
+
+    return Array.from(map.values())
+  }, [staffProfiles, selectedSectorId, visibleShifts])
+
+  // Computa o mapa de fins de semana de folga (staffId -> Set<dateStr>)
+  const weekendOffMap = useMemo(() => {
+    if (!cycle || !selectedSectorId || sectorStaffProfiles.length === 0) {
+      return new Map<string, Set<string>>()
+    }
+    const staffIds = sectorStaffProfiles.map((sp) => sp.id)
+    const cStart = (cycle.start_date || '').split(' ')[0]
+    const cEnd = (cycle.end_date || '').split(' ')[0]
+
+    return computeWeekendOffAssignments(staffIds, visibleShifts, contracts, cStart, cEnd)
+  }, [cycle, selectedSectorId, sectorStaffProfiles, visibleShifts, contracts])
 
   // A shift-type selection filters only what is rendered. Staffing, rest and
   // hour validations must continue to consider the complete schedule.
@@ -589,11 +633,49 @@ export function ShiftCalendar({
                         </div>
                       )
                     })}
-                    {dayShifts.length === 0 && view !== 'month' && view !== 'cycle' && (
-                      <div className="text-xs text-slate-400 italic p-4 text-center mt-4 border-2 border-dashed rounded-lg border-slate-200">
-                        Nenhum plantão agendado
-                      </div>
-                    )}
+
+                    {/* Placeholders de Fim de Semana de Folga Mensal (WEEKEND_OFF) */}
+                    {(() => {
+                      const dayStr = format(day, 'yyyy-MM-dd')
+                      const workedStaffIds = new Set(
+                        dayShifts.map((s) => s.staff_profile || s.user_id || s.user),
+                      )
+
+                      const weekendOffPlaceholders = sectorStaffProfiles.filter((staff) => {
+                        // Não renderiza se o colaborador já tem plantão no dia
+                        if (workedStaffIds.has(staff.id)) return false
+                        const offDates = weekendOffMap.get(staff.id)
+                        return offDates && offDates.has(dayStr)
+                      })
+
+                      return weekendOffPlaceholders.map((staff) => (
+                        <div
+                          key={`weekend-off-${staff.id}-${dayStr}`}
+                          title="Fim de semana de folga mensal"
+                          className="text-xs p-2 rounded bg-orange-100 border border-orange-300 shadow-sm flex flex-col gap-1 transition-colors select-none"
+                        >
+                          <div className="font-semibold text-slate-900 truncate" title={staff.name}>
+                            {staff.name}
+                          </div>
+                          <div className="flex items-center gap-1 text-orange-700 text-[10px] font-medium min-w-0">
+                            <span className="truncate">Folga fim de semana</span>
+                          </div>
+                        </div>
+                      ))
+                    })()}
+
+                    {dayShifts.length === 0 &&
+                      !sectorStaffProfiles.some((staff) => {
+                        const dayStr = format(day, 'yyyy-MM-dd')
+                        const offDates = weekendOffMap.get(staff.id)
+                        return offDates && offDates.has(dayStr)
+                      }) &&
+                      view !== 'month' &&
+                      view !== 'cycle' && (
+                        <div className="text-xs text-slate-400 italic p-4 text-center mt-4 border-2 border-dashed rounded-lg border-slate-200">
+                          Nenhum plantão agendado
+                        </div>
+                      )}
                   </div>
                 </div>
               )

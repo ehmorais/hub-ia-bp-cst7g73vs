@@ -38,6 +38,7 @@ import { useRealtime } from '@/hooks/use-realtime'
 import { format, eachDayOfInterval, addDays, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import pb from '@/lib/pocketbase/client'
+import { computeWeekendOffAssignments } from '@/lib/escala-weekend-off'
 import {
   Dialog,
   DialogContent,
@@ -333,16 +334,35 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
     const cycleStartStr = days.length > 0 ? format(days[0], 'yyyy-MM-dd') : ''
     const cycleEndStr = days.length > 0 ? format(days[days.length - 1], 'yyyy-MM-dd') : ''
 
+    // Mapeamento de dias trabalhados a partir do draft para cada colaborador
+    const workedDaysByStaff: Record<string, string[]> = {}
+    draftUsers.forEach((u) => {
+      workedDaysByStaff[u.id] = []
+      days.forEach((day) => {
+        const dateStr = format(day, 'yyyy-MM-dd')
+        const cell = draft[u.id]?.[dateStr]
+        if (cell && cell !== 'F') {
+          workedDaysByStaff[u.id].push(dateStr)
+        }
+      })
+    })
+
+    // Calcula os fins de semana de folga atribuídos usando a função utilitária unificada
+    const weekendOffAssignments = computeWeekendOffAssignments(
+      draftUsers.map((u) => u.id),
+      workedDaysByStaff,
+      contracts,
+      cycleStartStr,
+      cycleEndStr,
+    )
+
     draftUsers.forEach((user) => {
       const contract = contracts.find((c) => (c.staff_profile || c.user) === user.id)
       const maxH = contract?.monthly_hour_limit || 180
       const wh = contract?.expand?.shift_type?.work_hours || 12
       const restH = contract?.expand?.shift_type?.rest_hours || 36
-      const is12x36 = wh === 12 && restH >= 36
       let uh = 0,
         lastEnd: Date | null = null
-
-      const workedDays: string[] = []
 
       days.forEach((day) => {
         const dateStr = format(day, 'yyyy-MM-dd')
@@ -356,7 +376,6 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
         const isTO = !!matchingTimeoff
 
         if (cell && cell !== 'F') {
-          workedDays.push(dateStr)
           if (isTO) {
             const reqStatus = matchingTimeoff?.status
             alerts.push(
@@ -394,70 +413,54 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
       })
       if (uh > maxH) alerts.push(`${user.name} excede o limite mensal (Total: ${uh}h / ${maxH}h)`)
 
-      // Weekend-off validation
-      const stepDays = Math.max(2, Math.round((wh + restH) / 24))
-      const naturalWorkDays: Record<string, boolean> = {}
-      if (is12x36 && workedDays.length > 0 && cycleStartStr && cycleEndStr) {
-        const sortedWorked = [...workedDays].sort()
-        const firstDate = sortedWorked[0]
-        let cur = new Date(firstDate + 'T00:00:00Z')
-        const eDate = new Date(cycleEndStr + 'T00:00:00Z')
-        while (cur <= eDate) {
-          naturalWorkDays[cur.toISOString().split('T')[0]] = true
-          cur = new Date(cur.getTime() + stepDays * 86400000)
-        }
-        cur = new Date(firstDate + 'T00:00:00Z')
-        cur = new Date(cur.getTime() - stepDays * 86400000)
-        const sDate = new Date(cycleStartStr + 'T00:00:00Z')
-        while (cur >= sDate) {
-          naturalWorkDays[cur.toISOString().split('T')[0]] = true
-          cur = new Date(cur.getTime() - stepDays * 86400000)
-        }
-      }
+      // Weekend-off validation: verifica se cada mês coberto pelo ciclo tem pelo menos 1 par atribuído
+      const userWeekendOffDates = weekendOffAssignments.get(user.id) || new Set<string>()
 
       cycleMonths.forEach((mKey) => {
-        const [yStr, mStr] = mKey.split('-')
-        const y = Number(yStr)
-        const m = Number(mStr)
-        let dCur = new Date(Date.UTC(y, m - 1, 1))
-        let dLast = new Date(Date.UTC(y, m, 0))
-        const cStart = new Date(cycleStartStr + 'T00:00:00Z')
-        const cEnd = new Date(cycleEndStr + 'T00:00:00Z')
-        if (dCur < cStart) dCur = new Date(cStart)
-        if (dLast > cEnd) dLast = new Date(cEnd)
-
-        let foundValidWeekend = false
-        while (dCur <= dLast) {
-          if (dCur.getUTCDay() === 6) {
-            const satStr = dCur.toISOString().split('T')[0]
-            const sunDate = new Date(dCur.getTime() + 86400000)
-            const sunStr = sunDate.toISOString().split('T')[0]
-            if (sunDate <= cEnd && sunDate >= cStart) {
-              const satCell = draft[user.id]?.[satStr]
-              const sunCell = draft[user.id]?.[sunStr]
-              const satFree = !satCell || satCell === 'F'
-              const sunFree = !sunCell || sunCell === 'F'
-              if (satFree && sunFree) {
-                if (is12x36) {
-                  if (naturalWorkDays[sunStr]) {
-                    foundValidWeekend = true
-                  }
-                } else {
-                  foundValidWeekend = true
-                }
-              }
-            }
+        let hasWeekendOffInMonth = false
+        userWeekendOffDates.forEach((dateStr) => {
+          if (dateStr.startsWith(mKey)) {
+            hasWeekendOffInMonth = true
           }
-          dCur = new Date(dCur.getTime() + 86400000)
-        }
+        })
 
-        if (!foundValidWeekend) {
+        if (!hasWeekendOffInMonth) {
           alerts.push(`${user.name} sem fim de semana completo de folga em ${mKey}.`)
         }
       })
     })
     return Array.from(new Set(alerts))
   }, [days, draft, draftUsers, selectedSector, contracts, timeoffsForCycle])
+
+  // Mapa de fins de semana de folga para destaque visual na grade
+  const weekendOffMap = useMemo(() => {
+    if (!selectedCycle || draftUsers.length === 0 || days.length === 0) {
+      return new Map<string, Set<string>>()
+    }
+
+    const cycleStartStr = format(days[0], 'yyyy-MM-dd')
+    const cycleEndStr = format(days[days.length - 1], 'yyyy-MM-dd')
+
+    const workedDaysByStaff: Record<string, string[]> = {}
+    draftUsers.forEach((u) => {
+      workedDaysByStaff[u.id] = []
+      days.forEach((day) => {
+        const dateStr = format(day, 'yyyy-MM-dd')
+        const cell = draft[u.id]?.[dateStr]
+        if (cell && cell !== 'F') {
+          workedDaysByStaff[u.id].push(dateStr)
+        }
+      })
+    })
+
+    return computeWeekendOffAssignments(
+      draftUsers.map((u) => u.id),
+      workedDaysByStaff,
+      contracts,
+      cycleStartStr,
+      cycleEndStr,
+    )
+  }, [selectedCycle, draftUsers, days, draft, contracts])
 
   const handleDragStart = (
     e: React.DragEvent,
@@ -929,12 +932,16 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
                         )
                         const isTO = !!toReq
                         const isPendingTO = toReq?.status === 'pending'
+                        const isWeekendOff =
+                          (!val || val === 'F') && (weekendOffMap.get(user.id)?.has(ds) ?? false)
+
                         return (
                           <td
                             key={ds}
                             className={cn('p-0 border-b border-r relative', {
                               'bg-emerald-50':
                                 dragOverCell?.userId === user.id && dragOverCell?.dateStr === ds,
+                              'bg-orange-100': isWeekendOff && !isTO,
                             })}
                             onDragOver={(e) =>
                               isEditMode && !isTO ? handleDragOver(e, user.id, ds) : undefined
@@ -943,6 +950,7 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
                             onDrop={(e) =>
                               isEditMode && !isTO ? handleDrop(e, user.id, ds) : undefined
                             }
+                            title={isWeekendOff ? 'Fim de semana de folga mensal' : undefined}
                           >
                             {isEditMode ? (
                               <div
@@ -967,7 +975,9 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
                                       isPendingTO,
                                     'cursor-move hover:opacity-80 border-2 border-dashed border-transparent hover:border-slate-400':
                                       !!val && val !== 'F',
-                                    'bg-transparent': !val || val === 'F',
+                                    'bg-orange-100 text-orange-800 font-medium':
+                                      isWeekendOff && !isTO && (!val || val === 'F'),
+                                    'bg-transparent': (!val || val === 'F') && !isWeekendOff,
                                   },
                                 )}
                               >
@@ -975,7 +985,8 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
                                 {val === 'N' && '19:00 - 07:00'}
                                 {val === 'M' && '07:00 - 13:00'}
                                 {val === 'T' && '13:00 - 19:00'}
-                                {val === 'F' && 'Folga'}
+                                {val === 'F' && (isWeekendOff ? 'Folga fim de semana' : 'Folga')}
+                                {!val && isWeekendOff && 'Folga fim de semana'}
                               </div>
                             ) : (
                               <select
@@ -998,15 +1009,21 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
                                       isTO && !isPendingTO,
                                     'text-amber-500 font-bold bg-amber-50/80 hover:bg-amber-100':
                                       isPendingTO,
+                                    'bg-orange-100 text-orange-800 font-medium':
+                                      isWeekendOff && !isTO && (!val || val === 'F'),
                                   },
                                 )}
                               >
-                                <option value=""></option>
+                                <option value="">
+                                  {isWeekendOff ? 'Folga fim de semana' : ''}
+                                </option>
                                 <option value="D">07:00 - 19:00</option>
                                 <option value="N">19:00 - 07:00</option>
                                 <option value="M">07:00 - 13:00</option>
                                 <option value="T">13:00 - 19:00</option>
-                                <option value="F">Folga</option>
+                                <option value="F">
+                                  {isWeekendOff ? 'Folga fim de semana' : 'Folga'}
+                                </option>
                               </select>
                             )}
                             {isTO && (
