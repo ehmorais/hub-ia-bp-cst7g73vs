@@ -36,6 +36,35 @@ export interface WeekendOffContract {
  * Computa o padrão natural de plantões para colaboradores 12x36
  * a partir do primeiro plantão do colaborador no ciclo, projetando para frente e para trás.
  */
+/**
+ * Determina o padrão de dias naturalmente trabalhados usando âncora determinística por ID de colaborador.
+ */
+export function computeNaturalPatternByStaff(
+  staffId: string,
+  allStaffIds: string[],
+  cStart: string,
+  cEnd: string,
+  wHours: number = 12,
+  rHours: number = 36,
+): Record<string, boolean> {
+  const is12x36 = wHours === 12 && rHours >= 36
+  const stepDays = Math.max(2, Math.round((wHours + rHours) / 24))
+  const sortedIds = allStaffIds.slice().sort()
+  const pos = sortedIds.indexOf(staffId)
+  const stableIdx = pos !== -1 ? pos : 0
+  const offset = is12x36 ? stableIdx % stepDays : 0
+
+  const natDays: Record<string, boolean> = {}
+  let cur = new Date(cStart + 'T00:00:00Z')
+  cur = new Date(cur.getTime() + offset * 86400000)
+  const eDate = new Date(cEnd + 'T00:00:00Z')
+  while (cur <= eDate) {
+    natDays[cur.toISOString().split('T')[0]] = true
+    cur = new Date(cur.getTime() + stepDays * 86400000)
+  }
+  return natDays
+}
+
 export function computeNaturalPattern(
   userShiftsList: string[],
   cStart: string,
@@ -166,8 +195,9 @@ export function computeWeekendOffAssignments(
     const uShifts = Array.from(workedSet)
 
     const naturalDays = is12x36
-      ? computeNaturalPattern(
-          uShifts,
+      ? computeNaturalPatternByStaff(
+          staffId,
+          staffIds,
           normalizedCycleStart,
           normalizedCycleEnd,
           workHours,

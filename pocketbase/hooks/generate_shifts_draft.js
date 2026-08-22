@@ -1346,6 +1346,65 @@ routerAdd(
       draft = fbDraft
     }
 
+    // --- Stable anchor natural worked projection helper (v0.0.251) ---
+    // Deterministic anchor based on staff ID sorted order (or staff_id alphabetical rank),
+    // guaranteeing identical offsets across completion, candidate selection, and validation.
+    var computeNaturalPatternByStaff = function (staffId, staffContracts, cStart, cEnd) {
+      var contract = null
+      if (Array.isArray(staffContracts)) {
+        for (var sci = 0; sci < staffContracts.length; sci++) {
+          var item = staffContracts[sci]
+          if (item && item.id === staffId) {
+            contract = item
+            break
+          }
+        }
+      } else if (staffContracts && typeof staffContracts === 'object') {
+        contract = staffContracts[staffId] || null
+      }
+      var workHours = contract ? contract.work_hours || contract.shift_work_hours || 12 : 12
+      var restHours = contract ? contract.rest_hours || contract.shift_rest_hours || 36 : 36
+      var is12x36 = workHours === 12 && restHours >= 36
+      var stepDays = Math.max(2, Math.round((workHours + restHours) / 24))
+
+      // stableIndex: alphabetically sorted eligible IDs
+      var stableIdx = 0
+      if (Array.isArray(staffContracts)) {
+        var sortedIds = staffContracts
+          .map(function (c) {
+            return c.id
+          })
+          .filter(Boolean)
+          .sort()
+        var pos = sortedIds.indexOf(staffId)
+        if (pos !== -1) stableIdx = pos
+      } else if (staffContracts && typeof staffContracts === 'object') {
+        var keys = Object.keys(staffContracts).sort()
+        var kpos = keys.indexOf(staffId)
+        if (kpos !== -1) stableIdx = kpos
+      }
+
+      var offset = is12x36 ? stableIdx % stepDays : 0
+      var map = {}
+      var cur = new Date(cStart + 'T00:00:00Z')
+      cur = new Date(cur.getTime() + offset * 86400000)
+      var end = new Date(cEnd + 'T00:00:00Z')
+      while (cur <= end) {
+        map[cur.toISOString().split('T')[0]] = true
+        cur = new Date(cur.getTime() + stepDays * 86400000)
+      }
+      return map
+    }
+
+    var getNaturalWorkedDays = function (staffList, cStart, cEnd) {
+      var map = {}
+      staffList.forEach(function (u) {
+        map[u.id] = computeNaturalPatternByStaff(u.id, staffList, cStart, cEnd)
+      })
+      return map
+    }
+    var naturalWorkedMap = getNaturalWorkedDays(eligible, cycleStart, cycleEnd)
+
     // --- enforceWeekendOff function ---
     var enforceWeekendOff = function (currentShifts, staffList, cStart, cEnd, minStaff) {
       // 1. Months in cycle
@@ -1358,41 +1417,15 @@ routerAdd(
         mCur = new Date(mCur.getTime() + 86400000)
       }
 
-      // Compute natural 12x36 pattern from actual shifts (stable anchor)
+      // Compute natural 12x36 pattern using stable anchor by staff_id
       var naturalWorkedMap = {}
       staffList.forEach(function (u) {
-        naturalWorkedMap[u.id] = {}
         var is12x36 = u.work_hours === 12 && u.rest_hours >= 36
-        if (!is12x36) return
-        var stepDays = Math.max(2, Math.round((u.work_hours + u.rest_hours) / 24))
-        // Find first shift date for this staff
-        var firstDate = null
-        for (var si = 0; si < currentShifts.length; si++) {
-          var sid = currentShifts[si].user_id || currentShifts[si].staff_profile
-          if (sid === u.id) {
-            var d = (currentShifts[si].date || '').split(' ')[0]
-            if (!firstDate || d < firstDate) firstDate = d
-          }
+        if (!is12x36) {
+          naturalWorkedMap[u.id] = {}
+          return
         }
-        if (!firstDate) return
-        var firstDateObj = new Date(firstDate + 'T00:00:00Z')
-        var cStartObj = new Date(cStart + 'T00:00:00Z')
-        var anchorOffset = Math.floor((firstDateObj.getTime() - cStartObj.getTime()) / 86400000)
-        var set = {}
-        // Project forward
-        var cur = new Date(cStartObj.getTime() + anchorOffset * 86400000)
-        var end = new Date(cEnd + 'T00:00:00Z')
-        while (cur <= end) {
-          set[cur.toISOString().split('T')[0]] = true
-          cur = new Date(cur.getTime() + stepDays * 86400000)
-        }
-        // Project backward
-        cur = new Date(cStartObj.getTime() + anchorOffset * 86400000 - stepDays * 86400000)
-        while (cur >= cStartObj) {
-          set[cur.toISOString().split('T')[0]] = true
-          cur = new Date(cur.getTime() - stepDays * 86400000)
-        }
-        naturalWorkedMap[u.id] = set
+        naturalWorkedMap[u.id] = computeNaturalPatternByStaff(u.id, staffList, cStart, cEnd)
       })
 
       var workingShifts = currentShifts.map(function (s) {
@@ -1448,6 +1481,7 @@ routerAdd(
 
       var assignments = {} // staffId -> [sat, sun, ...]
       var protectedWeekends = {} // { [staffId]: { [dateStr]: true } }
+      var protectedDates = {} // Set keyed by staffId + ":" + dateStr across ALL iterations
       var issues = []
 
       staffList.forEach(function (u, staffIndex) {
@@ -1540,12 +1574,13 @@ routerAdd(
             for (var di = 0; di < datesToFree.length; di++) {
               var dt = datesToFree[di]
 
-              // Find substitute
+              // Find substitute (skips any candidate where date is protected)
               var candList = staffList.filter(function (cand) {
                 return (
                   cand.id !== u.id &&
                   !candidateStaffMap[cand.id][dt] &&
                   (unavailableMap[cand.id] || []).indexOf(dt) === -1 &&
+                  !protectedDates[cand.id + ':' + dt] &&
                   !(protectedWeekends[cand.id] && protectedWeekends[cand.id][dt])
                 )
               })
@@ -1630,6 +1665,8 @@ routerAdd(
             if (!protectedWeekends[u.id]) protectedWeekends[u.id] = {}
             protectedWeekends[u.id][committedWeekend.sat] = true
             protectedWeekends[u.id][committedWeekend.sun] = true
+            protectedDates[u.id + ':' + committedWeekend.sat] = true
+            protectedDates[u.id + ':' + committedWeekend.sun] = true
           } else {
             issues.push(
               'Fim de semana obrigatório não atendido: ' +
@@ -1715,15 +1752,24 @@ routerAdd(
       return a.requires_supervision ? 1 : -1
     })
 
-    completionOrder.forEach(function (u, sIdx) {
+    completionOrder.forEach(function (u) {
       var isRegular12x36 = u.work_hours === 12 && u.rest_hours >= 36
       var hasNamedOverride =
         customPromptText && u.name && customPromptText.indexOf(u.name.toLowerCase()) !== -1
       if (!isRegular12x36 || hasNamedOverride) return
 
+      var sortedEligibleIds = eligible
+        .map(function (c) {
+          return c.id
+        })
+        .filter(Boolean)
+        .sort()
+      var stableIdx = sortedEligibleIds.indexOf(u.id)
+      if (stableIdx === -1) stableIdx = 0
+
       var stepDays = Math.max(2, Math.round((u.work_hours + u.rest_hours) / 24))
       var maxShifts = Math.floor((u.monthly_hour_limit || 0) / u.work_hours)
-      var targetOffset = sIdx % stepDays
+      var targetOffset = stableIdx % stepDays
       var bestDates = []
       var bestScore = Number.MAX_SAFE_INTEGER
 

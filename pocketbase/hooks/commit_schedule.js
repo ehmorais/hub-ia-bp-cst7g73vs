@@ -287,20 +287,51 @@ routerAdd(
       cursor = new Date(cursor.getTime() + 86400000)
     }
 
-    // --- WEEKEND_OFF validation BEFORE allowing commit/publish ---
-    var computeNaturalPatternCommit = function (staffIndex, cStart, cEnd, wHours, rHours) {
-      var is12x36 = wHours === 12 && rHours >= 36
-      var stepDays = Math.max(2, Math.round((wHours + rHours) / 24))
-      var offset = is12x36 ? staffIndex % stepDays : 0
-      var natDays = {}
+    // --- WEEKEND_OFF validation BEFORE allowing commit/publish (v0.0.251) ---
+    var computeNaturalPatternByStaff = function (staffId, staffContracts, cStart, cEnd) {
+      var contract = null
+      if (Array.isArray(staffContracts)) {
+        for (var sci = 0; sci < staffContracts.length; sci++) {
+          var item = staffContracts[sci]
+          if (item && item.id === staffId) {
+            contract = item
+            break
+          }
+        }
+      } else if (staffContracts && typeof staffContracts === 'object') {
+        contract = staffContracts[staffId] || null
+      }
+      var workHours = contract ? contract.work_hours || contract.shift_work_hours || 12 : 12
+      var restHours = contract ? contract.rest_hours || contract.shift_rest_hours || 36 : 36
+      var is12x36 = workHours === 12 && restHours >= 36
+      var stepDays = Math.max(2, Math.round((workHours + restHours) / 24))
+
+      var stableIdx = 0
+      if (Array.isArray(staffContracts)) {
+        var sortedIds = staffContracts
+          .map(function (c) {
+            return c.id
+          })
+          .filter(Boolean)
+          .sort()
+        var pos = sortedIds.indexOf(staffId)
+        if (pos !== -1) stableIdx = pos
+      } else if (staffContracts && typeof staffContracts === 'object') {
+        var keys = Object.keys(staffContracts).sort()
+        var kpos = keys.indexOf(staffId)
+        if (kpos !== -1) stableIdx = kpos
+      }
+
+      var offset = is12x36 ? stableIdx % stepDays : 0
+      var map = {}
       var cur = new Date(cStart + 'T00:00:00Z')
       cur = new Date(cur.getTime() + offset * 86400000)
-      var eDate = new Date(cEnd + 'T00:00:00Z')
-      while (cur <= eDate) {
-        natDays[cur.toISOString().split('T')[0]] = true
+      var end = new Date(cEnd + 'T00:00:00Z')
+      while (cur <= end) {
+        map[cur.toISOString().split('T')[0]] = true
         cur = new Date(cur.getTime() + stepDays * 86400000)
       }
-      return natDays
+      return map
     }
 
     var commitMonths = {}
@@ -363,9 +394,28 @@ routerAdd(
       } catch (_) {}
     }
 
+    // Build staffContracts list for computeNaturalPatternByStaff
+    var staffContractsCommit = []
     var sortedProfileIds = Object.keys(profileMap).slice().sort()
+    sortedProfileIds.forEach(function (profileId) {
+      var contract = contractMap[profileId]
+      var workHours = 12
+      var restHours = 36
+      if (contract) {
+        try {
+          var shiftType = $app.findRecordById('shift_types', contract.getString('shift_type'))
+          workHours = shiftType.getInt('work_hours') || 12
+          restHours = shiftType.getInt('rest_hours') || 36
+        } catch (_) {}
+      }
+      staffContractsCommit.push({
+        id: profileId,
+        work_hours: workHours,
+        rest_hours: restHours,
+      })
+    })
 
-    sortedProfileIds.forEach(function (profileId, staffIdx) {
+    sortedProfileIds.forEach(function (profileId) {
       var profile = profileMap[profileId]
       var contract = contractMap[profileId]
       if (!contract) return
@@ -393,6 +443,11 @@ routerAdd(
 
       var staffAssignments = weekendOffAssignments ? weekendOffAssignments[profileId] : null
 
+      // Recalculate natural pattern using deterministic anchor by staff_id
+      var naturalDays = is12x36
+        ? computeNaturalPatternByStaff(profileId, staffContractsCommit, cycleStart, cycleEnd)
+        : null
+
       if (staffAssignments && Array.isArray(staffAssignments) && staffAssignments.length > 0) {
         // 2. Validate against explicit assignments from draft
         for (var ai = 0; ai < staffAssignments.length; ai += 2) {
@@ -410,11 +465,7 @@ routerAdd(
           }
         }
       } else {
-        // 3. Recalculate using stable anchor (index of staff order * stepDays from cycleStart)
-        var naturalDays = is12x36
-          ? computeNaturalPatternCommit(staffIdx, cycleStart, cycleEnd, workHours, restHours)
-          : null
-
+        // 3. Fallback: verify every month has a valid free weekend satisfying natural rotation
         Object.keys(commitMonths).forEach(function (monthKey) {
           var parts = monthKey.split('-')
           var y = Number(parts[0])
