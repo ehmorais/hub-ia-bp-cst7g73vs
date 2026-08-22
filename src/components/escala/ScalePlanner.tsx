@@ -39,10 +39,6 @@ import { format, eachDayOfInterval, addDays, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import pb from '@/lib/pocketbase/client'
 import {
-  computeWeekendOffAssignments,
-  computeWeekendOffAssignmentsSimple,
-} from '@/lib/escala-weekend-off'
-import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -308,6 +304,21 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
     [timeoffs, selectedCycleId],
   )
 
+  // Mapa de fins de semana de folga para destaque visual na grade
+  const weekendOffMap = useMemo(() => {
+    const persistedAssignments = activeDraftRecord?.validation_summary?.weekend_off_assignments
+    if (persistedAssignments && typeof persistedAssignments === 'object') {
+      const map = new Map<string, Set<string>>()
+      Object.entries(persistedAssignments).forEach(([staffId, dates]) => {
+        if (Array.isArray(dates)) {
+          map.set(staffId, new Set(dates as string[]))
+        }
+      })
+      return map
+    }
+    return new Map<string, Set<string>>()
+  }, [activeDraftRecord])
+
   const validations = useMemo(() => {
     if (!selectedSector || days.length === 0) return []
     const alerts: string[] = []
@@ -350,31 +361,6 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
       const mKey = format(d, 'yyyy-MM')
       if (!cycleMonths.includes(mKey)) cycleMonths.push(mKey)
     })
-
-    const cycleStartStr = days.length > 0 ? format(days[0], 'yyyy-MM-dd') : ''
-    const cycleEndStr = days.length > 0 ? format(days[days.length - 1], 'yyyy-MM-dd') : ''
-
-    // Mapeamento de dias trabalhados a partir do draft para cada colaborador
-    const workedDaysByStaff: Record<string, string[]> = {}
-    draftUsers.forEach((u) => {
-      workedDaysByStaff[u.id] = []
-      days.forEach((day) => {
-        const dateStr = format(day, 'yyyy-MM-dd')
-        const cell = draft[u.id]?.[dateStr]
-        if (cell && cell !== 'F') {
-          workedDaysByStaff[u.id].push(dateStr)
-        }
-      })
-    })
-
-    // Calcula os fins de semana de folga atribuídos usando a função utilitária unificada
-    const weekendOffAssignments = computeWeekendOffAssignments(
-      draftUsers.map((u) => u.id),
-      workedDaysByStaff,
-      contracts,
-      cycleStartStr,
-      cycleEndStr,
-    )
 
     draftUsers.forEach((user) => {
       const contract = contracts.find((c) => (c.staff_profile || c.user) === user.id)
@@ -434,81 +420,25 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
       if (uh > maxH) alerts.push(`${user.name} excede o limite mensal (Total: ${uh}h / ${maxH}h)`)
 
       // Weekend-off validation: verifica se cada mês coberto pelo ciclo tem pelo menos 1 par atribuído
-      const userWeekendOffDates = weekendOffAssignments.get(user.id) || new Set<string>()
+      if (weekendOffMap.size > 0) {
+        const userWeekendOffDates = weekendOffMap.get(user.id) || new Set<string>()
 
-      cycleMonths.forEach((mKey) => {
-        let hasWeekendOffInMonth = false
-        userWeekendOffDates.forEach((dateStr) => {
-          if (dateStr.startsWith(mKey)) {
-            hasWeekendOffInMonth = true
+        cycleMonths.forEach((mKey) => {
+          let hasWeekendOffInMonth = false
+          userWeekendOffDates.forEach((dateStr) => {
+            if (dateStr.startsWith(mKey)) {
+              hasWeekendOffInMonth = true
+            }
+          })
+
+          if (!hasWeekendOffInMonth) {
+            alerts.push(`${user.name} sem fim de semana completo de folga em ${mKey}.`)
           }
         })
-
-        if (!hasWeekendOffInMonth) {
-          alerts.push(`${user.name} sem fim de semana completo de folga em ${mKey}.`)
-        }
-      })
+      }
     })
     return Array.from(new Set(alerts))
-  }, [days, draft, draftUsers, selectedSector, contracts, timeoffsForCycle])
-
-  // Mapa de fins de semana de folga para destaque visual na grade
-  const weekendOffMap = useMemo(() => {
-    // 1. Se houver weekend_off_assignments persistidos no activeDraftRecord, preferir
-    const persistedAssignments = activeDraftRecord?.validation_summary?.weekend_off_assignments
-    if (persistedAssignments && typeof persistedAssignments === 'object') {
-      const map = new Map<string, Set<string>>()
-      Object.entries(persistedAssignments).forEach(([staffId, dates]) => {
-        if (Array.isArray(dates)) {
-          map.set(staffId, new Set(dates as string[]))
-        }
-      })
-      if (map.size > 0) {
-        return map
-      }
-    }
-
-    if (!selectedCycle || draftUsers.length === 0 || days.length === 0) {
-      return new Map<string, Set<string>>()
-    }
-
-    const cycleStartStr = format(days[0], 'yyyy-MM-dd')
-    const cycleEndStr = format(days[days.length - 1], 'yyyy-MM-dd')
-
-    const workedDaysByStaff: Record<string, string[]> = {}
-    draftUsers.forEach((u) => {
-      workedDaysByStaff[u.id] = []
-      days.forEach((day) => {
-        const dateStr = format(day, 'yyyy-MM-dd')
-        const cell = draft[u.id]?.[dateStr]
-        if (cell && cell !== 'F') {
-          workedDaysByStaff[u.id].push(dateStr)
-        }
-      })
-    })
-
-    // 2. Preferir computeWeekendOffAssignmentsSimple
-    const staffIds = draftUsers.map((u) => u.id)
-    const simpleMap = computeWeekendOffAssignmentsSimple(
-      staffIds,
-      workedDaysByStaff,
-      contracts,
-      cycleStartStr,
-      cycleEndStr,
-    )
-    if (simpleMap.size > 0) {
-      return simpleMap
-    }
-
-    // 3. Fallback backward compatibility
-    return computeWeekendOffAssignments(
-      staffIds,
-      workedDaysByStaff,
-      contracts,
-      cycleStartStr,
-      cycleEndStr,
-    )
-  }, [activeDraftRecord, selectedCycle, draftUsers, days, draft, contracts])
+  }, [days, draft, draftUsers, selectedSector, contracts, timeoffsForCycle, weekendOffMap])
 
   const hasWeekendOffMetadata = useMemo(() => {
     const assignments = activeDraftRecord?.validation_summary?.weekend_off_assignments
@@ -1000,6 +930,9 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
                         return (
                           <td
                             key={ds}
+                            data-testid={
+                              isWeekendOff && !isTO ? `weekend-off-${user.id}-${ds}` : undefined
+                            }
                             className={cn('p-0 border-b border-r relative', {
                               'bg-emerald-50':
                                 dragOverCell?.userId === user.id && dragOverCell?.dateStr === ds,
