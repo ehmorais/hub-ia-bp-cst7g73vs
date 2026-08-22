@@ -463,6 +463,7 @@ routerAdd(
 
       // enforceWeekendOff for generate_shifts.js
       var enforceWeekendOffGen = function (currentShifts, staffList, cStart, cEnd, sectorsList) {
+        // 1. Months in cycle
         var months = {}
         var mCur = new Date(cStart + 'T00:00:00Z')
         var mEnd = new Date(cEnd + 'T00:00:00Z')
@@ -472,16 +473,33 @@ routerAdd(
           mCur = new Date(mCur.getTime() + 86400000)
         }
 
+        // Helper map for sector min staffing
+        var sectorMinStaffMap = {}
+        if (Array.isArray(sectorsList)) {
+          sectorsList.forEach(function (sec) {
+            if (!sec) return
+            var secId = sec.id || (typeof sec.getId === 'function' ? sec.getId() : '')
+            var minSt =
+              typeof sec.getInt === 'function'
+                ? sec.getInt('min_staffing')
+                : sec.min_staffing || sec.min_staff || 0
+            if (secId) {
+              sectorMinStaffMap[secId] = minSt
+            }
+          })
+        }
+
         var workingShifts = currentShifts.map(function (s) {
           return {
             user_id: s.user_id,
             sector_id: s.sector_id,
             start_time: s.start_time,
             end_time: s.end_time,
-            date: (s.start_time || '').split(' ')[0],
+            date: (s.start_time || s.date || '').split(' ')[0],
           }
         })
 
+        // Shift sets per staff
         var shiftsByStaff = {}
         staffList.forEach(function (u) {
           shiftsByStaff[u.id] = {}
@@ -491,10 +509,66 @@ routerAdd(
           shiftsByStaff[s.user_id][s.date] = true
         })
 
+        // Clone helper for transactional candidate evaluation
+        var cloneState = function (shiftsArr, staffMap) {
+          var clonedShifts = shiftsArr.map(function (s) {
+            return {
+              user_id: s.user_id,
+              sector_id: s.sector_id,
+              start_time: s.start_time,
+              end_time: s.end_time,
+              date: s.date,
+            }
+          })
+          var clonedStaffMap = {}
+          Object.keys(staffMap).forEach(function (k) {
+            clonedStaffMap[k] = {}
+            Object.keys(staffMap[k]).forEach(function (d) {
+              if (staffMap[k][d]) {
+                clonedStaffMap[k][d] = true
+              }
+            })
+          })
+          return { shifts: clonedShifts, staffMap: clonedStaffMap }
+        }
+
+        // Check coverage on all days in [cStart, cEnd] for all sectors
+        var checkCoverageOk = function (shiftsArr) {
+          var dCountsBySector = {}
+          for (var si = 0; si < shiftsArr.length; si++) {
+            var sItem = shiftsArr[si]
+            var secKey = sItem.sector_id || 'default'
+            var d = sItem.date
+            if (!dCountsBySector[secKey]) dCountsBySector[secKey] = {}
+            dCountsBySector[secKey][d] = (dCountsBySector[secKey][d] || 0) + 1
+          }
+
+          var secKeys = Object.keys(sectorMinStaffMap)
+          if (secKeys.length === 0) return true
+
+          for (var ski = 0; ski < secKeys.length; ski++) {
+            var sId = secKeys[ski]
+            var reqMin = sectorMinStaffMap[sId] || 0
+            if (reqMin <= 0) continue
+
+            var curDate = new Date(cStart + 'T00:00:00Z')
+            var endDate = new Date(cEnd + 'T00:00:00Z')
+            while (curDate <= endDate) {
+              var dayStr = curDate.toISOString().split('T')[0]
+              var count = (dCountsBySector[sId] && dCountsBySector[sId][dayStr]) || 0
+              if (count < reqMin) {
+                return false
+              }
+              curDate = new Date(curDate.getTime() + 86400000)
+            }
+          }
+          return true
+        }
+
         var assignments = {}
         var issues = []
 
-        staffList.forEach(function (u) {
+        staffList.forEach(function (u, staffIndex) {
           var workH = u.shift_work_hours || 12
           var restH = u.shift_rest_hours || 36
           var is12x36 = workH === 12 && restH >= 36
@@ -512,7 +586,7 @@ routerAdd(
             if (dCur < cStartDate) dCur = new Date(cStartDate)
             if (dLast > cEndDate) dLast = new Date(cEndDate)
 
-            var weekends = []
+            var allMonthWeekends = []
             while (dCur <= dLast) {
               if (dCur.getUTCDay() === 6) {
                 // Sat
@@ -523,7 +597,7 @@ routerAdd(
                   var satWorked = !!shiftsByStaff[u.id][satStr]
                   var sunWorked = !!shiftsByStaff[u.id][sunStr]
                   var sunIsNat = is12x36 ? !!uNatSet[sunStr] : true
-                  weekends.push({
+                  allMonthWeekends.push({
                     sat: satStr,
                     sun: sunStr,
                     satWorked: satWorked,
@@ -535,7 +609,7 @@ routerAdd(
               dCur = new Date(dCur.getTime() + 86400000)
             }
 
-            if (weekends.length === 0) {
+            if (allMonthWeekends.length === 0) {
               issues.push(
                 'Fim de semana obrigatório não atendido: ' +
                   u.name +
@@ -546,47 +620,64 @@ routerAdd(
               return
             }
 
-            var assignedWeekend = null
-            for (var wi = 0; wi < weekends.length; wi++) {
-              var w = weekends[wi]
-              if (!w.satWorked && !w.sunWorked && w.sunIsNat) {
-                assignedWeekend = w
-                break
-              }
+            // 1. Collect candidate weekends where sunIsNat === true (or all if non-12x36)
+            var natCandidates = allMonthWeekends.filter(function (w) {
+              return w.sunIsNat
+            })
+            if (natCandidates.length === 0) {
+              natCandidates = allMonthWeekends.slice()
             }
 
-            if (!assignedWeekend) {
-              var targetW = null
-              for (var wj = 0; wj < weekends.length; wj++) {
-                if (weekends[wj].sunIsNat) {
-                  targetW = weekends[wj]
-                  break
-                }
-              }
-              if (!targetW) targetW = weekends[0]
+            // Order from LAST to FIRST
+            var revCandidates = natCandidates.slice().reverse()
+
+            // Round-robin offset starting from the end
+            var offset = staffIndex % revCandidates.length
+            var orderedCandidates = []
+            for (var oi = 0; oi < revCandidates.length; oi++) {
+              orderedCandidates.push(revCandidates[(offset + oi) % revCandidates.length])
+            }
+
+            // 2. Transactional attempt per candidate
+            var committedWeekend = null
+
+            for (var ci = 0; ci < orderedCandidates.length; ci++) {
+              var candidate = orderedCandidates[ci]
+              var satStr = candidate.sat
+              var sunStr = candidate.sun
+
+              // Snapshot state for rollback
+              var snapshot = cloneState(workingShifts, shiftsByStaff)
+              var candidateShifts = snapshot.shifts
+              var candidateStaffMap = snapshot.staffMap
 
               var datesToFree = []
-              if (targetW.satWorked) datesToFree.push(targetW.sat)
-              if (targetW.sunWorked) datesToFree.push(targetW.sun)
+              if (candidateStaffMap[u.id][satStr]) datesToFree.push(satStr)
+              if (candidateStaffMap[u.id][sunStr]) datesToFree.push(sunStr)
 
-              datesToFree.forEach(function (dt) {
+              var candidatePossible = true
+
+              for (var di = 0; di < datesToFree.length; di++) {
+                var dt = datesToFree[di]
+
+                // Find substitute in the same sector
                 var candList = staffList.filter(function (cand) {
                   return (
                     cand.id !== u.id &&
-                    cand.sector_id === u.sector_id &&
-                    !shiftsByStaff[cand.id][dt] &&
+                    (!u.sector_id || !cand.sector_id || cand.sector_id === u.sector_id) &&
+                    !candidateStaffMap[cand.id][dt] &&
                     (timeoffMap[cand.id] || []).indexOf(dt) === -1
                   )
                 })
 
                 var subFound = null
-                for (var ci = 0; ci < candList.length; ci++) {
-                  var c = candList[ci]
+                for (var sli = 0; sli < candList.length; sli++) {
+                  var c = candList[sli]
                   var cRestH = c.shift_rest_hours || 36
                   var cNeedGap = Math.max(1, Math.ceil((cRestH + 0.001) / 24))
                   var gapOk = true
-                  var cDates = Object.keys(shiftsByStaff[c.id]).filter(function (d) {
-                    return shiftsByStaff[c.id][d]
+                  var cDates = Object.keys(candidateStaffMap[c.id]).filter(function (d) {
+                    return candidateStaffMap[c.id][d]
                   })
                   for (var cdi = 0; cdi < cDates.length; cdi++) {
                     var diffDays = Math.abs(
@@ -606,41 +697,80 @@ routerAdd(
                 }
 
                 if (subFound) {
-                  for (var si = 0; si < workingShifts.length; si++) {
-                    if (workingShifts[si].user_id === u.id && workingShifts[si].date === dt) {
-                      workingShifts[si].user_id = subFound.id
+                  // Reassign shift from u to subFound
+                  for (var si = 0; si < candidateShifts.length; si++) {
+                    if (candidateShifts[si].user_id === u.id && candidateShifts[si].date === dt) {
+                      candidateShifts[si].user_id = subFound.id
+                      if (subFound.sector_id) {
+                        candidateShifts[si].sector_id = subFound.sector_id
+                      }
                       var startTime = subFound.shift_start_time || '07:00'
                       if (startTime.length === 5) startTime += ':00'
                       var start = new Date(dt + 'T' + startTime + '.000Z')
                       var end = new Date(
                         start.getTime() + (subFound.shift_work_hours || 12) * 3600000,
                       )
-                      workingShifts[si].start_time =
+                      candidateShifts[si].start_time =
                         start.toISOString().replace('T', ' ').substring(0, 23) + 'Z'
-                      workingShifts[si].end_time =
+                      candidateShifts[si].end_time =
                         end.toISOString().replace('T', ' ').substring(0, 23) + 'Z'
-                      shiftsByStaff[u.id][dt] = false
-                      shiftsByStaff[subFound.id][dt] = true
+                      candidateStaffMap[u.id][dt] = false
+                      candidateStaffMap[subFound.id][dt] = true
                       break
                     }
                   }
                 } else {
-                  for (var si2 = 0; si2 < workingShifts.length; si2++) {
-                    if (workingShifts[si2].user_id === u.id && workingShifts[si2].date === dt) {
-                      workingShifts.splice(si2, 1)
-                      shiftsByStaff[u.id][dt] = false
+                  // Removal as last resort: splice if post-removal coverage on dt >= minStaff of the sector
+                  var shiftSectorId = u.sector_id || ''
+                  for (var fsi = 0; fsi < candidateShifts.length; fsi++) {
+                    if (candidateShifts[fsi].user_id === u.id && candidateShifts[fsi].date === dt) {
+                      shiftSectorId = candidateShifts[fsi].sector_id || shiftSectorId
+                      break
+                    }
+                  }
+                  var sectorMin = sectorMinStaffMap[shiftSectorId] || 0
+                  var currentDayCount = 0
+                  for (var csi = 0; csi < candidateShifts.length; csi++) {
+                    if (
+                      candidateShifts[csi].date === dt &&
+                      (!shiftSectorId || candidateShifts[csi].sector_id === shiftSectorId)
+                    ) {
+                      currentDayCount++
+                    }
+                  }
+                  if (sectorMin > 0 && currentDayCount - 1 < sectorMin) {
+                    candidatePossible = false
+                    break
+                  }
+                  for (var si2 = 0; si2 < candidateShifts.length; si2++) {
+                    if (candidateShifts[si2].user_id === u.id && candidateShifts[si2].date === dt) {
+                      candidateShifts.splice(si2, 1)
+                      candidateStaffMap[u.id][dt] = false
                       break
                     }
                   }
                 }
-              })
+              }
 
-              assignedWeekend = targetW
+              // Verify both days are free and cycle coverage is maintained
+              if (
+                candidatePossible &&
+                !candidateStaffMap[u.id][satStr] &&
+                !candidateStaffMap[u.id][sunStr] &&
+                checkCoverageOk(candidateShifts)
+              ) {
+                // COMMIT state
+                workingShifts = candidateShifts
+                shiftsByStaff = candidateStaffMap
+                committedWeekend = candidate
+                break
+              }
+              // Otherwise ROLLBACK (discard candidateShifts/candidateStaffMap and loop to next)
             }
 
-            if (assignedWeekend) {
-              userPairs.push(assignedWeekend.sat)
-              userPairs.push(assignedWeekend.sun)
+            if (committedWeekend) {
+              userPairs.push(committedWeekend.sat)
+              userPairs.push(committedWeekend.sun)
             } else {
               issues.push(
                 'Fim de semana obrigatório não atendido: ' +
@@ -654,6 +784,56 @@ routerAdd(
 
           if (userPairs.length > 0) {
             assignments[u.id] = userPairs
+          }
+        })
+
+        // Check coverage on each day and sector
+        var dayCountsBySector = {}
+        workingShifts.forEach(function (s) {
+          var secKey = s.sector_id || 'default'
+          if (!dayCountsBySector[secKey]) dayCountsBySector[secKey] = {}
+          dayCountsBySector[secKey][s.date] = (dayCountsBySector[secKey][s.date] || 0) + 1
+        })
+
+        var secKeys = Object.keys(sectorMinStaffMap)
+        secKeys.forEach(function (sId) {
+          var minSt = sectorMinStaffMap[sId] || 0
+          if (minSt <= 0) return
+          var secName = sId
+          if (Array.isArray(sectorsList)) {
+            for (var si = 0; si < sectorsList.length; si++) {
+              if (
+                sectorsList[si] &&
+                (sectorsList[si].id === sId ||
+                  (typeof sectorsList[si].getId === 'function' && sectorsList[si].getId() === sId))
+              ) {
+                secName =
+                  (typeof sectorsList[si].getString === 'function'
+                    ? sectorsList[si].getString('name')
+                    : sectorsList[si].name) || sId
+                break
+              }
+            }
+          }
+          var cCur = new Date(cStart + 'T00:00:00Z')
+          var cEndD = new Date(cEnd + 'T00:00:00Z')
+          while (cCur <= cEndD) {
+            var dStr = cCur.toISOString().split('T')[0]
+            var count = (dayCountsBySector[sId] && dayCountsBySector[sId][dStr]) || 0
+            if (count < minSt) {
+              issues.push(
+                'Efetivo insuficiente em ' +
+                  secName +
+                  ' no dia ' +
+                  dStr +
+                  ': ' +
+                  count +
+                  '/' +
+                  minSt +
+                  '.',
+              )
+            }
+            cCur = new Date(cCur.getTime() + 86400000)
           }
         })
 
