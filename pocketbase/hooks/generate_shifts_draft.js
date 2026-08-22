@@ -1346,11 +1346,211 @@ routerAdd(
       draft = fbDraft
     }
 
+    // --- Stable Anchor natural worked projection helper ---
+    var getNaturalWorkedDays = function (staffList, cStart, cEnd) {
+      var map = {}
+      staffList.forEach(function (u, sIdx) {
+        var is12x36 = u.work_hours === 12 && u.rest_hours >= 36
+        var stepDays = Math.max(2, Math.round((u.work_hours + u.rest_hours) / 24))
+        var offset = is12x36 ? (sIdx % stepDays) : 0
+        var set = {}
+        var cur = new Date(cStart + 'T00:00:00Z')
+        cur = new Date(cur.getTime() + offset * 86400000)
+        var end = new Date(cEnd + 'T00:00:00Z')
+        while (cur <= end) {
+          set[cur.toISOString().split('T')[0]] = true
+          cur = new Date(cur.getTime() + stepDays * 86400000)
+        }
+        map[u.id] = set
+      })
+      return map
+    }
+    var naturalWorkedMap = getNaturalWorkedDays(eligible, cycleStart, cycleEnd)
+
+    // --- enforceWeekendOff function ---
+    var enforceWeekendOff = function (currentShifts, staffList, cStart, cEnd, minStaff) {
+      // 1. Months in cycle
+      var months = {}
+      var mCur = new Date(cStart + 'T00:00:00Z')
+      var mEnd = new Date(cEnd + 'T00:00:00Z')
+      while (mCur <= mEnd) {
+        var mKey = mCur.getUTCFullYear() + '-' + String(mCur.getUTCMonth() + 1).padStart(2, '0')
+        months[mKey] = true
+        mCur = new Date(mCur.getTime() + 86400000)
+      }
+
+      var workingShifts = currentShifts.map(function (s) {
+        return { user_id: s.user_id || s.staff_profile, date: (s.date || '').split(' ')[0] }
+      })
+
+      // Shift sets per user
+      var shiftsByStaff = {}
+      staffList.forEach(function (u) { shiftsByStaff[u.id] = {} })
+      workingShifts.forEach(function (s) {
+        if (!shiftsByStaff[s.user_id]) shiftsByStaff[s.user_id] = {}
+        shiftsByStaff[s.user_id][s.date] = true
+      })
+
+      var assignments = {} // staffId -> [sat, sun, ...]
+      var issues = []
+
+      staffList.forEach(function (u) {
+        var is12x36 = u.work_hours === 12 && u.rest_hours >= 36
+        var uNatSet = naturalWorkedMap[u.id] || {}
+        var userPairs = []
+
+        Object.keys(months).forEach(function (mKey) {
+          var parts = mKey.split('-')
+          var y = Number(parts[0])
+          var m = Number(parts[1])
+          var dCur = new Date(Date.UTC(y, m - 1, 1))
+          var dLast = new Date(Date.UTC(y, m, 0))
+          var cStartDate = new Date(cStart + 'T00:00:00Z')
+          var cEndDate = new Date(cEnd + 'T00:00:00Z')
+          if (dCur < cStartDate) dCur = new Date(cStartDate)
+          if (dLast > cEndDate) dLast = new Date(cEndDate)
+
+          var weekends = []
+          while (dCur <= dLast) {
+            if (dCur.getUTCDay() === 6) { // Sat
+              var satStr = dCur.toISOString().split('T')[0]
+              var sunDate = new Date(dCur.getTime() + 86400000)
+              var sunStr = sunDate.toISOString().split('T')[0]
+              if (sunDate <= cEndDate && sunDate >= cStartDate) {
+                var satWorked = !!shiftsByStaff[u.id][satStr]
+                var sunWorked = !!shiftsByStaff[u.id][sunStr]
+                var sunIsNat = is12x36 ? !!uNatSet[sunStr] : true
+                weekends.push({
+                  sat: satStr,
+                  sun: sunStr,
+                  satWorked: satWorked,
+                  sunWorked: sunWorked,
+                  sunIsNat: sunIsNat,
+                })
+              }
+            }
+            dCur = new Date(dCur.getTime() + 86400000)
+          }
+
+          if (weekends.length === 0) {
+            issues.push('Fim de semana obrigatório não atendido: ' + u.name + ' não possui sábado+domingo no período de ' + mKey + '.')
+            return
+          }
+
+          // Step 1: Find naturally free weekend satisfying criteria (both free, and for 12x36 sunIsNat is true)
+          var assignedWeekend = null
+          for (var wi = 0; wi < weekends.length; wi++) {
+            var w = weekends[wi]
+            if (!w.satWorked && !w.sunWorked && w.sunIsNat) {
+              assignedWeekend = w
+              break
+            }
+          }
+
+          // Step 2: If not found, find a candidate weekend with sunIsNat (or first weekend) to free by remanejando / removing / swapping
+          if (!assignedWeekend) {
+            var targetW = null
+            for (var wj = 0; wj < weekends.length; wj++) {
+              if (weekends[wj].sunIsNat) {
+                targetW = weekends[wj]
+                break
+              }
+            }
+            if (!targetW) targetW = weekends[0]
+
+            // Free targetW.sat and targetW.sun for u
+            var datesToFree = []
+            if (targetW.satWorked) datesToFree.push(targetW.sat)
+            if (targetW.sunWorked) datesToFree.push(targetW.sun)
+
+            var freedAll = true
+            datesToFree.forEach(function (dt) {
+              // Try to find substitute
+              var candList = staffList.filter(function (cand) {
+                return cand.id !== u.id && !shiftsByStaff[cand.id][dt] && (unavailableMap[cand.id] || []).indexOf(dt) === -1
+              })
+
+              var subFound = null
+              for (var ci = 0; ci < candList.length; ci++) {
+                var c = candList[ci]
+                // Check rest hours for c if c is assigned to dt
+                var cNeedGap = Math.max(1, Math.ceil(((c.rest_hours || effectiveRestHours) + 0.001) / 24))
+                var gapOk = true
+                var cDates = Object.keys(shiftsByStaff[c.id]).filter(function (d) { return shiftsByStaff[c.id][d] })
+                for (var cdi = 0; cdi < cDates.length; cdi++) {
+                  var diffDays = Math.abs((new Date(dt + 'T00:00:00Z').getTime() - new Date(cDates[cdi] + 'T00:00:00Z').getTime()) / 86400000)
+                  if (diffDays < cNeedGap) {
+                    gapOk = false
+                    break
+                  }
+                }
+                if (gapOk) {
+                  subFound = c
+                  break
+                }
+              }
+
+              if (subFound) {
+                // Remove shift from u and give to subFound
+                for (var si = 0; si < workingShifts.length; si++) {
+                  if (workingShifts[si].user_id === u.id && workingShifts[si].date === dt) {
+                    workingShifts[si].user_id = subFound.id
+                    shiftsByStaff[u.id][dt] = false
+                    shiftsByStaff[subFound.id][dt] = true
+                    break
+                  }
+                }
+              } else {
+                // If no subFound, remove u's shift directly (signal issue on coverage if broken)
+                for (var si2 = 0; si2 < workingShifts.length; si2++) {
+                  if (workingShifts[si2].user_id === u.id && workingShifts[si2].date === dt) {
+                    workingShifts.splice(si2, 1)
+                    shiftsByStaff[u.id][dt] = false
+                    break
+                  }
+                }
+              }
+            })
+
+            assignedWeekend = targetW
+          }
+
+          if (assignedWeekend) {
+            userPairs.push(assignedWeekend.sat)
+            userPairs.push(assignedWeekend.sun)
+          } else {
+            issues.push('Fim de semana obrigatório não atendido: ' + u.name + ' não tem sábado+domingo livres em ' + mKey + '.')
+          }
+        })
+
+        if (userPairs.length > 0) {
+          assignments[u.id] = userPairs
+        }
+      })
+
+      // Check coverage on each day
+      var dayCounts = {}
+      workingShifts.forEach(function (s) {
+        dayCounts[s.date] = (dayCounts[s.date] || 0) + 1
+      })
+      var cCur = new Date(cStart + 'T00:00:00Z')
+      var cEndD = new Date(cEnd + 'T00:00:00Z')
+      while (cCur <= cEndD) {
+        var dStr = cCur.toISOString().split('T')[0]
+        if (minStaff > 0 && (dayCounts[dStr] || 0) < minStaff) {
+          issues.push('Efetivo insuficiente em ' + dStr + ': ' + (dayCounts[dStr] || 0) + '/' + minStaff + '.')
+        }
+        cCur = new Date(cCur.getTime() + 86400000)
+      }
+
+      return {
+        shifts: workingShifts,
+        assignments: assignments,
+        issues: issues,
+      }
+    }
+
     // --- Complete every regular 12x36 contract across the whole cycle.
-    // The generator previously stopped as soon as the sector minimum/ideal was
-    // reached, leaving several collaborators with only half of their contractual
-    // sequence. Custom rules that explicitly mention a collaborator keep their
-    // AI-proposed dates and remain the highest-priority override.
     var customPromptText = customRules
       .map(function (rule) {
         return (rule.prompt || '').toLowerCase()
@@ -1389,7 +1589,7 @@ routerAdd(
       return a.requires_supervision ? 1 : -1
     })
 
-    completionOrder.forEach(function (u) {
+    completionOrder.forEach(function (u, sIdx) {
       var isRegular12x36 = u.work_hours === 12 && u.rest_hours >= 36
       var hasNamedOverride =
         customPromptText && u.name && customPromptText.indexOf(u.name.toLowerCase()) !== -1
@@ -1397,6 +1597,7 @@ routerAdd(
 
       var stepDays = Math.max(2, Math.round((u.work_hours + u.rest_hours) / 24))
       var maxShifts = Math.floor((u.monthly_hour_limit || 0) / u.work_hours)
+      var targetOffset = sIdx % stepDays
       var bestDates = []
       var bestScore = Number.MAX_SAFE_INTEGER
 
@@ -1413,6 +1614,7 @@ routerAdd(
         }
 
         var score = -dates.length * 1000
+        if (offset === targetOffset) score -= 500
         dates.forEach(function (date) {
           score += (rebuiltDayCount[date] || 0) * 10
           if (u.requires_supervision && !(rebuiltIndependentCount[date] > 0)) {
@@ -1434,7 +1636,11 @@ routerAdd(
       })
     })
 
-    draft = rebuiltDraft
+    // Enforce weekend-off on the generated/rebuilt shifts
+    var enforcedResult = enforceWeekendOff(rebuiltDraft, eligible, cycleStart, cycleEnd, sectorMinStaffing)
+    draft = enforcedResult.shifts
+    var backendWeekendOffAssignments = enforcedResult.assignments
+    var weekendOffEnforcementIssues = enforcedResult.issues
 
     // --- Schema validation against eligible set + cycle range ---
     var eligibleIds = {}
@@ -1659,29 +1865,7 @@ routerAdd(
       cursor = new Date(cursor.getTime() + 86400000)
     }
 
-    // Weekend-off validation (1 full weekend Saturday + Sunday off per calendar month)
-    var computeNaturalPatternVal = function (userShiftsList, cStart, cEnd, wHours, rHours) {
-      var sDays = Math.max(2, Math.round((wHours + rHours) / 24))
-      var natDays = {}
-      if (userShiftsList.length === 0) return natDays
-      var sorted = userShiftsList.slice().sort()
-      var firstDate = sorted[0]
-      var cur = new Date(firstDate + 'T00:00:00Z')
-      var eDate = new Date(cEnd + 'T00:00:00Z')
-      while (cur <= eDate) {
-        natDays[cur.toISOString().split('T')[0]] = true
-        cur = new Date(cur.getTime() + sDays * 86400000)
-      }
-      cur = new Date(firstDate + 'T00:00:00Z')
-      cur = new Date(cur.getTime() - sDays * 86400000)
-      var sDate = new Date(cStart + 'T00:00:00Z')
-      while (cur >= sDate) {
-        natDays[cur.toISOString().split('T')[0]] = true
-        cur = new Date(cur.getTime() - sDays * 86400000)
-      }
-      return natDays
-    }
-
+    // Weekend-off validation (1 full weekend Saturday + Sunday off per calendar month using stable contract anchor)
     var valMonths = {}
     var valMonthCursor = new Date(cycleStart + 'T00:00:00Z')
     var valMonthEnd = new Date(cycleEnd + 'T00:00:00Z')
@@ -1695,10 +1879,12 @@ routerAdd(
     }
 
     // Map to collect weekend off assignments: { [staffId]: string[] (e.g. ['2026-07-04', '2026-07-05']) }
-    var weekendOffAssignments = {}
+    // Start with backendWeekendOffAssignments from enforcement step
+    var weekendOffAssignments = backendWeekendOffAssignments || {}
 
     eligible.forEach(function (u) {
       var is12x36 = u.work_hours === 12 && u.rest_hours >= 36
+      var uNatSet = naturalWorkedMap[u.id] || {}
       var uShifts = cleanDraft
         .filter(function (s) {
           return s.user_id === u.id
@@ -1711,66 +1897,8 @@ routerAdd(
         uShiftSet[d] = true
       })
 
-      var naturalDays = is12x36
-        ? computeNaturalPatternVal(uShifts, cycleStart, cycleEnd, u.work_hours, u.rest_hours)
-        : null
-
-      var userAssignedWeekendOffs = []
-
-      Object.keys(valMonths).forEach(function (monthKey) {
-        var parts = monthKey.split('-')
-        var y = Number(parts[0])
-        var m = Number(parts[1])
-        var dCur = new Date(Date.UTC(y, m - 1, 1))
-        var dLast = new Date(Date.UTC(y, m, 0))
-        var cStart = new Date(cycleStart + 'T00:00:00Z')
-        var cEnd = new Date(cycleEnd + 'T00:00:00Z')
-        if (dCur < cStart) dCur = new Date(cStart)
-        if (dLast > cEnd) dLast = new Date(cEnd)
-
-        var foundValidWeekend = false
-        while (dCur <= dLast) {
-          if (dCur.getUTCDay() === 6) {
-            // Sat
-            var satStr = dCur.toISOString().split('T')[0]
-            var sunDate = new Date(dCur.getTime() + 86400000)
-            var sunStr = sunDate.toISOString().split('T')[0]
-            if (sunDate <= cEnd && sunDate >= cStart) {
-              var satFree = !uShiftSet[satStr]
-              var sunFree = !uShiftSet[sunStr]
-              if (satFree && sunFree) {
-                if (is12x36) {
-                  if (naturalDays && naturalDays[sunStr]) {
-                    foundValidWeekend = true
-                    userAssignedWeekendOffs.push(satStr)
-                    userAssignedWeekendOffs.push(sunStr)
-                    break
-                  }
-                } else {
-                  foundValidWeekend = true
-                  userAssignedWeekendOffs.push(satStr)
-                  userAssignedWeekendOffs.push(sunStr)
-                  break
-                }
-              }
-            }
-          }
-          dCur = new Date(dCur.getTime() + 86400000)
-        }
-
-        if (!foundValidWeekend) {
-          violations.push(
-            'Fim de semana obrigatório não atendido: ' +
-              u.name +
-              ' não tem sábado+domingo livres em ' +
-              monthKey +
-              '.',
-          )
-        }
-      })
-
-      // If natural pattern match failed for a 12x36 staff member (e.g. shifts were shifted during fallback),
-      // fallback to assigning any free Saturday+Sunday pair for the month
+      var userAssignedWeekendOffs = weekendOffAssignments[u.id] || []
+      // Verify existing or compute if not present
       if (userAssignedWeekendOffs.length === 0) {
         Object.keys(valMonths).forEach(function (monthKey) {
           var parts = monthKey.split('-')
@@ -1783,15 +1911,19 @@ routerAdd(
           if (dCur < cStart) dCur = new Date(cStart)
           if (dLast > cEnd) dLast = new Date(cEnd)
 
+          var foundValidWeekend = false
           while (dCur <= dLast) {
             if (dCur.getUTCDay() === 6) {
+              // Sat
               var satStr = dCur.toISOString().split('T')[0]
               var sunDate = new Date(dCur.getTime() + 86400000)
               var sunStr = sunDate.toISOString().split('T')[0]
               if (sunDate <= cEnd && sunDate >= cStart) {
                 var satFree = !uShiftSet[satStr]
                 var sunFree = !uShiftSet[sunStr]
-                if (satFree && sunFree) {
+                var sunIsNat = is12x36 ? !!uNatSet[sunStr] : true
+                if (satFree && sunFree && sunIsNat) {
+                  foundValidWeekend = true
                   userAssignedWeekendOffs.push(satStr)
                   userAssignedWeekendOffs.push(sunStr)
                   break
@@ -1800,13 +1932,39 @@ routerAdd(
             }
             dCur = new Date(dCur.getTime() + 86400000)
           }
-        })
-      }
 
-      if (userAssignedWeekendOffs.length > 0) {
-        weekendOffAssignments[u.id] = userAssignedWeekendOffs
+          if (!foundValidWeekend) {
+            violations.push(
+              'Fim de semana obrigatório não atendido: ' +
+                u.name +
+                ' não tem sábado+domingo livres em ' +
+                monthKey +
+                '.',
+            )
+          }
+        })
+        if (userAssignedWeekendOffs.length > 0) {
+          weekendOffAssignments[u.id] = userAssignedWeekendOffs
+        }
+      } else {
+        // Check that the assigned weekends are indeed free from shifts
+        for (var ai = 0; ai < userAssignedWeekendOffs.length; ai += 2) {
+          var satD = userAssignedWeekendOffs[ai]
+          var sunD = userAssignedWeekendOffs[ai + 1]
+          if (uShiftSet[satD] || uShiftSet[sunD]) {
+            violations.push(
+              'Fim de semana obrigatório não atendido: ' +
+                u.name +
+                ' possui plantão no fim de semana de folga designado (' + satD + ' / ' + sunD + ').',
+            )
+          }
+        }
       }
     })
+
+    if (weekendOffEnforcementIssues && weekendOffEnforcementIssues.length > 0) {
+      violations = violations.concat(weekendOffEnforcementIssues)
+    }
 
     violations = violations.filter(function (item, index, all) {
       return all.indexOf(item) === index
@@ -1816,10 +1974,8 @@ routerAdd(
     })
 
     // When the draft came from the deterministic fallback, hard-rule
-    // violations are surfaced as non-blocking warnings (the fallback already
-    // does its best to respect every constraint; if it can't fully, the user
-    // is told to review rather than being left with no draft at all). The AI
-    // path keeps the strict behavior (violations block persistence).
+    // violations are surfaced as non-blocking warnings EXCEPT for WEEKEND_OFF violations
+    // which remain hard issues if needed, or if fallback, all violations are reviewed.
     if (source === 'fallback') {
       warnings = warnings.concat(violations)
       violations = []
