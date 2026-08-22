@@ -287,25 +287,18 @@ routerAdd(
       cursor = new Date(cursor.getTime() + 86400000)
     }
 
-    // Weekend-off validation
-    var computeNaturalPatternCommit = function (userShiftsList, cStart, cEnd, wHours, rHours) {
-      var sDays = Math.max(2, Math.round((wHours + rHours) / 24))
+    // Weekend-off validation using stable anchor based on sorted eligible profiles
+    var computeNaturalPatternCommit = function (staffIndex, cStart, cEnd, wHours, rHours) {
+      var is12x36 = wHours === 12 && rHours >= 36
+      var stepDays = Math.max(2, Math.round((wHours + rHours) / 24))
+      var offset = is12x36 ? staffIndex % stepDays : 0
       var natDays = {}
-      if (userShiftsList.length === 0) return natDays
-      var sorted = userShiftsList.slice().sort()
-      var firstDate = sorted[0]
-      var cur = new Date(firstDate + 'T00:00:00Z')
+      var cur = new Date(cStart + 'T00:00:00Z')
+      cur = new Date(cur.getTime() + offset * 86400000)
       var eDate = new Date(cEnd + 'T00:00:00Z')
       while (cur <= eDate) {
         natDays[cur.toISOString().split('T')[0]] = true
-        cur = new Date(cur.getTime() + sDays * 86400000)
-      }
-      cur = new Date(firstDate + 'T00:00:00Z')
-      cur = new Date(cur.getTime() - sDays * 86400000)
-      var sDate = new Date(cStart + 'T00:00:00Z')
-      while (cur >= sDate) {
-        natDays[cur.toISOString().split('T')[0]] = true
-        cur = new Date(cur.getTime() - sDays * 86400000)
+        cur = new Date(cur.getTime() + stepDays * 86400000)
       }
       return natDays
     }
@@ -322,7 +315,9 @@ routerAdd(
       commitMonthCursor = new Date(commitMonthCursor.getTime() + 86400000)
     }
 
-    Object.keys(profileMap).forEach(function (profileId) {
+    var sortedProfileIds = Object.keys(profileMap).slice().sort()
+
+    sortedProfileIds.forEach(function (profileId, staffIdx) {
       var profile = profileMap[profileId]
       var contract = contractMap[profileId]
       if (!contract) return
@@ -349,7 +344,7 @@ routerAdd(
       })
 
       var naturalDays = is12x36
-        ? computeNaturalPatternCommit(uShifts, cycleStart, cycleEnd, workHours, restHours)
+        ? computeNaturalPatternCommit(staffIdx, cycleStart, cycleEnd, workHours, restHours)
         : null
 
       Object.keys(commitMonths).forEach(function (monthKey) {

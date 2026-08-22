@@ -434,6 +434,246 @@ routerAdd(
         })
       })
 
+      // Stable anchor natural worked projection helper for usersWithContracts
+      var getNaturalWorkedDaysGen = function (staffList, cStart, cEnd) {
+        var map = {}
+        staffList.forEach(function (u, sIdx) {
+          var workH = u.shift_work_hours || 12
+          var restH = u.shift_rest_hours || 36
+          var is12x36 = workH === 12 && restH >= 36
+          var stepDays = Math.max(2, Math.round((workH + restH) / 24))
+          var offset = is12x36 ? sIdx % stepDays : 0
+          var set = {}
+          var cur = new Date(cStart + 'T00:00:00Z')
+          cur = new Date(cur.getTime() + offset * 86400000)
+          var end = new Date(cEnd + 'T00:00:00Z')
+          while (cur <= end) {
+            set[cur.toISOString().split('T')[0]] = true
+            cur = new Date(cur.getTime() + stepDays * 86400000)
+          }
+          map[u.id] = set
+        })
+        return map
+      }
+      var naturalWorkedMapGen = getNaturalWorkedDaysGen(
+        usersWithContracts,
+        generationStart,
+        generationEnd,
+      )
+
+      // enforceWeekendOff for generate_shifts.js
+      var enforceWeekendOffGen = function (currentShifts, staffList, cStart, cEnd, sectorsList) {
+        var months = {}
+        var mCur = new Date(cStart + 'T00:00:00Z')
+        var mEnd = new Date(cEnd + 'T00:00:00Z')
+        while (mCur <= mEnd) {
+          var mKey = mCur.getUTCFullYear() + '-' + String(mCur.getUTCMonth() + 1).padStart(2, '0')
+          months[mKey] = true
+          mCur = new Date(mCur.getTime() + 86400000)
+        }
+
+        var workingShifts = currentShifts.map(function (s) {
+          return {
+            user_id: s.user_id,
+            sector_id: s.sector_id,
+            start_time: s.start_time,
+            end_time: s.end_time,
+            date: (s.start_time || '').split(' ')[0],
+          }
+        })
+
+        var shiftsByStaff = {}
+        staffList.forEach(function (u) {
+          shiftsByStaff[u.id] = {}
+        })
+        workingShifts.forEach(function (s) {
+          if (!shiftsByStaff[s.user_id]) shiftsByStaff[s.user_id] = {}
+          shiftsByStaff[s.user_id][s.date] = true
+        })
+
+        var assignments = {}
+        var issues = []
+
+        staffList.forEach(function (u) {
+          var workH = u.shift_work_hours || 12
+          var restH = u.shift_rest_hours || 36
+          var is12x36 = workH === 12 && restH >= 36
+          var uNatSet = naturalWorkedMapGen[u.id] || {}
+          var userPairs = []
+
+          Object.keys(months).forEach(function (mKey) {
+            var parts = mKey.split('-')
+            var y = Number(parts[0])
+            var m = Number(parts[1])
+            var dCur = new Date(Date.UTC(y, m - 1, 1))
+            var dLast = new Date(Date.UTC(y, m, 0))
+            var cStartDate = new Date(cStart + 'T00:00:00Z')
+            var cEndDate = new Date(cEnd + 'T00:00:00Z')
+            if (dCur < cStartDate) dCur = new Date(cStartDate)
+            if (dLast > cEndDate) dLast = new Date(cEndDate)
+
+            var weekends = []
+            while (dCur <= dLast) {
+              if (dCur.getUTCDay() === 6) {
+                // Sat
+                var satStr = dCur.toISOString().split('T')[0]
+                var sunDate = new Date(dCur.getTime() + 86400000)
+                var sunStr = sunDate.toISOString().split('T')[0]
+                if (sunDate <= cEndDate && sunDate >= cStartDate) {
+                  var satWorked = !!shiftsByStaff[u.id][satStr]
+                  var sunWorked = !!shiftsByStaff[u.id][sunStr]
+                  var sunIsNat = is12x36 ? !!uNatSet[sunStr] : true
+                  weekends.push({
+                    sat: satStr,
+                    sun: sunStr,
+                    satWorked: satWorked,
+                    sunWorked: sunWorked,
+                    sunIsNat: sunIsNat,
+                  })
+                }
+              }
+              dCur = new Date(dCur.getTime() + 86400000)
+            }
+
+            if (weekends.length === 0) {
+              issues.push(
+                'Fim de semana obrigatório não atendido: ' +
+                  u.name +
+                  ' não possui sábado+domingo no período de ' +
+                  mKey +
+                  '.',
+              )
+              return
+            }
+
+            var assignedWeekend = null
+            for (var wi = 0; wi < weekends.length; wi++) {
+              var w = weekends[wi]
+              if (!w.satWorked && !w.sunWorked && w.sunIsNat) {
+                assignedWeekend = w
+                break
+              }
+            }
+
+            if (!assignedWeekend) {
+              var targetW = null
+              for (var wj = 0; wj < weekends.length; wj++) {
+                if (weekends[wj].sunIsNat) {
+                  targetW = weekends[wj]
+                  break
+                }
+              }
+              if (!targetW) targetW = weekends[0]
+
+              var datesToFree = []
+              if (targetW.satWorked) datesToFree.push(targetW.sat)
+              if (targetW.sunWorked) datesToFree.push(targetW.sun)
+
+              datesToFree.forEach(function (dt) {
+                var candList = staffList.filter(function (cand) {
+                  return (
+                    cand.id !== u.id &&
+                    cand.sector_id === u.sector_id &&
+                    !shiftsByStaff[cand.id][dt] &&
+                    (timeoffMap[cand.id] || []).indexOf(dt) === -1
+                  )
+                })
+
+                var subFound = null
+                for (var ci = 0; ci < candList.length; ci++) {
+                  var c = candList[ci]
+                  var cRestH = c.shift_rest_hours || 36
+                  var cNeedGap = Math.max(1, Math.ceil((cRestH + 0.001) / 24))
+                  var gapOk = true
+                  var cDates = Object.keys(shiftsByStaff[c.id]).filter(function (d) {
+                    return shiftsByStaff[c.id][d]
+                  })
+                  for (var cdi = 0; cdi < cDates.length; cdi++) {
+                    var diffDays = Math.abs(
+                      (new Date(dt + 'T00:00:00Z').getTime() -
+                        new Date(cDates[cdi] + 'T00:00:00Z').getTime()) /
+                        86400000,
+                    )
+                    if (diffDays < cNeedGap) {
+                      gapOk = false
+                      break
+                    }
+                  }
+                  if (gapOk) {
+                    subFound = c
+                    break
+                  }
+                }
+
+                if (subFound) {
+                  for (var si = 0; si < workingShifts.length; si++) {
+                    if (workingShifts[si].user_id === u.id && workingShifts[si].date === dt) {
+                      workingShifts[si].user_id = subFound.id
+                      var startTime = subFound.shift_start_time || '07:00'
+                      if (startTime.length === 5) startTime += ':00'
+                      var start = new Date(dt + 'T' + startTime + '.000Z')
+                      var end = new Date(
+                        start.getTime() + (subFound.shift_work_hours || 12) * 3600000,
+                      )
+                      workingShifts[si].start_time =
+                        start.toISOString().replace('T', ' ').substring(0, 23) + 'Z'
+                      workingShifts[si].end_time =
+                        end.toISOString().replace('T', ' ').substring(0, 23) + 'Z'
+                      shiftsByStaff[u.id][dt] = false
+                      shiftsByStaff[subFound.id][dt] = true
+                      break
+                    }
+                  }
+                } else {
+                  for (var si2 = 0; si2 < workingShifts.length; si2++) {
+                    if (workingShifts[si2].user_id === u.id && workingShifts[si2].date === dt) {
+                      workingShifts.splice(si2, 1)
+                      shiftsByStaff[u.id][dt] = false
+                      break
+                    }
+                  }
+                }
+              })
+
+              assignedWeekend = targetW
+            }
+
+            if (assignedWeekend) {
+              userPairs.push(assignedWeekend.sat)
+              userPairs.push(assignedWeekend.sun)
+            } else {
+              issues.push(
+                'Fim de semana obrigatório não atendido: ' +
+                  u.name +
+                  ' não tem sábado+domingo livres em ' +
+                  mKey +
+                  '.',
+              )
+            }
+          })
+
+          if (userPairs.length > 0) {
+            assignments[u.id] = userPairs
+          }
+        })
+
+        return {
+          shifts: workingShifts,
+          assignments: assignments,
+          issues: issues,
+        }
+      }
+
+      var enforcedGenResult = enforceWeekendOffGen(
+        completedShifts,
+        usersWithContracts,
+        generationStart,
+        generationEnd,
+        sectors,
+      )
+      completedShifts = enforcedGenResult.shifts
+      var weekendOffEnforcementIssuesGen = enforcedGenResult.issues
+
       generatedShifts = completedShifts
 
       var userHourMap = {}
@@ -604,25 +844,18 @@ routerAdd(
         }
       })
 
-      // Weekend-off validation
-      var computeNaturalPatternGen = function (userShiftsList, cStart, cEnd, wHours, rHours) {
-        var sDays = Math.max(2, Math.round((wHours + rHours) / 24))
+      // Weekend-off validation using stable anchor
+      var computeNaturalPatternGen = function (staffIndex, cStart, cEnd, wHours, rHours) {
+        var is12x36 = wHours === 12 && rHours >= 36
+        var stepDays = Math.max(2, Math.round((wHours + rHours) / 24))
+        var offset = is12x36 ? staffIndex % stepDays : 0
         var natDays = {}
-        if (userShiftsList.length === 0) return natDays
-        var sorted = userShiftsList.slice().sort()
-        var firstDate = sorted[0]
-        var cur = new Date(firstDate + 'T00:00:00Z')
+        var cur = new Date(cStart + 'T00:00:00Z')
+        cur = new Date(cur.getTime() + offset * 86400000)
         var eDate = new Date(cEnd + 'T00:00:00Z')
         while (cur <= eDate) {
           natDays[cur.toISOString().split('T')[0]] = true
-          cur = new Date(cur.getTime() + sDays * 86400000)
-        }
-        cur = new Date(firstDate + 'T00:00:00Z')
-        cur = new Date(cur.getTime() - sDays * 86400000)
-        var sDate = new Date(cStart + 'T00:00:00Z')
-        while (cur >= sDate) {
-          natDays[cur.toISOString().split('T')[0]] = true
-          cur = new Date(cur.getTime() - sDays * 86400000)
+          cur = new Date(cur.getTime() + stepDays * 86400000)
         }
         return natDays
       }
@@ -639,7 +872,7 @@ routerAdd(
         genMonthCursor = new Date(genMonthCursor.getTime() + 86400000)
       }
 
-      usersWithContracts.forEach(function (u) {
+      usersWithContracts.forEach(function (u, staffIdx) {
         var is12x36 = u.shift_work_hours === 12 && u.shift_rest_hours >= 36
         var uShifts = generatedShifts
           .filter(function (s) {
@@ -655,7 +888,7 @@ routerAdd(
 
         var naturalDays = is12x36
           ? computeNaturalPatternGen(
-              uShifts,
+              staffIdx,
               cycleStart,
               cycleEnd,
               u.shift_work_hours,
@@ -709,6 +942,10 @@ routerAdd(
           }
         })
       })
+
+      if (weekendOffEnforcementIssuesGen && weekendOffEnforcementIssuesGen.length > 0) {
+        violations = violations.concat(weekendOffEnforcementIssuesGen)
+      }
 
       violations = violations.filter(function (item, index, all) {
         return all.indexOf(item) === index

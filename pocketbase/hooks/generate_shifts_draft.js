@@ -1352,7 +1352,7 @@ routerAdd(
       staffList.forEach(function (u, sIdx) {
         var is12x36 = u.work_hours === 12 && u.rest_hours >= 36
         var stepDays = Math.max(2, Math.round((u.work_hours + u.rest_hours) / 24))
-        var offset = is12x36 ? (sIdx % stepDays) : 0
+        var offset = is12x36 ? sIdx % stepDays : 0
         var set = {}
         var cur = new Date(cStart + 'T00:00:00Z')
         cur = new Date(cur.getTime() + offset * 86400000)
@@ -1385,7 +1385,9 @@ routerAdd(
 
       // Shift sets per user
       var shiftsByStaff = {}
-      staffList.forEach(function (u) { shiftsByStaff[u.id] = {} })
+      staffList.forEach(function (u) {
+        shiftsByStaff[u.id] = {}
+      })
       workingShifts.forEach(function (s) {
         if (!shiftsByStaff[s.user_id]) shiftsByStaff[s.user_id] = {}
         shiftsByStaff[s.user_id][s.date] = true
@@ -1412,7 +1414,8 @@ routerAdd(
 
           var weekends = []
           while (dCur <= dLast) {
-            if (dCur.getUTCDay() === 6) { // Sat
+            if (dCur.getUTCDay() === 6) {
+              // Sat
               var satStr = dCur.toISOString().split('T')[0]
               var sunDate = new Date(dCur.getTime() + 86400000)
               var sunStr = sunDate.toISOString().split('T')[0]
@@ -1433,7 +1436,13 @@ routerAdd(
           }
 
           if (weekends.length === 0) {
-            issues.push('Fim de semana obrigatório não atendido: ' + u.name + ' não possui sábado+domingo no período de ' + mKey + '.')
+            issues.push(
+              'Fim de semana obrigatório não atendido: ' +
+                u.name +
+                ' não possui sábado+domingo no período de ' +
+                mKey +
+                '.',
+            )
             return
           }
 
@@ -1467,18 +1476,31 @@ routerAdd(
             datesToFree.forEach(function (dt) {
               // Try to find substitute
               var candList = staffList.filter(function (cand) {
-                return cand.id !== u.id && !shiftsByStaff[cand.id][dt] && (unavailableMap[cand.id] || []).indexOf(dt) === -1
+                return (
+                  cand.id !== u.id &&
+                  !shiftsByStaff[cand.id][dt] &&
+                  (unavailableMap[cand.id] || []).indexOf(dt) === -1
+                )
               })
 
               var subFound = null
               for (var ci = 0; ci < candList.length; ci++) {
                 var c = candList[ci]
                 // Check rest hours for c if c is assigned to dt
-                var cNeedGap = Math.max(1, Math.ceil(((c.rest_hours || effectiveRestHours) + 0.001) / 24))
+                var cNeedGap = Math.max(
+                  1,
+                  Math.ceil(((c.rest_hours || effectiveRestHours) + 0.001) / 24),
+                )
                 var gapOk = true
-                var cDates = Object.keys(shiftsByStaff[c.id]).filter(function (d) { return shiftsByStaff[c.id][d] })
+                var cDates = Object.keys(shiftsByStaff[c.id]).filter(function (d) {
+                  return shiftsByStaff[c.id][d]
+                })
                 for (var cdi = 0; cdi < cDates.length; cdi++) {
-                  var diffDays = Math.abs((new Date(dt + 'T00:00:00Z').getTime() - new Date(cDates[cdi] + 'T00:00:00Z').getTime()) / 86400000)
+                  var diffDays = Math.abs(
+                    (new Date(dt + 'T00:00:00Z').getTime() -
+                      new Date(cDates[cdi] + 'T00:00:00Z').getTime()) /
+                      86400000,
+                  )
                   if (diffDays < cNeedGap) {
                     gapOk = false
                     break
@@ -1519,7 +1541,13 @@ routerAdd(
             userPairs.push(assignedWeekend.sat)
             userPairs.push(assignedWeekend.sun)
           } else {
-            issues.push('Fim de semana obrigatório não atendido: ' + u.name + ' não tem sábado+domingo livres em ' + mKey + '.')
+            issues.push(
+              'Fim de semana obrigatório não atendido: ' +
+                u.name +
+                ' não tem sábado+domingo livres em ' +
+                mKey +
+                '.',
+            )
           }
         })
 
@@ -1538,7 +1566,15 @@ routerAdd(
       while (cCur <= cEndD) {
         var dStr = cCur.toISOString().split('T')[0]
         if (minStaff > 0 && (dayCounts[dStr] || 0) < minStaff) {
-          issues.push('Efetivo insuficiente em ' + dStr + ': ' + (dayCounts[dStr] || 0) + '/' + minStaff + '.')
+          issues.push(
+            'Efetivo insuficiente em ' +
+              dStr +
+              ': ' +
+              (dayCounts[dStr] || 0) +
+              '/' +
+              minStaff +
+              '.',
+          )
         }
         cCur = new Date(cCur.getTime() + 86400000)
       }
@@ -1637,7 +1673,13 @@ routerAdd(
     })
 
     // Enforce weekend-off on the generated/rebuilt shifts
-    var enforcedResult = enforceWeekendOff(rebuiltDraft, eligible, cycleStart, cycleEnd, sectorMinStaffing)
+    var enforcedResult = enforceWeekendOff(
+      rebuiltDraft,
+      eligible,
+      cycleStart,
+      cycleEnd,
+      sectorMinStaffing,
+    )
     draft = enforcedResult.shifts
     var backendWeekendOffAssignments = enforcedResult.assignments
     var weekendOffEnforcementIssues = enforcedResult.issues
@@ -1880,7 +1922,9 @@ routerAdd(
 
     // Map to collect weekend off assignments: { [staffId]: string[] (e.g. ['2026-07-04', '2026-07-05']) }
     // Start with backendWeekendOffAssignments from enforcement step
-    var weekendOffAssignments = backendWeekendOffAssignments || {}
+    var weekendOffAssignments = backendWeekendOffAssignments
+      ? JSON.parse(JSON.stringify(backendWeekendOffAssignments))
+      : {}
 
     eligible.forEach(function (u) {
       var is12x36 = u.work_hours === 12 && u.rest_hours >= 36
@@ -1955,7 +1999,11 @@ routerAdd(
             violations.push(
               'Fim de semana obrigatório não atendido: ' +
                 u.name +
-                ' possui plantão no fim de semana de folga designado (' + satD + ' / ' + sunD + ').',
+                ' possui plantão no fim de semana de folga designado (' +
+                satD +
+                ' / ' +
+                sunD +
+                ').',
             )
           }
         }
@@ -1973,12 +2021,21 @@ routerAdd(
       return all.indexOf(item) === index
     })
 
-    // When the draft came from the deterministic fallback, hard-rule
-    // violations are surfaced as non-blocking warnings EXCEPT for WEEKEND_OFF violations
-    // which remain hard issues if needed, or if fallback, all violations are reviewed.
+    // When the draft came from the deterministic fallback, non-weekend-off
+    // violations are surfaced as non-blocking warnings. WEEKEND_OFF violations
+    // must remain hard/blocking.
     if (source === 'fallback') {
-      warnings = warnings.concat(violations)
-      violations = []
+      var weekendOffViolations = []
+      var otherViolations = []
+      violations.forEach(function (v) {
+        if (v && v.indexOf('Fim de semana obrigatório') !== -1) {
+          weekendOffViolations.push(v)
+        } else {
+          otherViolations.push(v)
+        }
+      })
+      warnings = warnings.concat(otherViolations)
+      violations = weekendOffViolations
       warnings.unshift(
         'Rascunho gerado por fallback determinístico (a IA não retornou JSON válido). Revise antes de publicar.',
       )
