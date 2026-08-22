@@ -39,10 +39,6 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { useToast } from '@/components/ui/use-toast'
 import pb from '@/lib/pocketbase/client'
 import { useRealtime } from '@/hooks/use-realtime'
-import {
-  computeWeekendOffAssignments,
-  computeWeekendOffAssignmentsSimple,
-} from '@/lib/escala-weekend-off'
 
 type ViewMode = 'cycle' | 'month' | 'week' | 'day'
 
@@ -156,7 +152,7 @@ export function ShiftCalendar({
 
   // Computa o mapa de fins de semana de folga (staffId -> Set<dateStr>)
   const weekendOffMap = useMemo(() => {
-    // 1. Preferir assignments persistidos pelo backend no validation_summary do draft
+    // Assignments persistidos pelo backend no validation_summary do draft
     const persistedAssignments = draft?.validation_summary?.weekend_off_assignments
     if (persistedAssignments && typeof persistedAssignments === 'object') {
       const map = new Map<string, Set<string>>()
@@ -170,28 +166,8 @@ export function ShiftCalendar({
       }
     }
 
-    if (!cycle || !selectedSectorId || sectorStaffProfiles.length === 0) {
-      return new Map<string, Set<string>>()
-    }
-    const staffIds = sectorStaffProfiles.map((sp) => sp.id)
-    const cStart = (cycle.start_date || '').split(' ')[0]
-    const cEnd = (cycle.end_date || '').split(' ')[0]
-
-    // 2. Chamar computeWeekendOffAssignmentsSimple em vez de computeWeekendOffAssignments
-    const simpleMap = computeWeekendOffAssignmentsSimple(
-      staffIds,
-      visibleShifts,
-      contracts,
-      cStart,
-      cEnd,
-    )
-    if (simpleMap.size > 0) {
-      return simpleMap
-    }
-
-    // 3. Fallback backward compatibility
-    return computeWeekendOffAssignments(staffIds, visibleShifts, contracts, cStart, cEnd)
-  }, [draft, cycle, selectedSectorId, sectorStaffProfiles, visibleShifts, contracts])
+    return new Map<string, Set<string>>()
+  }, [draft])
 
   const hasWeekendOffMetadata = useMemo(() => {
     const assignments = draft?.validation_summary?.weekend_off_assignments
@@ -699,6 +675,7 @@ export function ShiftCalendar({
                       return weekendOffPlaceholders.map((staff) => (
                         <div
                           key={`weekend-off-${staff.id}-${dayStr}`}
+                          data-testid={`weekend-off-${staff.id}-${dayStr}`}
                           title="Fim de semana de folga mensal"
                           className="text-xs p-2 rounded bg-orange-100 border border-orange-300 shadow-sm flex flex-col gap-1 transition-colors select-none"
                         >
