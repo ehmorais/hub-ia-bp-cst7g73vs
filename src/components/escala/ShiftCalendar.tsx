@@ -42,6 +42,29 @@ import { useRealtime } from '@/hooks/use-realtime'
 
 type ViewMode = 'cycle' | 'month' | 'week' | 'day'
 
+/**
+ * Classifica um plantão como diurno (D) ou noturno (N).
+ *
+ * Prefere os horários estruturados do tipo de turno
+ * (shift_type.start_time / end_time) quando disponíveis, caindo para os
+ * horários reais do plantão apenas quando o tipo não os definir. Um plantão
+ * é noturno se iniciar às 18:00 ou depois, ou se cruzar a meia-noite
+ * (horário de fim anterior ao de início).
+ */
+function isNightShift(
+  typeStart?: string,
+  typeEnd?: string,
+  actualStart = '',
+  actualEnd = '',
+): boolean {
+  const start = (typeStart || actualStart || '').trim()
+  const end = (typeEnd || actualEnd || '').trim()
+  if (!start && !end) return false
+  const startHour = parseInt(start.split(':')[0] || '0', 10)
+  const crossesMidnight = !!start && !!end && end < start
+  return startHour >= 18 || crossesMidnight
+}
+
 export function ShiftCalendar({
   shifts,
   validationShifts,
@@ -513,7 +536,27 @@ export function ShiftCalendar({
                       const contract = contracts.find(
                         (item) => (item.staff_profile || item.user) === (s.staff_profile || s.user),
                       )
-                      const shiftType = contract?.expand?.shift_type?.name || 'Padrão'
+                      const shiftType = contract?.expand?.shift_type
+                      const name =
+                        s.expand?.staff_profile?.name ||
+                        s.expand?.user?.name ||
+                        s.name ||
+                        'Sem nome'
+                      const startTime = (
+                        String(s.start_time || '').split(/[ T]/)[1] || ''
+                      ).substring(0, 5)
+                      const endTime = (String(s.end_time || '').split(/[ T]/)[1] || '').substring(
+                        0,
+                        5,
+                      )
+                      const isNight = isNightShift(
+                        shiftType?.start_time,
+                        shiftType?.end_time,
+                        startTime,
+                        endTime,
+                      )
+                      const periodLetter = isNight ? 'N' : 'D'
+                      const timeRange = `${startTime}–${endTime}`
                       return (
                         <div
                           key={s.id}
@@ -526,46 +569,22 @@ export function ShiftCalendar({
                               : 'border-slate-200 hover:border-primary/50',
                           )}
                         >
+                          <div className="font-semibold text-slate-800 truncate" title={name}>
+                            {name}
+                          </div>
                           <div
-                            className="font-semibold text-slate-800 truncate"
-                            title={
-                              s.expand?.staff_profile?.name || s.expand?.user?.name || s.name || ''
-                            }
+                            className="flex items-center gap-1 text-slate-500 text-[10px] min-w-0"
+                            title={`${periodLetter} ${timeRange}`}
                           >
-                            {s.expand?.staff_profile?.name ||
-                              s.expand?.user?.name ||
-                              s.name ||
-                              'Sem nome'}
-                          </div>
-                          <div className="flex justify-between items-center text-slate-500 text-[10px]">
-                            <span className="flex items-center gap-1">
-                              <ClockIcon className="w-3 h-3" />
-                              {s.start_time.split(' ')[1].substring(0, 5)} -{' '}
-                              {s.end_time.split(' ')[1].substring(0, 5)}
-                            </span>
-                          </div>
-                          <div className="flex flex-wrap gap-1 mt-0.5">
-                            <Badge
-                              variant="outline"
-                              className="text-[9px] px-1 h-3 font-normal text-slate-600 bg-slate-50"
-                            >
-                              {s.expand?.sector?.name || 'Setor'}
-                            </Badge>
-                            <Badge
-                              variant="outline"
+                            <span
                               className={cn(
-                                'text-[9px] px-1 h-3 font-normal',
-                                s.start_time.includes('19:00:00')
-                                  ? 'text-indigo-100 bg-indigo-800 border-indigo-900'
-                                  : s.start_time.includes('13:00:00')
-                                    ? 'text-orange-700 bg-orange-50 border-orange-200'
-                                    : s.end_time.includes('13:00:00')
-                                      ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
-                                      : 'text-blue-700 bg-blue-50 border-blue-200',
+                                'font-bold shrink-0',
+                                isNight ? 'text-indigo-700' : 'text-emerald-700',
                               )}
                             >
-                              {shiftType}
-                            </Badge>
+                              {periodLetter}
+                            </span>
+                            <span className="truncate">{timeRange}</span>
                           </div>
                         </div>
                       )
@@ -623,25 +642,5 @@ export function ShiftCalendar({
         )}
       </div>
     </div>
-  )
-}
-
-function ClockIcon(props: any) {
-  return (
-    <svg
-      {...props}
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <circle cx="12" cy="12" r="10" />
-      <polyline points="12 6 12 12 16 14" />
-    </svg>
   )
 }
