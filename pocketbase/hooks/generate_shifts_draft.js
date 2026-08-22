@@ -1393,10 +1393,47 @@ routerAdd(
         shiftsByStaff[s.user_id][s.date] = true
       })
 
+      // Clone helper for transactional candidate evaluation
+      var cloneState = function (shiftsArr, staffMap) {
+        var clonedShifts = shiftsArr.map(function (s) {
+          return { user_id: s.user_id, date: s.date }
+        })
+        var clonedStaffMap = {}
+        Object.keys(staffMap).forEach(function (k) {
+          clonedStaffMap[k] = {}
+          Object.keys(staffMap[k]).forEach(function (d) {
+            if (staffMap[k][d]) {
+              clonedStaffMap[k][d] = true
+            }
+          })
+        })
+        return { shifts: clonedShifts, staffMap: clonedStaffMap }
+      }
+
+      // Check coverage on all days in [cStart, cEnd]
+      var checkCoverageOk = function (shiftsArr) {
+        if (!minStaff || minStaff <= 0) return true
+        var dCounts = {}
+        for (var si = 0; si < shiftsArr.length; si++) {
+          var d = shiftsArr[si].date
+          dCounts[d] = (dCounts[d] || 0) + 1
+        }
+        var curDate = new Date(cStart + 'T00:00:00Z')
+        var endDate = new Date(cEnd + 'T00:00:00Z')
+        while (curDate <= endDate) {
+          var dayStr = curDate.toISOString().split('T')[0]
+          if ((dCounts[dayStr] || 0) < minStaff) {
+            return false
+          }
+          curDate = new Date(curDate.getTime() + 86400000)
+        }
+        return true
+      }
+
       var assignments = {} // staffId -> [sat, sun, ...]
       var issues = []
 
-      staffList.forEach(function (u) {
+      staffList.forEach(function (u, staffIndex) {
         var is12x36 = u.work_hours === 12 && u.rest_hours >= 36
         var uNatSet = naturalWorkedMap[u.id] || {}
         var userPairs = []
@@ -1412,7 +1449,7 @@ routerAdd(
           if (dCur < cStartDate) dCur = new Date(cStartDate)
           if (dLast > cEndDate) dLast = new Date(cEndDate)
 
-          var weekends = []
+          var allMonthWeekends = []
           while (dCur <= dLast) {
             if (dCur.getUTCDay() === 6) {
               // Sat
@@ -1423,7 +1460,7 @@ routerAdd(
                 var satWorked = !!shiftsByStaff[u.id][satStr]
                 var sunWorked = !!shiftsByStaff[u.id][sunStr]
                 var sunIsNat = is12x36 ? !!uNatSet[sunStr] : true
-                weekends.push({
+                allMonthWeekends.push({
                   sat: satStr,
                   sun: sunStr,
                   satWorked: satWorked,
@@ -1435,7 +1472,7 @@ routerAdd(
             dCur = new Date(dCur.getTime() + 86400000)
           }
 
-          if (weekends.length === 0) {
+          if (allMonthWeekends.length === 0) {
             issues.push(
               'Fim de semana obrigatório não atendido: ' +
                 u.name +
@@ -1446,54 +1483,63 @@ routerAdd(
             return
           }
 
-          // Step 1: Find naturally free weekend satisfying criteria (both free, and for 12x36 sunIsNat is true)
-          var assignedWeekend = null
-          for (var wi = 0; wi < weekends.length; wi++) {
-            var w = weekends[wi]
-            if (!w.satWorked && !w.sunWorked && w.sunIsNat) {
-              assignedWeekend = w
-              break
-            }
+          // 1. Collect candidate weekends where sunIsNat === true (or all if non-12x36)
+          var natCandidates = allMonthWeekends.filter(function (w) {
+            return w.sunIsNat
+          })
+          if (natCandidates.length === 0) {
+            natCandidates = allMonthWeekends.slice()
           }
 
-          // Step 2: If not found, find a candidate weekend with sunIsNat (or first weekend) to free by remanejando / removing / swapping
-          if (!assignedWeekend) {
-            var targetW = null
-            for (var wj = 0; wj < weekends.length; wj++) {
-              if (weekends[wj].sunIsNat) {
-                targetW = weekends[wj]
-                break
-              }
-            }
-            if (!targetW) targetW = weekends[0]
+          // Order from LAST to FIRST
+          var revCandidates = natCandidates.slice().reverse()
 
-            // Free targetW.sat and targetW.sun for u
+          // Round-robin offset starting from the end
+          var offset = staffIndex % revCandidates.length
+          var orderedCandidates = []
+          for (var oi = 0; oi < revCandidates.length; oi++) {
+            orderedCandidates.push(revCandidates[(offset + oi) % revCandidates.length])
+          }
+
+          // 2. Transactional attempt per candidate
+          var committedWeekend = null
+
+          for (var ci = 0; ci < orderedCandidates.length; ci++) {
+            var candidate = orderedCandidates[ci]
+            var satStr = candidate.sat
+            var sunStr = candidate.sun
+
+            // Snapshot state for rollback
+            var snapshot = cloneState(workingShifts, shiftsByStaff)
+            var candidateShifts = snapshot.shifts
+            var candidateStaffMap = snapshot.staffMap
+
             var datesToFree = []
-            if (targetW.satWorked) datesToFree.push(targetW.sat)
-            if (targetW.sunWorked) datesToFree.push(targetW.sun)
+            if (candidateStaffMap[u.id][satStr]) datesToFree.push(satStr)
+            if (candidateStaffMap[u.id][sunStr]) datesToFree.push(sunStr)
 
-            var freedAll = true
-            datesToFree.forEach(function (dt) {
-              // Try to find substitute
+            var candidatePossible = true
+
+            for (var di = 0; di < datesToFree.length; di++) {
+              var dt = datesToFree[di]
+
+              // Find substitute
               var candList = staffList.filter(function (cand) {
                 return (
                   cand.id !== u.id &&
-                  !shiftsByStaff[cand.id][dt] &&
+                  !candidateStaffMap[cand.id][dt] &&
                   (unavailableMap[cand.id] || []).indexOf(dt) === -1
                 )
               })
 
               var subFound = null
-              for (var ci = 0; ci < candList.length; ci++) {
-                var c = candList[ci]
-                // Check rest hours for c if c is assigned to dt
-                var cNeedGap = Math.max(
-                  1,
-                  Math.ceil(((c.rest_hours || effectiveRestHours) + 0.001) / 24),
-                )
+              for (var sli = 0; sli < candList.length; sli++) {
+                var c = candList[sli]
+                var cRest = typeof c.rest_hours === 'number' ? c.rest_hours : effectiveRestHours
+                var cNeedGap = Math.max(1, Math.ceil((cRest + 0.001) / 24))
                 var gapOk = true
-                var cDates = Object.keys(shiftsByStaff[c.id]).filter(function (d) {
-                  return shiftsByStaff[c.id][d]
+                var cDates = Object.keys(candidateStaffMap[c.id]).filter(function (d) {
+                  return candidateStaffMap[c.id][d]
                 })
                 for (var cdi = 0; cdi < cDates.length; cdi++) {
                   var diffDays = Math.abs(
@@ -1513,33 +1559,56 @@ routerAdd(
               }
 
               if (subFound) {
-                // Remove shift from u and give to subFound
-                for (var si = 0; si < workingShifts.length; si++) {
-                  if (workingShifts[si].user_id === u.id && workingShifts[si].date === dt) {
-                    workingShifts[si].user_id = subFound.id
-                    shiftsByStaff[u.id][dt] = false
-                    shiftsByStaff[subFound.id][dt] = true
+                // Reassign shift from u to subFound
+                for (var si = 0; si < candidateShifts.length; si++) {
+                  if (candidateShifts[si].user_id === u.id && candidateShifts[si].date === dt) {
+                    candidateShifts[si].user_id = subFound.id
+                    candidateStaffMap[u.id][dt] = false
+                    candidateStaffMap[subFound.id][dt] = true
                     break
                   }
                 }
               } else {
-                // If no subFound, remove u's shift directly (signal issue on coverage if broken)
-                for (var si2 = 0; si2 < workingShifts.length; si2++) {
-                  if (workingShifts[si2].user_id === u.id && workingShifts[si2].date === dt) {
-                    workingShifts.splice(si2, 1)
-                    shiftsByStaff[u.id][dt] = false
+                // Removal as last resort: splice if post-removal coverage on dt >= minStaff
+                var currentDayCount = 0
+                for (var csi = 0; csi < candidateShifts.length; csi++) {
+                  if (candidateShifts[csi].date === dt) {
+                    currentDayCount++
+                  }
+                }
+                if (minStaff > 0 && currentDayCount - 1 < minStaff) {
+                  candidatePossible = false
+                  break
+                }
+                for (var si2 = 0; si2 < candidateShifts.length; si2++) {
+                  if (candidateShifts[si2].user_id === u.id && candidateShifts[si2].date === dt) {
+                    candidateShifts.splice(si2, 1)
+                    candidateStaffMap[u.id][dt] = false
                     break
                   }
                 }
               }
-            })
+            }
 
-            assignedWeekend = targetW
+            // Verify both days are free and cycle coverage is maintained
+            if (
+              candidatePossible &&
+              !candidateStaffMap[u.id][satStr] &&
+              !candidateStaffMap[u.id][sunStr] &&
+              checkCoverageOk(candidateShifts)
+            ) {
+              // COMMIT state
+              workingShifts = candidateShifts
+              shiftsByStaff = candidateStaffMap
+              committedWeekend = candidate
+              break
+            }
+            // Otherwise ROLLBACK (discard candidateShifts/candidateStaffMap and loop to next)
           }
 
-          if (assignedWeekend) {
-            userPairs.push(assignedWeekend.sat)
-            userPairs.push(assignedWeekend.sun)
+          if (committedWeekend) {
+            userPairs.push(committedWeekend.sat)
+            userPairs.push(committedWeekend.sun)
           } else {
             issues.push(
               'Fim de semana obrigatório não atendido: ' +
