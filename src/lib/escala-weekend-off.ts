@@ -175,6 +175,7 @@ export function computeWeekendOffAssignments(
         )
       : null
 
+    let foundForAnyMonth = false
     commitMonths.forEach((monthKey) => {
       const parts = monthKey.split('-')
       const y = Number(parts[0])
@@ -205,12 +206,14 @@ export function computeWeekendOffAssignments(
                   assignedDates.add(satStr)
                   assignedDates.add(sunStr)
                   foundForMonth = true
+                  foundForAnyMonth = true
                   break // 1 fim de semana completo de folga por mês-calendário
                 }
               } else {
                 assignedDates.add(satStr)
                 assignedDates.add(sunStr)
                 foundForMonth = true
+                foundForAnyMonth = true
                 break // 1 fim de semana completo de folga por mês-calendário
               }
             }

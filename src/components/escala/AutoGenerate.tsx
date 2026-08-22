@@ -417,6 +417,7 @@ function AutoGenerateInner({
   // Generation run/draft tracking (schedule_generation_runs + schedule_drafts).
   const [runId, setRunId] = useState<string>('')
   const [draftId, setDraftId] = useState<string>('')
+  const [currentDraftRecord, setCurrentDraftRecord] = useState<any>(null)
   const [genSource, setGenSource] = useState<'ai' | 'fallback' | ''>('')
   const [runMetrics, setRunMetrics] = useState<RunMetrics | null>(null)
   const [validationIssues, setValidationIssues] = useState<ValidationIssue[]>([])
@@ -438,6 +439,7 @@ function AutoGenerateInner({
     setSelectedShiftType('all')
     setRunId('')
     setDraftId('')
+    setCurrentDraftRecord(null)
     setGenSource('')
     setRunMetrics(null)
     setValidationIssues([])
@@ -478,6 +480,14 @@ function AutoGenerateInner({
     // Issues may be attached to the draft (success path) or to the run
     // alone (validation_failed path with no draft). Prefer the draft's.
     try {
+      if (dId) {
+        try {
+          const draftObj = await getDraft(dId)
+          setCurrentDraftRecord(draftObj)
+        } catch (dErr) {
+          console.error('Failed to load draft record:', dErr)
+        }
+      }
       const issues = dId ? await getDraftIssues(dId) : await getRunIssues(rId)
       setValidationIssues(issues as ValidationIssue[])
     } catch (err) {
@@ -1512,6 +1522,7 @@ function AutoGenerateInner({
               cycle={cycleObj}
               contracts={contracts}
               staffProfiles={staffProfiles}
+              draft={currentDraftRecord}
               onShiftUpdate={handleDraftShiftUpdate}
             />
 

@@ -1694,6 +1694,9 @@ routerAdd(
       valMonthCursor = new Date(valMonthCursor.getTime() + 86400000)
     }
 
+    // Map to collect weekend off assignments: { [staffId]: string[] (e.g. ['2026-07-04', '2026-07-05']) }
+    var weekendOffAssignments = {}
+
     eligible.forEach(function (u) {
       var is12x36 = u.work_hours === 12 && u.rest_hours >= 36
       var uShifts = cleanDraft
@@ -1711,6 +1714,8 @@ routerAdd(
       var naturalDays = is12x36
         ? computeNaturalPatternVal(uShifts, cycleStart, cycleEnd, u.work_hours, u.rest_hours)
         : null
+
+      var userAssignedWeekendOffs = []
 
       Object.keys(valMonths).forEach(function (monthKey) {
         var parts = monthKey.split('-')
@@ -1737,9 +1742,15 @@ routerAdd(
                 if (is12x36) {
                   if (naturalDays && naturalDays[sunStr]) {
                     foundValidWeekend = true
+                    userAssignedWeekendOffs.push(satStr)
+                    userAssignedWeekendOffs.push(sunStr)
+                    break
                   }
                 } else {
                   foundValidWeekend = true
+                  userAssignedWeekendOffs.push(satStr)
+                  userAssignedWeekendOffs.push(sunStr)
+                  break
                 }
               }
             }
@@ -1757,6 +1768,10 @@ routerAdd(
           )
         }
       })
+
+      if (userAssignedWeekendOffs.length > 0) {
+        weekendOffAssignments[u.id] = userAssignedWeekendOffs
+      }
     })
 
     violations = violations.filter(function (item, index, all) {
@@ -1888,6 +1903,7 @@ routerAdd(
         warnings_count: warnings.length,
         hard_violations: [],
         warnings: warnings.slice(0, 20),
+        weekend_off_assignments: weekendOffAssignments,
       })
       $app.saveNoValidate(draftRec)
       draftId = draftRec.id

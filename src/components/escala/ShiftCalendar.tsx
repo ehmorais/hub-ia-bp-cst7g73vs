@@ -72,6 +72,7 @@ export function ShiftCalendar({
   cycle,
   contracts,
   staffProfiles = [],
+  draft,
   onShiftUpdate,
 }: {
   shifts: any[]
@@ -79,6 +80,7 @@ export function ShiftCalendar({
   cycle: any
   contracts: any[]
   staffProfiles?: Array<{ id: string; name: string; default_sector?: string; [key: string]: any }>
+  draft?: any
   onShiftUpdate?: (updatedShift: any) => void
 }) {
   const [view, setView] = useState<ViewMode>('cycle')
@@ -151,6 +153,20 @@ export function ShiftCalendar({
 
   // Computa o mapa de fins de semana de folga (staffId -> Set<dateStr>)
   const weekendOffMap = useMemo(() => {
+    // Preferir assignments persistidos pelo backend no validation_summary do draft
+    const persistedAssignments = draft?.validation_summary?.weekend_off_assignments
+    if (persistedAssignments && typeof persistedAssignments === 'object') {
+      const map = new Map<string, Set<string>>()
+      Object.entries(persistedAssignments).forEach(([staffId, dates]) => {
+        if (Array.isArray(dates)) {
+          map.set(staffId, new Set(dates as string[]))
+        }
+      })
+      if (map.size > 0) {
+        return map
+      }
+    }
+
     if (!cycle || !selectedSectorId || sectorStaffProfiles.length === 0) {
       return new Map<string, Set<string>>()
     }
@@ -159,7 +175,7 @@ export function ShiftCalendar({
     const cEnd = (cycle.end_date || '').split(' ')[0]
 
     return computeWeekendOffAssignments(staffIds, visibleShifts, contracts, cStart, cEnd)
-  }, [cycle, selectedSectorId, sectorStaffProfiles, visibleShifts, contracts])
+  }, [draft, cycle, selectedSectorId, sectorStaffProfiles, visibleShifts, contracts])
 
   // A shift-type selection filters only what is rendered. Staffing, rest and
   // hour validations must continue to consider the complete schedule.
