@@ -1769,6 +1769,40 @@ routerAdd(
         }
       })
 
+      // If natural pattern match failed for a 12x36 staff member (e.g. shifts were shifted during fallback),
+      // fallback to assigning any free Saturday+Sunday pair for the month
+      if (userAssignedWeekendOffs.length === 0) {
+        Object.keys(valMonths).forEach(function (monthKey) {
+          var parts = monthKey.split('-')
+          var y = Number(parts[0])
+          var m = Number(parts[1])
+          var dCur = new Date(Date.UTC(y, m - 1, 1))
+          var dLast = new Date(Date.UTC(y, m, 0))
+          var cStart = new Date(cycleStart + 'T00:00:00Z')
+          var cEnd = new Date(cycleEnd + 'T00:00:00Z')
+          if (dCur < cStart) dCur = new Date(cStart)
+          if (dLast > cEnd) dLast = new Date(cEnd)
+
+          while (dCur <= dLast) {
+            if (dCur.getUTCDay() === 6) {
+              var satStr = dCur.toISOString().split('T')[0]
+              var sunDate = new Date(dCur.getTime() + 86400000)
+              var sunStr = sunDate.toISOString().split('T')[0]
+              if (sunDate <= cEnd && sunDate >= cStart) {
+                var satFree = !uShiftSet[satStr]
+                var sunFree = !uShiftSet[sunStr]
+                if (satFree && sunFree) {
+                  userAssignedWeekendOffs.push(satStr)
+                  userAssignedWeekendOffs.push(sunStr)
+                  break
+                }
+              }
+            }
+            dCur = new Date(dCur.getTime() + 86400000)
+          }
+        })
+      }
+
       if (userAssignedWeekendOffs.length > 0) {
         weekendOffAssignments[u.id] = userAssignedWeekendOffs
       }

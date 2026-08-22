@@ -38,7 +38,10 @@ import { useRealtime } from '@/hooks/use-realtime'
 import { format, eachDayOfInterval, addDays, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import pb from '@/lib/pocketbase/client'
-import { computeWeekendOffAssignments } from '@/lib/escala-weekend-off'
+import {
+  computeWeekendOffAssignments,
+  computeWeekendOffAssignmentsSimple,
+} from '@/lib/escala-weekend-off'
 import {
   Dialog,
   DialogContent,
@@ -75,6 +78,7 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
   const [dragOverCell, setDragOverCell] = useState<{ userId: string; dateStr: string } | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
   const [generationError, setGenerationError] = useState<string | null>(null)
+  const [activeDraftRecord, setActiveDraftRecord] = useState<any>(null)
 
   const { toast } = useToast()
   const isCollectionPast = new Date().getDate() > 10
@@ -171,6 +175,22 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
         .finally(() => setIsLoadingShifts(false))
     }
   }, [selectedCycleId])
+
+  useEffect(() => {
+    if (selectedCycleId && selectedSectorId) {
+      pb.collection('schedule_drafts')
+        .getFullList({
+          filter: `cycle="${selectedCycleId}" && sector="${selectedSectorId}"`,
+          sort: '-created',
+        })
+        .then((records) => {
+          setActiveDraftRecord(records[0] || null)
+        })
+        .catch(() => setActiveDraftRecord(null))
+    } else {
+      setActiveDraftRecord(null)
+    }
+  }, [selectedCycleId, selectedSectorId, allShifts])
 
   useRealtime(
     'shifts',
@@ -434,6 +454,20 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
 
   // Mapa de fins de semana de folga para destaque visual na grade
   const weekendOffMap = useMemo(() => {
+    // 1. Se houver weekend_off_assignments persistidos no activeDraftRecord, preferir
+    const persistedAssignments = activeDraftRecord?.validation_summary?.weekend_off_assignments
+    if (persistedAssignments && typeof persistedAssignments === 'object') {
+      const map = new Map<string, Set<string>>()
+      Object.entries(persistedAssignments).forEach(([staffId, dates]) => {
+        if (Array.isArray(dates)) {
+          map.set(staffId, new Set(dates as string[]))
+        }
+      })
+      if (map.size > 0) {
+        return map
+      }
+    }
+
     if (!selectedCycle || draftUsers.length === 0 || days.length === 0) {
       return new Map<string, Set<string>>()
     }
@@ -453,14 +487,33 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
       })
     })
 
-    return computeWeekendOffAssignments(
-      draftUsers.map((u) => u.id),
+    // 2. Preferir computeWeekendOffAssignmentsSimple
+    const staffIds = draftUsers.map((u) => u.id)
+    const simpleMap = computeWeekendOffAssignmentsSimple(
+      staffIds,
       workedDaysByStaff,
       contracts,
       cycleStartStr,
       cycleEndStr,
     )
-  }, [selectedCycle, draftUsers, days, draft, contracts])
+    if (simpleMap.size > 0) {
+      return simpleMap
+    }
+
+    // 3. Fallback backward compatibility
+    return computeWeekendOffAssignments(
+      staffIds,
+      workedDaysByStaff,
+      contracts,
+      cycleStartStr,
+      cycleEndStr,
+    )
+  }, [activeDraftRecord, selectedCycle, draftUsers, days, draft, contracts])
+
+  const hasWeekendOffMetadata = useMemo(() => {
+    const assignments = activeDraftRecord?.validation_summary?.weekend_off_assignments
+    return !!assignments && typeof assignments === 'object' && Object.keys(assignments).length > 0
+  }, [activeDraftRecord])
 
   const handleDragStart = (
     e: React.DragEvent,
@@ -823,6 +876,15 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
             <AlertTitle>Falha na Geração de Escala</AlertTitle>
             <AlertDescription className="whitespace-pre-line text-xs">
               {generationError}
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {activeDraftRecord && !hasWeekendOffMetadata && (
+          <Alert className="border-amber-300 bg-amber-50/60 text-amber-900 py-2">
+            <AlertDescription className="text-xs">
+              Rascunho anterior à regra de folga de fim de semana. Gere novamente para aplicar e
+              exibir o destaque.
             </AlertDescription>
           </Alert>
         )}

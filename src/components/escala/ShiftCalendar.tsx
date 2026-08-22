@@ -39,7 +39,10 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { useToast } from '@/components/ui/use-toast'
 import pb from '@/lib/pocketbase/client'
 import { useRealtime } from '@/hooks/use-realtime'
-import { computeWeekendOffAssignments } from '@/lib/escala-weekend-off'
+import {
+  computeWeekendOffAssignments,
+  computeWeekendOffAssignmentsSimple,
+} from '@/lib/escala-weekend-off'
 
 type ViewMode = 'cycle' | 'month' | 'week' | 'day'
 
@@ -153,7 +156,7 @@ export function ShiftCalendar({
 
   // Computa o mapa de fins de semana de folga (staffId -> Set<dateStr>)
   const weekendOffMap = useMemo(() => {
-    // Preferir assignments persistidos pelo backend no validation_summary do draft
+    // 1. Preferir assignments persistidos pelo backend no validation_summary do draft
     const persistedAssignments = draft?.validation_summary?.weekend_off_assignments
     if (persistedAssignments && typeof persistedAssignments === 'object') {
       const map = new Map<string, Set<string>>()
@@ -174,8 +177,26 @@ export function ShiftCalendar({
     const cStart = (cycle.start_date || '').split(' ')[0]
     const cEnd = (cycle.end_date || '').split(' ')[0]
 
+    // 2. Chamar computeWeekendOffAssignmentsSimple em vez de computeWeekendOffAssignments
+    const simpleMap = computeWeekendOffAssignmentsSimple(
+      staffIds,
+      visibleShifts,
+      contracts,
+      cStart,
+      cEnd,
+    )
+    if (simpleMap.size > 0) {
+      return simpleMap
+    }
+
+    // 3. Fallback backward compatibility
     return computeWeekendOffAssignments(staffIds, visibleShifts, contracts, cStart, cEnd)
   }, [draft, cycle, selectedSectorId, sectorStaffProfiles, visibleShifts, contracts])
+
+  const hasWeekendOffMetadata = useMemo(() => {
+    const assignments = draft?.validation_summary?.weekend_off_assignments
+    return !!assignments && typeof assignments === 'object' && Object.keys(assignments).length > 0
+  }, [draft])
 
   // A shift-type selection filters only what is rendered. Staffing, rest and
   // hour validations must continue to consider the complete schedule.
@@ -522,6 +543,17 @@ export function ShiftCalendar({
             </Select>
           </div>
         </div>
+
+        {draft && !hasWeekendOffMetadata && (
+          <div className="px-4 pt-3 pb-0">
+            <Alert className="border-amber-300 bg-amber-50/60 text-amber-900 py-2">
+              <AlertDescription className="text-xs">
+                Rascunho anterior à regra de folga de fim de semana. Gere novamente para aplicar e
+                exibir o destaque.
+              </AlertDescription>
+            </Alert>
+          </div>
+        )}
 
         <ScrollArea className="flex-1 bg-slate-50/30">
           {(view === 'month' || view === 'cycle') && (
