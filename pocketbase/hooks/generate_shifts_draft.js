@@ -1346,27 +1346,6 @@ routerAdd(
       draft = fbDraft
     }
 
-    // --- Stable Anchor natural worked projection helper ---
-    var getNaturalWorkedDays = function (staffList, cStart, cEnd) {
-      var map = {}
-      staffList.forEach(function (u, sIdx) {
-        var is12x36 = u.work_hours === 12 && u.rest_hours >= 36
-        var stepDays = Math.max(2, Math.round((u.work_hours + u.rest_hours) / 24))
-        var offset = is12x36 ? sIdx % stepDays : 0
-        var set = {}
-        var cur = new Date(cStart + 'T00:00:00Z')
-        cur = new Date(cur.getTime() + offset * 86400000)
-        var end = new Date(cEnd + 'T00:00:00Z')
-        while (cur <= end) {
-          set[cur.toISOString().split('T')[0]] = true
-          cur = new Date(cur.getTime() + stepDays * 86400000)
-        }
-        map[u.id] = set
-      })
-      return map
-    }
-    var naturalWorkedMap = getNaturalWorkedDays(eligible, cycleStart, cycleEnd)
-
     // --- enforceWeekendOff function ---
     var enforceWeekendOff = function (currentShifts, staffList, cStart, cEnd, minStaff) {
       // 1. Months in cycle
@@ -1378,6 +1357,43 @@ routerAdd(
         months[mKey] = true
         mCur = new Date(mCur.getTime() + 86400000)
       }
+
+      // Compute natural 12x36 pattern from actual shifts (stable anchor)
+      var naturalWorkedMap = {}
+      staffList.forEach(function (u) {
+        naturalWorkedMap[u.id] = {}
+        var is12x36 = u.work_hours === 12 && u.rest_hours >= 36
+        if (!is12x36) return
+        var stepDays = Math.max(2, Math.round((u.work_hours + u.rest_hours) / 24))
+        // Find first shift date for this staff
+        var firstDate = null
+        for (var si = 0; si < currentShifts.length; si++) {
+          var sid = currentShifts[si].user_id || currentShifts[si].staff_profile
+          if (sid === u.id) {
+            var d = (currentShifts[si].date || '').split(' ')[0]
+            if (!firstDate || d < firstDate) firstDate = d
+          }
+        }
+        if (!firstDate) return
+        var firstDateObj = new Date(firstDate + 'T00:00:00Z')
+        var cStartObj = new Date(cStart + 'T00:00:00Z')
+        var anchorOffset = Math.floor((firstDateObj.getTime() - cStartObj.getTime()) / 86400000)
+        var set = {}
+        // Project forward
+        var cur = new Date(cStartObj.getTime() + anchorOffset * 86400000)
+        var end = new Date(cEnd + 'T00:00:00Z')
+        while (cur <= end) {
+          set[cur.toISOString().split('T')[0]] = true
+          cur = new Date(cur.getTime() + stepDays * 86400000)
+        }
+        // Project backward
+        cur = new Date(cStartObj.getTime() + anchorOffset * 86400000 - stepDays * 86400000)
+        while (cur >= cStartObj) {
+          set[cur.toISOString().split('T')[0]] = true
+          cur = new Date(cur.getTime() - stepDays * 86400000)
+        }
+        naturalWorkedMap[u.id] = set
+      })
 
       var workingShifts = currentShifts.map(function (s) {
         return { user_id: s.user_id || s.staff_profile, date: (s.date || '').split(' ')[0] }
@@ -1431,6 +1447,7 @@ routerAdd(
       }
 
       var assignments = {} // staffId -> [sat, sun, ...]
+      var protectedWeekends = {} // { [staffId]: { [dateStr]: true } }
       var issues = []
 
       staffList.forEach(function (u, staffIndex) {
@@ -1528,7 +1545,8 @@ routerAdd(
                 return (
                   cand.id !== u.id &&
                   !candidateStaffMap[cand.id][dt] &&
-                  (unavailableMap[cand.id] || []).indexOf(dt) === -1
+                  (unavailableMap[cand.id] || []).indexOf(dt) === -1 &&
+                  !(protectedWeekends[cand.id] && protectedWeekends[cand.id][dt])
                 )
               })
 
@@ -1609,6 +1627,9 @@ routerAdd(
           if (committedWeekend) {
             userPairs.push(committedWeekend.sat)
             userPairs.push(committedWeekend.sun)
+            if (!protectedWeekends[u.id]) protectedWeekends[u.id] = {}
+            protectedWeekends[u.id][committedWeekend.sat] = true
+            protectedWeekends[u.id][committedWeekend.sun] = true
           } else {
             issues.push(
               'Fim de semana obrigatório não atendido: ' +
