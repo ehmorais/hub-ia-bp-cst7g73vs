@@ -393,35 +393,41 @@ routerAdd(
       var staffAssignments = weekendOffAssignments ? weekendOffAssignments[profileId] : null
 
       if (staffAssignments && Array.isArray(staffAssignments) && staffAssignments.length >= 2) {
-        // Valida contra designação explícita do rascunho persistido
-        var satD = staffAssignments[0]
-        var sunD = staffAssignments[1]
-        if (
-          !satD ||
-          !sunD ||
-          !assertWeekendPair(satD, sunD) ||
-          satD < cycleStart ||
-          sunD > cycleEnd
-        ) {
+        if (staffAssignments.length > 2) {
           violations.push(
-            'Fim de semana obrigatório inválido: ' +
-              profile.name +
-              ' possui designação (' +
-              satD +
-              ' / ' +
-              sunD +
-              ') que não é Sábado + Domingo dentro do ciclo.',
+            'Fim de semana obrigatório inválido: payload legado com mais de um par por staff.',
           )
-        } else if (uShiftSet[satD] || uShiftSet[sunD]) {
-          violations.push(
-            'Fim de semana obrigatório não atendido: ' +
-              profile.name +
-              ' possui plantão no fim de semana de folga designado (' +
-              satD +
-              ' / ' +
-              sunD +
-              ').',
-          )
+        } else {
+          // Valida contra designação explícita do rascunho persistido
+          var satD = staffAssignments[0]
+          var sunD = staffAssignments[1]
+          if (
+            !satD ||
+            !sunD ||
+            !assertWeekendPair(satD, sunD) ||
+            satD < cycleStart ||
+            sunD > cycleEnd
+          ) {
+            violations.push(
+              'Fim de semana obrigatório inválido: ' +
+                profile.name +
+                ' possui designação (' +
+                satD +
+                ' / ' +
+                sunD +
+                ') que não é Sábado + Domingo dentro do ciclo.',
+            )
+          } else if (uShiftSet[satD] || uShiftSet[sunD]) {
+            violations.push(
+              'Fim de semana obrigatório não atendido: ' +
+                profile.name +
+                ' possui plantão no fim de semana de folga designado (' +
+                satD +
+                ' / ' +
+                sunD +
+                ').',
+            )
+          }
         }
       } else {
         violations.push(

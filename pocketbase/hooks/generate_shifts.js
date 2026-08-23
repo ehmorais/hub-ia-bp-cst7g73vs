@@ -1108,9 +1108,9 @@ routerAdd(
 
       // Validação per-cycle de folga de fim de semana (exatamente 1 par sat+sun por colaborador por ciclo)
       var expectedCountGen = 1
+      var genAssignmentsMap = enforcedGenResult.assignments || {}
 
       usersWithContracts.forEach(function (u) {
-        var is12x36 = u.shift_work_hours === 12 && u.shift_rest_hours >= 36
         var uShifts = generatedShifts
           .filter(function (s) {
             return s.user_id === u.id
@@ -1123,35 +1123,44 @@ routerAdd(
           uShiftSet[d] = true
         })
 
-        var naturalDays = is12x36
-          ? computeNaturalPatternByStaff(u.id, usersWithContracts, cycleStart, cycleEnd)
-          : null
+        var userPair = genAssignmentsMap[u.id]
 
-        var validWeekendCount = 0
-        var dCur = cycleStart
-        while (dCur <= cycleEnd) {
-          if (dayOfWeekDateOnly(dCur) === 6) {
-            var satStr = dCur
-            var sunStr = addDaysDateOnly(dCur, 1)
-            if (sunStr <= cycleEnd && assertWeekendPair(satStr, sunStr)) {
-              var satFree = !uShiftSet[satStr]
-              var sunFree = !uShiftSet[sunStr]
-              var sunIsNat = is12x36 ? !!(naturalDays && naturalDays[sunStr]) : true
-              if (satFree && sunFree && sunIsNat) {
-                validWeekendCount = 1
-                break
-              }
-            }
-          }
-          dCur = addDaysDateOnly(dCur, 1)
-        }
-
-        if (validWeekendCount < expectedCountGen) {
+        if (!userPair || !Array.isArray(userPair) || userPair.length !== 2) {
           violations.push(
             'Fim de semana obrigatório não atendido: ' +
               u.name +
               ' não tem sábado+domingo livres no ciclo.',
           )
+        } else {
+          var satStr = userPair[0]
+          var sunStr = userPair[1]
+          if (
+            !satStr ||
+            !sunStr ||
+            !assertWeekendPair(satStr, sunStr) ||
+            satStr < cycleStart ||
+            sunStr > cycleEnd
+          ) {
+            violations.push(
+              'Fim de semana obrigatório inválido: ' +
+                u.name +
+                ' possui designação (' +
+                satStr +
+                ' / ' +
+                sunStr +
+                ') que não é Sábado + Domingo no ciclo.',
+            )
+          } else if (uShiftSet[satStr] || uShiftSet[sunStr]) {
+            violations.push(
+              'Fim de semana obrigatório não atendido: ' +
+                u.name +
+                ' possui plantão no fim de semana de folga designado (' +
+                satStr +
+                ' / ' +
+                sunStr +
+                ').',
+            )
+          }
         }
       })
 
