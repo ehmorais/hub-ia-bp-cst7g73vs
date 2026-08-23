@@ -1,5 +1,5 @@
 /**
- * Utilitário compartilhado para cálculo e identificação de Fim de Semana de Folga Mensal (WEEKEND_OFF).
+ * Utilitário compartilhado para cálculo e identificação de Fim de Semana de Folga por Ciclo (WEEKEND_OFF).
  *
  * Reproduz exatamente a mesma regra e algoritmo dos hooks de backend
  * (commit_schedule.js, generate_shifts.js, generate_shifts_draft.js).
@@ -66,15 +66,8 @@ export function dayOfWeekDateOnly(dateStr: string): number {
  * Formata um objeto Date do JS local diretamente para YYYY-MM-DD
  * usando métodos locais (getFullYear, getMonth, getDate) sem qualquer conversão de timezone ou UTC shift.
  */
-/**
- * Formata um objeto Date do JS local diretamente para YYYY-MM-DD
- * usando métodos locais (getFullYear, getMonth, getDate) sem qualquer conversão de timezone ou UTC shift.
- */
 export const formatLocalDateKey = (d: Date): string => {
   if (d instanceof Date && !isNaN(d.getTime())) {
-    // Se a data foi construída de uma string ISO em UTC meia-noite (ex: new Date("2026-10-04")),
-    // em fusos negativos (ex: UTC-3) os métodos locais retornariam o dia anterior às 21h.
-    // formatLocalDateKeySafe lida com ambos os casos: preserva a data civil pretendida.
     return formatLocalDateKeySafe(d)
   }
   return ''
@@ -99,8 +92,6 @@ export const formatLocalDateKeyUTC = (d: Date): string => {
 export function formatLocalDateKeySafe(d: Date): string {
   if (!(d instanceof Date) || isNaN(d.getTime())) return ''
 
-  // Verifica se o objeto Date está exatamente à meia-noite UTC (como gerado por new Date("YYYY-MM-DD"))
-  // e difere do horário local.
   const utcHours = d.getUTCHours()
   const utcMinutes = d.getUTCMinutes()
   const utcSeconds = d.getUTCSeconds()
@@ -111,7 +102,6 @@ export function formatLocalDateKeySafe(d: Date): string {
   const localSeconds = d.getSeconds()
   const localMillis = d.getMilliseconds()
 
-  // Se foi gerado em UTC midnight puro (00:00:00.000Z) mas no horário local não é 00:00:00 (ex: 21:00 do dia anterior em UTC-3)
   if (
     utcHours === 0 &&
     utcMinutes === 0 &&
@@ -122,7 +112,6 @@ export function formatLocalDateKeySafe(d: Date): string {
     return formatLocalDateKeyUTC(d)
   }
 
-  // Caso padrão: usa os componentes locais
   const y = d.getFullYear()
   const m = String(d.getMonth() + 1).padStart(2, '0')
   const day = String(d.getDate()).padStart(2, '0')
@@ -153,45 +142,76 @@ export function getSaturdaysInRange(rangeStart: string, rangeEnd: string): strin
 }
 
 /**
- * Retorna true apenas quando o mês especificado contém pelo menos 2 pares sábado+domingo completos
- * (ambos os dias dentro de [rangeStart, rangeEnd]).
- *
- * @param rangeStart - Data inicial do ciclo ("YYYY-MM-DD")
- * @param rangeEnd - Data final do ciclo ("YYYY-MM-DD")
- * @param yearMonth - Mês a avaliar ("YYYY-MM")
+ * Retorna todos os pares [{ sat, sun }] completos dentro de [cycleStart, cycleEnd]
+ * onde o sábado está no ciclo e o domingo consecutivo também está no ciclo.
  */
-export function isWeekendOffApplicableMonth(
-  rangeStart: string,
-  rangeEnd: string,
-  yearMonth: string,
-): boolean {
-  if (!rangeStart || !rangeEnd || !yearMonth) return false
-  const rStart = rangeStart.split(' ')[0].split('T')[0]
-  const rEnd = rangeEnd.split(' ')[0].split('T')[0]
-  if (!rStart || !rEnd || rStart > rEnd) return false
-  const parts = yearMonth.split('-')
-  const y = +parts[0],
-    m = +parts[1]
-  if (isNaN(y) || isNaN(m) || m < 1 || m > 12) return false
+export function getCycleWeekendCandidates(
+  cycleStart: string,
+  cycleEnd: string,
+): Array<{ sat: string; sun: string }> {
+  const result: Array<{ sat: string; sun: string }> = []
+  const cStart = (cycleStart || '').split(' ')[0].split('T')[0]
+  const cEnd = (cycleEnd || '').split(' ')[0].split('T')[0]
+  if (!cStart || !cEnd || cStart > cEnd) return result
 
-  // Primeiro e último dia do mês
-  const monthStart = formatDateOnly(y, m, 1)
-  const monthEnd = formatDateOnly(y, m + 1, 0) // day 0 do mês seguinte = último dia
-
-  let dCur = rStart > monthStart ? rStart : monthStart
-  const effectiveEnd = rEnd < monthEnd ? rEnd : monthEnd
-
-  let completePairs = 0
-  while (dCur <= effectiveEnd) {
+  let dCur = cStart
+  while (dCur <= cEnd) {
     if (dayOfWeekDateOnly(dCur) === 6) {
+      const satStr = dCur
       const sunStr = addDaysDateOnly(dCur, 1)
-      if (sunStr >= rStart && sunStr <= rEnd && sunStr <= effectiveEnd) {
-        completePairs++
+      if (sunStr <= cEnd && assertWeekendPair(satStr, sunStr)) {
+        result.push({ sat: satStr, sun: sunStr })
       }
     }
     dCur = addDaysDateOnly(dCur, 1)
   }
-  return completePairs >= 2
+  return result
+}
+
+/**
+ * Constrói o Map<staffId, Set<dateStr>> a partir da estrutura validation_summary
+ * Formato suportado: `{ staffId: [sat, sun] }` ou array legado de objetos.
+ * Valida estritamente cada par com assertWeekendPair.
+ */
+export function buildWeekendOffMap(validationSummary: any): Map<string, Set<string>> {
+  const map = new Map<string, Set<string>>()
+  const persistedAssignments = validationSummary?.weekend_off_assignments
+  if (!persistedAssignments) return map
+
+  if (Array.isArray(persistedAssignments)) {
+    persistedAssignments.forEach((item: any) => {
+      const staffId = item?.staff_profile || item?.user_id || item?.user
+      const sat = item?.saturday || item?.sat
+      const sun = item?.sunday || item?.sun
+      if (staffId && sat && sun && assertWeekendPair(sat, sun)) {
+        let set = map.get(staffId)
+        if (!set) {
+          set = new Set<string>()
+          map.set(staffId, set)
+        }
+        set.add(sat)
+        set.add(sun)
+      }
+    })
+  } else if (typeof persistedAssignments === 'object') {
+    Object.entries(persistedAssignments).forEach(([staffId, dates]) => {
+      if (Array.isArray(dates) && dates.length >= 2) {
+        const validDates: string[] = []
+        for (let i = 0; i < dates.length; i += 2) {
+          const sat = dates[i]
+          const sun = dates[i + 1]
+          if (sat && sun && assertWeekendPair(sat, sun)) {
+            validDates.push(sat, sun)
+          }
+        }
+        if (validDates.length > 0) {
+          map.set(staffId, new Set(validDates))
+        }
+      }
+    })
+  }
+
+  return map
 }
 
 /**
@@ -254,283 +274,4 @@ export function computeNaturalPattern(
   }
 
   return natDays
-}
-
-/**
- * Calcula os fins de semana de folga mensal atribuídos para cada colaborador.
- *
- * Retorna: Map<staffId, Set<dateStr>>
- * contendo as datas (sábado e domingo em formato 'YYYY-MM-DD') do fim de semana de folga.
- */
-export function computeWeekendOffAssignments(
-  staffIds: string[],
-  shifts: WeekendOffShift[] | Record<string, string[]>,
-  contracts: WeekendOffContract[],
-  cycleStart: string,
-  cycleEnd: string,
-): Map<string, Set<string>> {
-  const result = new Map<string, Set<string>>()
-  if (!cycleStart || !cycleEnd || !staffIds || staffIds.length === 0) {
-    return result
-  }
-
-  const normalizedCycleStart = cycleStart.split(' ')[0].split('T')[0]
-  const normalizedCycleEnd = cycleEnd.split(' ')[0].split('T')[0]
-
-  if (!normalizedCycleStart || !normalizedCycleEnd || normalizedCycleStart > normalizedCycleEnd) {
-    return result
-  }
-
-  // Lista de meses que intersectam o ciclo
-  const commitMonths: string[] = []
-  let commitMonthCursor = normalizedCycleStart
-  while (commitMonthCursor <= normalizedCycleEnd) {
-    const { y, m } = parseDateOnly(commitMonthCursor)
-    const cMKey = `${y}-${String(m).padStart(2, '0')}`
-    if (!commitMonths.includes(cMKey)) {
-      commitMonths.push(cMKey)
-    }
-    commitMonthCursor = addDaysDateOnly(commitMonthCursor, 1)
-  }
-
-  // Mapa de contratos por staffId
-  const contractMap = new Map<string, WeekendOffContract>()
-  contracts.forEach((c) => {
-    const pid = c.staff_profile || c.user
-    if (pid && !contractMap.has(pid)) {
-      contractMap.set(pid, c)
-    }
-  })
-
-  // Mapa de shifts / workedDays por staffId
-  const workedDaysMap = new Map<string, Set<string>>()
-  staffIds.forEach((id) => workedDaysMap.set(id, new Set<string>()))
-
-  if (Array.isArray(shifts)) {
-    shifts.forEach((s) => {
-      const pid = s.staff_profile || s.user_id || s.user
-      if (!pid) return
-      let dateStr = ''
-      if (s.date) {
-        dateStr = s.date.split(' ')[0].split('T')[0]
-      } else if (s.start_time) {
-        dateStr = s.start_time.split(' ')[0].split('T')[0]
-      }
-      if (dateStr) {
-        let set = workedDaysMap.get(pid)
-        if (!set) {
-          set = new Set<string>()
-          workedDaysMap.set(pid, set)
-        }
-        set.add(dateStr)
-      }
-    })
-  } else if (shifts && typeof shifts === 'object') {
-    Object.entries(shifts).forEach(([pid, days]) => {
-      let set = workedDaysMap.get(pid)
-      if (!set) {
-        set = new Set<string>()
-        workedDaysMap.set(pid, set)
-      }
-      if (Array.isArray(days)) {
-        days.forEach((d) => set.add(d))
-      }
-    })
-  }
-
-  staffIds.forEach((staffId) => {
-    const assignedDates = new Set<string>()
-    const contract = contractMap.get(staffId)
-
-    const workHours = contract?.work_hours || contract?.expand?.shift_type?.work_hours || 12
-    const restHours = contract?.rest_hours || contract?.expand?.shift_type?.rest_hours || 36
-    const is12x36 = workHours === 12 && restHours >= 36
-
-    const workedSet = workedDaysMap.get(staffId) || new Set<string>()
-
-    const naturalDays = is12x36
-      ? computeNaturalPatternByStaff(
-          staffId,
-          staffIds,
-          normalizedCycleStart,
-          normalizedCycleEnd,
-          workHours,
-          restHours,
-        )
-      : null
-
-    commitMonths.forEach((monthKey) => {
-      if (!isWeekendOffApplicableMonth(normalizedCycleStart, normalizedCycleEnd, monthKey)) {
-        return
-      }
-
-      const parts = monthKey.split('-')
-      const y = +parts[0],
-        m = +parts[1]
-      const monthStart = formatDateOnly(y, m, 1)
-      const monthEnd = formatDateOnly(y, m + 1, 0)
-
-      let dCur = normalizedCycleStart > monthStart ? normalizedCycleStart : monthStart
-      const effectiveEnd = normalizedCycleEnd < monthEnd ? normalizedCycleEnd : monthEnd
-
-      while (dCur <= effectiveEnd) {
-        if (dayOfWeekDateOnly(dCur) === 6) {
-          // Saturday
-          const satStr = dCur
-          const sunStr = addDaysDateOnly(dCur, 1)
-
-          if (
-            sunStr <= normalizedCycleEnd &&
-            sunStr >= normalizedCycleStart &&
-            assertWeekendPair(satStr, sunStr)
-          ) {
-            const satFree = !workedSet.has(satStr)
-            const sunFree = !workedSet.has(sunStr)
-
-            if (satFree && sunFree) {
-              if (is12x36) {
-                if (naturalDays && naturalDays[sunStr]) {
-                  assignedDates.add(satStr)
-                  assignedDates.add(sunStr)
-                  break // 1 fim de semana completo de folga por mês-calendário
-                }
-              } else {
-                assignedDates.add(satStr)
-                assignedDates.add(sunStr)
-                break // 1 fim de semana completo de folga por mês-calendário
-              }
-            }
-          }
-        }
-        dCur = addDaysDateOnly(dCur, 1)
-      }
-    })
-
-    if (assignedDates.size > 0) {
-      result.set(staffId, assignedDates)
-    }
-  })
-
-  return result
-}
-
-/**
- * Versão simplificada para cálculo de Fim de Semana de Folga Mensal (WEEKEND_OFF).
- */
-export function computeWeekendOffAssignmentsSimple(
-  staffIds: string[],
-  shifts: WeekendOffShift[] | Record<string, string[]>,
-  contracts: WeekendOffContract[],
-  cycleStart: string,
-  cycleEnd: string,
-): Map<string, Set<string>> {
-  const result = new Map<string, Set<string>>()
-  if (!cycleStart || !cycleEnd || !staffIds || staffIds.length === 0) {
-    return result
-  }
-
-  const normalizedCycleStart = cycleStart.split(' ')[0].split('T')[0]
-  const normalizedCycleEnd = cycleEnd.split(' ')[0].split('T')[0]
-
-  if (!normalizedCycleStart || !normalizedCycleEnd || normalizedCycleStart > normalizedCycleEnd) {
-    return result
-  }
-
-  // Lista de meses que intersectam o ciclo
-  const commitMonths: string[] = []
-  let commitMonthCursor = normalizedCycleStart
-  while (commitMonthCursor <= normalizedCycleEnd) {
-    const { y, m } = parseDateOnly(commitMonthCursor)
-    const cMKey = `${y}-${String(m).padStart(2, '0')}`
-    if (!commitMonths.includes(cMKey)) {
-      commitMonths.push(cMKey)
-    }
-    commitMonthCursor = addDaysDateOnly(commitMonthCursor, 1)
-  }
-
-  // Mapa de shifts / workedDays por staffId
-  const workedDaysMap = new Map<string, Set<string>>()
-  staffIds.forEach((id) => workedDaysMap.set(id, new Set<string>()))
-
-  if (Array.isArray(shifts)) {
-    shifts.forEach((s) => {
-      const pid = s.staff_profile || s.user_id || s.user
-      if (!pid) return
-      let dateStr = ''
-      if (s.date) {
-        dateStr = s.date.split(' ')[0].split('T')[0]
-      } else if (s.start_time) {
-        dateStr = s.start_time.split(' ')[0].split('T')[0]
-      }
-      if (dateStr) {
-        let set = workedDaysMap.get(pid)
-        if (!set) {
-          set = new Set<string>()
-          workedDaysMap.set(pid, set)
-        }
-        set.add(dateStr)
-      }
-    })
-  } else if (shifts && typeof shifts === 'object') {
-    Object.entries(shifts).forEach(([pid, days]) => {
-      let set = workedDaysMap.get(pid)
-      if (!set) {
-        set = new Set<string>()
-        workedDaysMap.set(pid, set)
-      }
-      if (Array.isArray(days)) {
-        days.forEach((d) => set.add(d))
-      }
-    })
-  }
-
-  staffIds.forEach((staffId) => {
-    const assignedDates = new Set<string>()
-    const workedSet = workedDaysMap.get(staffId) || new Set<string>()
-
-    commitMonths.forEach((monthKey) => {
-      if (!isWeekendOffApplicableMonth(normalizedCycleStart, normalizedCycleEnd, monthKey)) {
-        return
-      }
-
-      const parts = monthKey.split('-')
-      const y = +parts[0],
-        m = +parts[1]
-      const monthStart = formatDateOnly(y, m, 1)
-      const monthEnd = formatDateOnly(y, m + 1, 0)
-
-      let dCur = normalizedCycleStart > monthStart ? normalizedCycleStart : monthStart
-      const effectiveEnd = normalizedCycleEnd < monthEnd ? normalizedCycleEnd : monthEnd
-
-      while (dCur <= effectiveEnd) {
-        if (dayOfWeekDateOnly(dCur) === 6) {
-          // Saturday
-          const satStr = dCur
-          const sunStr = addDaysDateOnly(dCur, 1)
-
-          if (
-            sunStr <= normalizedCycleEnd &&
-            sunStr >= normalizedCycleStart &&
-            assertWeekendPair(satStr, sunStr)
-          ) {
-            const satFree = !workedSet.has(satStr)
-            const sunFree = !workedSet.has(sunStr)
-
-            if (satFree && sunFree) {
-              assignedDates.add(satStr)
-              assignedDates.add(sunStr)
-              break // 1 fim de semana completo de folga por mês-calendário
-            }
-          }
-        }
-        dCur = addDaysDateOnly(dCur, 1)
-      }
-    })
-
-    if (assignedDates.size > 0) {
-      result.set(staffId, assignedDates)
-    }
-  })
-
-  return result
 }

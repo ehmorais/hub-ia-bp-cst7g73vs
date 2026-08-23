@@ -43,9 +43,9 @@ import {
   assertWeekendPair,
   formatLocalDateKeySafe,
   parseDateOnly,
-  formatDateOnly,
   addDaysDateOnly,
   dayOfWeekDateOnly,
+  buildWeekendOffMap,
 } from '@/lib/escala-weekend-off'
 
 type ViewMode = 'cycle' | 'month' | 'week' | 'day'
@@ -177,26 +177,7 @@ export function ShiftCalendar({
 
   // Computa o mapa de fins de semana de folga (staffId -> Set<dateStr>) exclusivamente de draft.validation_summary.weekend_off_assignments
   const weekendOffMap = useMemo(() => {
-    const persistedAssignments = draft?.validation_summary?.weekend_off_assignments
-    const map = new Map<string, Set<string>>()
-    if (persistedAssignments && typeof persistedAssignments === 'object') {
-      Object.entries(persistedAssignments).forEach(([staffId, dates]) => {
-        if (Array.isArray(dates) && dates.length >= 2) {
-          const validDates: string[] = []
-          for (let i = 0; i < dates.length; i += 2) {
-            const sat = dates[i]
-            const sun = dates[i + 1]
-            if (sat && sun && assertWeekendPair(sat, sun)) {
-              validDates.push(sat, sun)
-            }
-          }
-          if (validDates.length > 0) {
-            map.set(staffId, new Set(validDates))
-          }
-        }
-      })
-    }
-    return map
+    return buildWeekendOffMap(draft?.validation_summary)
   }, [draft])
 
   const hasWeekendOffMetadata = useMemo(() => {
@@ -601,14 +582,22 @@ export function ShiftCalendar({
         <ScrollArea className="flex-1 bg-slate-50/30">
           {(view === 'month' || view === 'cycle') && (
             <div className="grid grid-cols-7 border-b sticky top-0 bg-slate-100 z-10">
-              {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((d) => (
-                <div
-                  key={d}
-                  className="p-2 text-center text-xs font-semibold text-slate-500 border-r last:border-r-0"
-                >
-                  {d}
-                </div>
-              ))}
+              {(() => {
+                const baseWeekLabels = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+                const firstDayDow = days.length > 0 ? days[0].dayOfWeek : 0
+                const rotatedLabels = [
+                  ...baseWeekLabels.slice(firstDayDow),
+                  ...baseWeekLabels.slice(0, firstDayDow),
+                ]
+                return rotatedLabels.map((d, idx) => (
+                  <div
+                    key={`${d}-${idx}`}
+                    className="p-2 text-center text-xs font-semibold text-slate-500 border-r last:border-r-0"
+                  >
+                    {d}
+                  </div>
+                ))
+              })()}
             </div>
           )}
 

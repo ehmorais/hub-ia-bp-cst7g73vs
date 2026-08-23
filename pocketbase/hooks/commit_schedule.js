@@ -321,93 +321,7 @@ routerAdd(
       return true
     }
 
-    // --- isWeekendOffApplicableMonth helper (shared logic) ---
-    var isWeekendOffApplicableMonth = function (rangeStart, rangeEnd, yearMonth) {
-      if (!rangeStart || !rangeEnd || !yearMonth) return false
-      var rStart = rangeStart.split(' ')[0].split('T')[0]
-      var rEnd = rangeEnd.split(' ')[0].split('T')[0]
-      if (!rStart || !rEnd || rStart > rEnd) return false
-
-      var parts = yearMonth.split('-')
-      var y = Number(parts[0])
-      var m = Number(parts[1])
-      if (isNaN(y) || isNaN(m) || m < 1 || m > 12) return false
-
-      var monthStart = formatDateOnly(y, m, 1)
-      var monthEnd = formatDateOnly(y, m + 1, 0)
-
-      var dCur = rStart > monthStart ? rStart : monthStart
-      var effectiveEnd = rEnd < monthEnd ? rEnd : monthEnd
-
-      var completePairs = 0
-      while (dCur <= effectiveEnd) {
-        if (dayOfWeekDateOnly(dCur) === 6) {
-          var sunStr = addDaysDateOnly(dCur, 1)
-          if (sunStr >= rStart && sunStr <= rEnd && sunStr <= effectiveEnd) {
-            completePairs++
-          }
-        }
-        dCur = addDaysDateOnly(dCur, 1)
-      }
-      return completePairs >= 2
-    }
-
-    // --- WEEKEND_OFF validation BEFORE allowing commit/publish (v0.0.251) ---
-    var computeNaturalPatternByStaff = function (staffId, staffContracts, cStart, cEnd) {
-      var normStart = cStart.split(' ')[0].split('T')[0]
-      var normEnd = cEnd.split(' ')[0].split('T')[0]
-      var contract = null
-      if (Array.isArray(staffContracts)) {
-        for (var sci = 0; sci < staffContracts.length; sci++) {
-          var item = staffContracts[sci]
-          if (item && item.id === staffId) {
-            contract = item
-            break
-          }
-        }
-      } else if (staffContracts && typeof staffContracts === 'object') {
-        contract = staffContracts[staffId] || null
-      }
-      var workHours = contract ? contract.work_hours || contract.shift_work_hours || 12 : 12
-      var restHours = contract ? contract.rest_hours || contract.shift_rest_hours || 36 : 36
-      var is12x36 = workHours === 12 && restHours >= 36
-      var stepDays = Math.max(2, Math.round((workHours + restHours) / 24))
-
-      var stableIdx = 0
-      if (Array.isArray(staffContracts)) {
-        var sortedIds = staffContracts
-          .map(function (c) {
-            return c.id
-          })
-          .filter(Boolean)
-          .sort()
-        var pos = sortedIds.indexOf(staffId)
-        if (pos !== -1) stableIdx = pos
-      } else if (staffContracts && typeof staffContracts === 'object') {
-        var keys = Object.keys(staffContracts).sort()
-        var kpos = keys.indexOf(staffId)
-        if (kpos !== -1) stableIdx = kpos
-      }
-
-      var offset = is12x36 ? stableIdx % stepDays : 0
-      var map = {}
-      var cur = addDaysDateOnly(normStart, offset)
-      while (cur <= normEnd) {
-        map[cur] = true
-        cur = addDaysDateOnly(cur, stepDays)
-      }
-      return map
-    }
-
-    var commitMonths = {}
-    var commitMonthCursor = cycleStart
-    while (commitMonthCursor <= cycleEnd) {
-      var pMonth = parseDateOnly(commitMonthCursor)
-      var cMKey = pMonth.y + '-' + (pMonth.m < 10 ? '0' + pMonth.m : '' + pMonth.m)
-      commitMonths[cMKey] = true
-      commitMonthCursor = addDaysDateOnly(commitMonthCursor, 1)
-    }
-
+    // --- WEEKEND_OFF validation per-cycle BEFORE allowing commit/publish ---
     // 1. Check if there is an existing schedule_draft with validation_summary.weekend_off_assignments
     var draftRecord = null
     var weekendOffAssignments = null
@@ -456,46 +370,14 @@ routerAdd(
       } catch (_) {}
     }
 
-    // Build staffContracts list for computeNaturalPatternByStaff
-    var staffContractsCommit = []
     var sortedProfileIds = Object.keys(profileMap).slice().sort()
-    sortedProfileIds.forEach(function (profileId) {
-      var contract = contractMap[profileId]
-      var workHours = 12
-      var restHours = 36
-      if (contract) {
-        try {
-          var shiftType = $app.findRecordById('shift_types', contract.getString('shift_type'))
-          workHours = shiftType.getInt('work_hours') || 12
-          restHours = shiftType.getInt('rest_hours') || 36
-        } catch (_) {}
-      }
-      staffContractsCommit.push({
-        id: profileId,
-        work_hours: workHours,
-        rest_hours: restHours,
-      })
-    })
-
-    var applicableCommitMonths = Object.keys(commitMonths).filter(function (mKey) {
-      return isWeekendOffApplicableMonth(cycleStart, cycleEnd, mKey)
-    })
-    var expectedCountCommit = applicableCommitMonths.length
+    var expectedCountCommit = 1 // Exatamente 1 par sábado+domingo por staff por ciclo inteiro
 
     sortedProfileIds.forEach(function (profileId) {
       var profile = profileMap[profileId]
       var contract = contractMap[profileId]
       if (!contract) return
 
-      var workHours = 12
-      var restHours = 36
-      try {
-        var shiftType = $app.findRecordById('shift_types', contract.getString('shift_type'))
-        workHours = shiftType.getInt('work_hours') || 12
-        restHours = shiftType.getInt('rest_hours') || 36
-      } catch (_) {}
-
-      var is12x36 = workHours === 12 && restHours >= 36
       var uShifts = normalized
         .filter(function (s) {
           return s.staff_profile === profileId
@@ -510,104 +392,45 @@ routerAdd(
 
       var staffAssignments = weekendOffAssignments ? weekendOffAssignments[profileId] : null
 
-      // Recalculate natural pattern using deterministic anchor by staff_id
-      var naturalDays = is12x36
-        ? computeNaturalPatternByStaff(profileId, staffContractsCommit, cycleStart, cycleEnd)
-        : null
-
-      if (staffAssignments && Array.isArray(staffAssignments) && staffAssignments.length > 0) {
-        // 2. Validate against explicit assignments from draft
-        var validPairCount = 0
-        for (var ai = 0; ai < staffAssignments.length; ai += 2) {
-          var satD = staffAssignments[ai]
-          var sunD = staffAssignments[ai + 1]
-          if (!assertWeekendPair(satD, sunD)) {
-            violations.push(
-              'Fim de semana obrigatório inválido: ' +
-                profile.name +
-                ' possui designação (' +
-                satD +
-                ' / ' +
-                sunD +
-                ') que não é Sábado + Domingo.',
-            )
-          } else if (uShiftSet[satD] || (sunD && uShiftSet[sunD])) {
-            violations.push(
-              'Fim de semana obrigatório não atendido: ' +
-                profile.name +
-                ' possui plantão no fim de semana de folga designado (' +
-                satD +
-                (sunD ? ' / ' + sunD : '') +
-                ').',
-            )
-          } else {
-            validPairCount++
-          }
-        }
-        if (validPairCount < expectedCountCommit) {
-          var missingDraft = expectedCountCommit - validPairCount
+      if (staffAssignments && Array.isArray(staffAssignments) && staffAssignments.length >= 2) {
+        // Valida contra designação explícita do rascunho persistido
+        var satD = staffAssignments[0]
+        var sunD = staffAssignments[1]
+        if (
+          !satD ||
+          !sunD ||
+          !assertWeekendPair(satD, sunD) ||
+          satD < cycleStart ||
+          sunD > cycleEnd
+        ) {
+          violations.push(
+            'Fim de semana obrigatório inválido: ' +
+              profile.name +
+              ' possui designação (' +
+              satD +
+              ' / ' +
+              sunD +
+              ') que não é Sábado + Domingo dentro do ciclo.',
+          )
+        } else if (uShiftSet[satD] || uShiftSet[sunD]) {
           violations.push(
             'Fim de semana obrigatório não atendido: ' +
               profile.name +
-              '. Faltam ' +
-              missingDraft +
-              ' fins de semana de folga.',
+              ' possui plantão no fim de semana de folga designado (' +
+              satD +
+              ' / ' +
+              sunD +
+              ').',
           )
         }
       } else {
-        // 3. Fallback: verify every month has a valid free weekend satisfying natural rotation
-        var freeCount = 0
-        applicableCommitMonths.forEach(function (monthKey) {
-          var parts = monthKey.split('-')
-          var y = Number(parts[0])
-          var m = Number(parts[1])
-          var monthStart = formatDateOnly(y, m, 1)
-          var monthEnd = formatDateOnly(y, m + 1, 0)
-          var dCur = cycleStart > monthStart ? cycleStart : monthStart
-          var effectiveEnd = cycleEnd < monthEnd ? cycleEnd : monthEnd
-
-          var foundValidWeekend = false
-          while (dCur <= effectiveEnd) {
-            if (dayOfWeekDateOnly(dCur) === 6) {
-              // Sat
-              var satStr = dCur
-              var sunStr = addDaysDateOnly(dCur, 1)
-              if (sunStr <= cycleEnd && sunStr >= cycleStart && assertWeekendPair(satStr, sunStr)) {
-                var satFree = !uShiftSet[satStr]
-                var sunFree = !uShiftSet[sunStr]
-                var isNatWorked = is12x36 ? !!(naturalDays && naturalDays[sunStr]) : true
-                if (satFree && sunFree && isNatWorked) {
-                  foundValidWeekend = true
-                  break
-                }
-              }
-            }
-            dCur = addDaysDateOnly(dCur, 1)
-          }
-
-          if (foundValidWeekend) {
-            freeCount++
-          } else {
-            violations.push(
-              'Fim de semana obrigatório não atendido: ' +
-                profile.name +
-                ' não tem sábado+domingo livres em ' +
-                monthKey +
-                '.',
-            )
-          }
-        })
-
-        if (freeCount < expectedCountCommit) {
-          var missingCommit = expectedCountCommit - freeCount
-          violations.push(
-            'Fim de semana obrigatório não atendido: ' +
-              profile.name +
-              '. Faltam ' +
-              missingCommit +
-              ' fins de semana de folga.',
-          )
-        }
+        violations.push(
+          'Fim de semana obrigatório não atendido: ' +
+            profile.name +
+            '. Faltam ' +
+            expectedCountCommit +
+            ' fins de semana de folga.',
+        )
       }
     })
 

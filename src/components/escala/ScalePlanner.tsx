@@ -44,6 +44,7 @@ import {
   parseDateOnly,
   addDaysDateOnly,
   dayOfWeekDateOnly,
+  buildWeekendOffMap,
 } from '@/lib/escala-weekend-off'
 import {
   Dialog,
@@ -330,26 +331,7 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
 
   // Mapa de fins de semana de folga para destaque visual na grade exclusivamente de activeDraftRecord
   const weekendOffMap = useMemo(() => {
-    const persistedAssignments = activeDraftRecord?.validation_summary?.weekend_off_assignments
-    const map = new Map<string, Set<string>>()
-    if (persistedAssignments && typeof persistedAssignments === 'object') {
-      Object.entries(persistedAssignments).forEach(([staffId, dates]) => {
-        if (Array.isArray(dates) && dates.length >= 2) {
-          const validDates: string[] = []
-          for (let i = 0; i < dates.length; i += 2) {
-            const sat = dates[i]
-            const sun = dates[i + 1]
-            if (sat && sun && assertWeekendPair(sat, sun)) {
-              validDates.push(sat, sun)
-            }
-          }
-          if (validDates.length > 0) {
-            map.set(staffId, new Set(validDates))
-          }
-        }
-      })
-    }
-    return map
+    return buildWeekendOffMap(activeDraftRecord?.validation_summary)
   }, [activeDraftRecord])
 
   const hasWeekendOffMetadata = useMemo(() => {
@@ -391,13 +373,6 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
       } else if (count > 0 && count < (selectedSector.min_staffing || 0)) {
         alerts.push(`Dia ${format(dayItem.date, 'dd/MM')}: Abaixo do efetivo mínimo`)
       }
-    })
-
-    // Group covered calendar months
-    const cycleMonths: string[] = []
-    days.forEach((d) => {
-      const mKey = d.key.substring(0, 7)
-      if (!cycleMonths.includes(mKey)) cycleMonths.push(mKey)
     })
 
     draftUsers.forEach((user) => {
@@ -457,22 +432,12 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
       })
       if (uh > maxH) alerts.push(`${user.name} excede o limite mensal (Total: ${uh}h / ${maxH}h)`)
 
-      // Weekend-off validation: verifica se cada mês coberto pelo ciclo tem pelo menos 1 par atribuído
+      // Weekend-off validation: no modelo per-cycle, cada colaborador elegível tem 1 par no ciclo
       if (weekendOffMap.size > 0) {
         const userWeekendOffDates = weekendOffMap.get(user.id) || new Set<string>()
-
-        cycleMonths.forEach((mKey) => {
-          let hasWeekendOffInMonth = false
-          userWeekendOffDates.forEach((dateStr) => {
-            if (dateStr.startsWith(mKey)) {
-              hasWeekendOffInMonth = true
-            }
-          })
-
-          if (!hasWeekendOffInMonth) {
-            alerts.push(`${user.name} sem fim de semana completo de folga em ${mKey}.`)
-          }
-        })
+        if (userWeekendOffDates.size < 2) {
+          alerts.push(`${user.name} sem fim de semana completo de folga no ciclo.`)
+        }
       }
     })
     return Array.from(new Set(alerts))
