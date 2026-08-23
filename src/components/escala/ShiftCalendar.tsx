@@ -39,7 +39,14 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { useToast } from '@/components/ui/use-toast'
 import pb from '@/lib/pocketbase/client'
 import { useRealtime } from '@/hooks/use-realtime'
-import { assertWeekendPair, formatLocalDateKey } from '@/lib/escala-weekend-off'
+import {
+  assertWeekendPair,
+  formatLocalDateKeySafe,
+  parseDateOnly,
+  formatDateOnly,
+  addDaysDateOnly,
+  dayOfWeekDateOnly,
+} from '@/lib/escala-weekend-off'
 
 type ViewMode = 'cycle' | 'month' | 'week' | 'day'
 
@@ -85,9 +92,26 @@ export function ShiftCalendar({
 }) {
   const [view, setView] = useState<ViewMode>('cycle')
   const [movedShiftIds, setMovedShiftIds] = useState<Set<string>>(() => new Set())
-  const cycleStart = cycle ? parseISO(cycle.start_date.split(' ')[0]) : new Date()
-  const cycleEnd = cycle ? parseISO(cycle.end_date.split(' ')[0]) : new Date()
-  const cycleInterval = { start: cycleStart, end: cycleEnd }
+  // Parse ciclo em data local segura (ano, mês, dia) sem offset UTC
+  const cycleStartDateStr = cycle ? (cycle.start_date || '').split(' ')[0].split('T')[0] : ''
+  const cycleEndDateStr = cycle ? (cycle.end_date || '').split(' ')[0].split('T')[0] : ''
+
+  const cycleStart = useMemo(() => {
+    if (!cycleStartDateStr) return new Date()
+    const { y, m, d } = parseDateOnly(cycleStartDateStr)
+    return new Date(y, m - 1, d)
+  }, [cycleStartDateStr])
+
+  const cycleEnd = useMemo(() => {
+    if (!cycleEndDateStr) return new Date()
+    const { y, m, d } = parseDateOnly(cycleEndDateStr)
+    return new Date(y, m - 1, d)
+  }, [cycleEndDateStr])
+
+  const cycleInterval = useMemo(
+    () => ({ start: cycleStart, end: cycleEnd }),
+    [cycleStart, cycleEnd],
+  )
 
   const [currentDate, setCurrentDate] = useState(cycleStart)
   const [sectors, setSectors] = useState<any[]>([])
@@ -188,18 +212,53 @@ export function ShiftCalendar({
     )
   }, [selectedSectorId, shifts, validationShifts])
 
-  const days = useMemo(() => {
-    if (view === 'cycle') return eachDayOfInterval(cycleInterval)
-    if (view === 'day') return [currentDate]
-    if (view === 'week') {
+  // Estrutura robusta para os dias da grade com date, key (YYYY-MM-DD) e dayOfWeek (0=Dom, 6=Sáb)
+  interface CalendarDayItem {
+    date: Date
+    key: string
+    dayOfWeek: number
+  }
+
+  const days = useMemo<CalendarDayItem[]>(() => {
+    let rawDates: Date[] = []
+    if (view === 'cycle') {
+      if (cycleStartDateStr && cycleEndDateStr && cycleStartDateStr <= cycleEndDateStr) {
+        let curStr = cycleStartDateStr
+        const items: CalendarDayItem[] = []
+        while (curStr <= cycleEndDateStr) {
+          const { y, m, d } = parseDateOnly(curStr)
+          const localDate = new Date(y, m - 1, d)
+          items.push({
+            date: localDate,
+            key: curStr,
+            dayOfWeek: dayOfWeekDateOnly(curStr),
+          })
+          curStr = addDaysDateOnly(curStr, 1)
+        }
+        return items
+      }
+      rawDates = eachDayOfInterval(cycleInterval)
+    } else if (view === 'day') {
+      rawDates = [currentDate]
+    } else if (view === 'week') {
       const start = startOfWeek(currentDate, { weekStartsOn: 0 }) // Sunday
       const end = endOfWeek(currentDate, { weekStartsOn: 0 })
-      return eachDayOfInterval({ start, end })
+      rawDates = eachDayOfInterval({ start, end })
+    } else {
+      const start = startOfMonth(currentDate)
+      const end = endOfMonth(currentDate)
+      rawDates = eachDayOfInterval({ start, end })
     }
-    const start = startOfMonth(currentDate)
-    const end = endOfMonth(currentDate)
-    return eachDayOfInterval({ start, end })
-  }, [currentDate, view])
+
+    return rawDates.map((d) => {
+      const key = formatLocalDateKeySafe(d)
+      return {
+        date: d,
+        key,
+        dayOfWeek: dayOfWeekDateOnly(key),
+      }
+    })
+  }, [currentDate, view, cycleStartDateStr, cycleEndDateStr, cycleInterval])
 
   const alerts = useMemo(() => {
     const newAlerts: { type: 'error' | 'warning' | 'info'; message: string; date?: Date }[] = []
@@ -214,12 +273,14 @@ export function ShiftCalendar({
     // Only validate days INSIDE the current cycle. Days outside the cycle have
     // nothing to validate (no draft/published schedule covers them).
     if (cycle) {
-      days.forEach((day) => {
+      days.forEach((dayItem) => {
+        const day = dayItem.date
         if (!isWithinInterval(day, cycleInterval)) return // outside the cycle
 
-        const dayShifts = validationVisibleShifts.filter((s) =>
-          isSameDay(parseISO(s.start_time.split(' ')[0]), day),
-        )
+        const dayShifts = validationVisibleShifts.filter((s) => {
+          const sDateStr = s.start_time ? s.start_time.split(' ')[0].split('T')[0] : ''
+          return sDateStr === dayItem.key
+        })
         const count = dayShifts.length
 
         // The cycle has an active draft or published schedule (there are
@@ -383,11 +444,11 @@ export function ShiftCalendar({
     if (view === 'month') setCurrentDate(addMonths(currentDate, -1))
   }
 
-  const getShiftsForDay = (day: Date) => {
+  const getShiftsForDay = (dayKey: string) => {
     return visibleShifts
       .filter((s) => {
-        const sDate = parseISO(s.start_time.split(' ')[0])
-        return isSameDay(sDate, day)
+        const sDateStr = s.start_time ? s.start_time.split(' ')[0].split('T')[0] : ''
+        return sDateStr === dayKey
       })
       .sort((a, b) => a.start_time.localeCompare(b.start_time))
   }
@@ -489,7 +550,8 @@ export function ShiftCalendar({
                 `${format(cycleStart, 'dd/MM/yyyy')} a ${format(cycleEnd, 'dd/MM/yyyy')}`}
               {view === 'day' && format(currentDate, "dd 'de' MMMM, yyyy", { locale: ptBR })}
               {view === 'week' &&
-                `${format(days[0], 'dd/MM')} a ${format(days[days.length - 1], 'dd/MM')}`}
+                days.length > 0 &&
+                `${format(days[0].date, 'dd/MM')} a ${format(days[days.length - 1].date, 'dd/MM')}`}{' '}
               {view === 'month' && format(currentDate, "MMMM 'de' yyyy", { locale: ptBR })}
             </span>
             <Button variant="outline" size="icon" onClick={next}>
@@ -559,9 +621,13 @@ export function ShiftCalendar({
               view === 'day' && 'grid-cols-1 min-h-full',
             )}
           >
-            {days.map((day, i) => {
-              const dayShifts = getShiftsForDay(day)
+            {days.map((dayItem, i) => {
+              const day = dayItem.date
+              const dateKey = dayItem.key
+              const dayShifts = getShiftsForDay(dateKey)
               const inCycle = cycle ? isWithinInterval(day, cycleInterval) : true
+              // Garante que é sábado (6) ou domingo (0)
+              const isWeekendDay = dayItem.dayOfWeek === 6 || dayItem.dayOfWeek === 0
 
               return (
                 <div
@@ -665,13 +731,15 @@ export function ShiftCalendar({
 
                     {/* Placeholders de Fim de Semana de Folga Mensal (WEEKEND_OFF) */}
                     {(() => {
-                      const dateKey = formatLocalDateKey(day)
+                      // NUNCA renderizar em dias que não sejam sábado ou domingo
+                      if (!isWeekendDay) return null
+
                       const workedStaffIds = new Set(
                         dayShifts.map((s) => s.staff_profile || s.user_id || s.user),
                       )
 
                       const weekendOffPlaceholders = sectorStaffProfiles.filter((staff) => {
-                        // Não renderiza se a célula tem shifts (a folga não é real)
+                        // Não renderiza se a célula tem shifts (a folga não é real ou há conflito)
                         if (workedStaffIds.has(staff.id)) return false
                         const offDates = weekendOffMap.get(staff.id)
                         return offDates && offDates.has(dateKey)
@@ -696,7 +764,7 @@ export function ShiftCalendar({
 
                     {dayShifts.length === 0 &&
                       !sectorStaffProfiles.some((staff) => {
-                        const dateKey = formatLocalDateKey(day)
+                        if (!isWeekendDay) return false
                         const offDates = weekendOffMap.get(staff.id)
                         return offDates && offDates.has(dateKey)
                       }) &&

@@ -66,7 +66,63 @@ export function dayOfWeekDateOnly(dateStr: string): number {
  * Formata um objeto Date do JS local diretamente para YYYY-MM-DD
  * usando métodos locais (getFullYear, getMonth, getDate) sem qualquer conversão de timezone ou UTC shift.
  */
+/**
+ * Formata um objeto Date do JS local diretamente para YYYY-MM-DD
+ * usando métodos locais (getFullYear, getMonth, getDate) sem qualquer conversão de timezone ou UTC shift.
+ */
 export const formatLocalDateKey = (d: Date): string => {
+  if (d instanceof Date && !isNaN(d.getTime())) {
+    // Se a data foi construída de uma string ISO em UTC meia-noite (ex: new Date("2026-10-04")),
+    // em fusos negativos (ex: UTC-3) os métodos locais retornariam o dia anterior às 21h.
+    // formatLocalDateKeySafe lida com ambos os casos: preserva a data civil pretendida.
+    return formatLocalDateKeySafe(d)
+  }
+  return ''
+}
+
+/**
+ * Formata componentes UTC de um objeto Date para YYYY-MM-DD.
+ */
+export const formatLocalDateKeyUTC = (d: Date): string => {
+  const y = d.getUTCFullYear()
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0')
+  const day = String(d.getUTCDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+/**
+ * Extrai ano/mês/dia do objeto Date exatamente como ele foi construído,
+ * sem qualquer conversão incorreta de timezone.
+ * Se o Date foi construído como `new Date(2026, 9, 4)` (local) ou `new Date("2026-10-04")` (UTC midnight),
+ * retorna "2026-10-04".
+ */
+export function formatLocalDateKeySafe(d: Date): string {
+  if (!(d instanceof Date) || isNaN(d.getTime())) return ''
+
+  // Verifica se o objeto Date está exatamente à meia-noite UTC (como gerado por new Date("YYYY-MM-DD"))
+  // e difere do horário local.
+  const utcHours = d.getUTCHours()
+  const utcMinutes = d.getUTCMinutes()
+  const utcSeconds = d.getUTCSeconds()
+  const utcMillis = d.getUTCMilliseconds()
+
+  const localHours = d.getHours()
+  const localMinutes = d.getMinutes()
+  const localSeconds = d.getSeconds()
+  const localMillis = d.getMilliseconds()
+
+  // Se foi gerado em UTC midnight puro (00:00:00.000Z) mas no horário local não é 00:00:00 (ex: 21:00 do dia anterior em UTC-3)
+  if (
+    utcHours === 0 &&
+    utcMinutes === 0 &&
+    utcSeconds === 0 &&
+    utcMillis === 0 &&
+    (localHours !== 0 || localMinutes !== 0)
+  ) {
+    return formatLocalDateKeyUTC(d)
+  }
+
+  // Caso padrão: usa os componentes locais
   const y = d.getFullYear()
   const m = String(d.getMonth() + 1).padStart(2, '0')
   const day = String(d.getDate()).padStart(2, '0')

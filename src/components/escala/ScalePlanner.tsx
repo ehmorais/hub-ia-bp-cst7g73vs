@@ -38,7 +38,13 @@ import { useRealtime } from '@/hooks/use-realtime'
 import { format, eachDayOfInterval, addDays, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import pb from '@/lib/pocketbase/client'
-import { assertWeekendPair, formatLocalDateKey } from '@/lib/escala-weekend-off'
+import {
+  assertWeekendPair,
+  formatLocalDateKeySafe,
+  parseDateOnly,
+  addDaysDateOnly,
+  dayOfWeekDateOnly,
+} from '@/lib/escala-weekend-off'
 import {
   Dialog,
   DialogContent,
@@ -260,14 +266,31 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
     () => sectors.find((s) => s.id === selectedSectorId),
     [sectors, selectedSectorId],
   )
-  const days = useMemo(() => {
+  interface PlannerDayItem {
+    date: Date
+    key: string
+    dayOfWeek: number
+  }
+
+  const days = useMemo<PlannerDayItem[]>(() => {
     try {
-      return selectedCycle
-        ? eachDayOfInterval({
-            start: parseISO(selectedCycle.start_date.split(' ')[0]),
-            end: parseISO(selectedCycle.end_date.split(' ')[0]),
-          })
-        : []
+      if (!selectedCycle) return []
+      const startStr = (selectedCycle.start_date || '').split(' ')[0].split('T')[0]
+      const endStr = (selectedCycle.end_date || '').split(' ')[0].split('T')[0]
+      if (!startStr || !endStr || startStr > endStr) return []
+
+      const items: PlannerDayItem[] = []
+      let cur = startStr
+      while (cur <= endStr) {
+        const { y, m, d } = parseDateOnly(cur)
+        items.push({
+          date: new Date(y, m - 1, d),
+          key: cur,
+          dayOfWeek: dayOfWeekDateOnly(cur),
+        })
+        cur = addDaysDateOnly(cur, 1)
+      }
+      return items
     } catch {
       return []
     }
@@ -280,8 +303,8 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
       { count: number; status: 'understaffed' | 'suboptimal' | 'optimal' }
     > = {}
 
-    days.forEach((day) => {
-      const ds = formatLocalDateKey(day)
+    days.forEach((dayItem) => {
+      const ds = dayItem.key
       let count = 0
       draftUsers.forEach((u) => {
         const val = draft[u.id]?.[ds]
@@ -341,8 +364,8 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
       ? Math.ceil(selectedSector.bed_capacity / (selectedSector.staffing_ratio || 10))
       : 0
 
-    days.forEach((day) => {
-      const dateStr = formatLocalDateKey(day)
+    days.forEach((dayItem) => {
+      const dateStr = dayItem.key
       let count = 0,
         supCount = 0,
         reqSupCount = 0
@@ -357,22 +380,23 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
       })
 
       if (reqSupCount > 0 && supCount === 0)
-        alerts.push(`Dia ${format(day, 'dd/MM')}: Falta Enfermeiro p/ supervisão`)
+        alerts.push(`Dia ${format(dayItem.date, 'dd/MM')}: Falta Enfermeiro p/ supervisão`)
       if (isEm) {
-        if (count < 2) alerts.push(`Dia ${format(day, 'dd/MM')}: Emergência < mínimo (2)`)
-        else if (count < 3) alerts.push(`Dia ${format(day, 'dd/MM')}: Emergência < ideal (3)`)
+        if (count < 2) alerts.push(`Dia ${format(dayItem.date, 'dd/MM')}: Emergência < mínimo (2)`)
+        else if (count < 3)
+          alerts.push(`Dia ${format(dayItem.date, 'dd/MM')}: Emergência < ideal (3)`)
       } else if (fReq > 0) {
         if (count < fReq)
-          alerts.push(`Dia ${format(day, 'dd/MM')}: Andar < efetivo (${count}/${fReq})`)
+          alerts.push(`Dia ${format(dayItem.date, 'dd/MM')}: Andar < efetivo (${count}/${fReq})`)
       } else if (count > 0 && count < (selectedSector.min_staffing || 0)) {
-        alerts.push(`Dia ${format(day, 'dd/MM')}: Abaixo do efetivo mínimo`)
+        alerts.push(`Dia ${format(dayItem.date, 'dd/MM')}: Abaixo do efetivo mínimo`)
       }
     })
 
     // Group covered calendar months
     const cycleMonths: string[] = []
     days.forEach((d) => {
-      const mKey = formatLocalDateKey(d).substring(0, 7)
+      const mKey = d.key.substring(0, 7)
       if (!cycleMonths.includes(mKey)) cycleMonths.push(mKey)
     })
 
@@ -384,8 +408,8 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
       let uh = 0,
         lastEnd: Date | null = null
 
-      days.forEach((day) => {
-        const dateStr = formatLocalDateKey(day)
+      days.forEach((dayItem) => {
+        const dateStr = dayItem.key
         const cell = draft[user.id]?.[dateStr]
         const matchingTimeoff = timeoffsForCycle.find((t) => {
           if ((t.staff_profile || t.user) !== user.id) return false
@@ -399,7 +423,7 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
           if (isTO) {
             const reqStatus = matchingTimeoff?.status
             alerts.push(
-              `${user.name} alocado em dia de folga ${reqStatus === 'pending' ? '(pendente)' : ''} (${format(day, 'dd/MM')})`,
+              `${user.name} alocado em dia de folga ${reqStatus === 'pending' ? '(pendente)' : ''} (${format(dayItem.date, 'dd/MM')})`,
             )
           }
 
@@ -421,11 +445,11 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
 
           uh += duration
 
-          const cs = new Date(day)
+          const cs = new Date(dayItem.date)
           cs.setHours(stHour, 0, 0, 0)
 
           if (lastEnd && (cs.getTime() - lastEnd.getTime()) / 3600000 < restH) {
-            alerts.push(`${user.name} sem descanso de ${restH}h (${format(day, 'dd/MM')})`)
+            alerts.push(`${user.name} sem descanso de ${restH}h (${format(dayItem.date, 'dd/MM')})`)
           }
 
           lastEnd = new Date(cs.getTime() + duration * 3600000)
@@ -530,13 +554,13 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
     let csvContent = 'data:text/csv;charset=utf-8,\uFEFF'
     csvContent += `Escala: ${sectorName} - ${cycleName}\n\n`
 
-    const headers = ['Colaborador', 'Cargo', ...days.map((d) => format(d, 'dd/MM/yyyy'))]
+    const headers = ['Colaborador', 'Cargo', ...days.map((d) => format(d.date, 'dd/MM/yyyy'))]
     csvContent += headers.join(',') + '\n'
 
     draftUsers.forEach((user) => {
       const row = [user.name, user.expand?.staff_role?.name || '']
-      days.forEach((day) => {
-        const ds = formatLocalDateKey(day)
+      days.forEach((dayItem) => {
+        const ds = dayItem.key
         const cell = draft[user.id]?.[ds] || ''
         let displayCell = cell
         if (cell === 'D') displayCell = '07:00 - 19:00'
@@ -597,7 +621,7 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
       const toCreate: any[] = []
       draftUsers.forEach((u) =>
         days.forEach((d) => {
-          const dateStr = formatLocalDateKey(d)
+          const dateStr = d.key
           const cell = draft[u.id]?.[dateStr]
           if (cell && cell !== 'F') {
             let st = '07:00:00'
@@ -864,8 +888,8 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
                   <th className="sticky left-0 z-20 bg-slate-100 border-b border-r p-2 text-left min-w-[150px]">
                     Colaborador
                   </th>
-                  {days.map((day) => {
-                    const ds = formatLocalDateKey(day)
+                  {days.map((dayItem) => {
+                    const ds = dayItem.key
                     const dc = dailyCounts[ds]
                     return (
                       <th
@@ -873,9 +897,9 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
                         className="border-b border-r p-1.5 min-w-[95px] bg-slate-50 text-center relative"
                       >
                         <div className="text-[10px] uppercase text-slate-500">
-                          {format(day, 'eee', { locale: ptBR })}
+                          {format(dayItem.date, 'eee', { locale: ptBR })}
                         </div>
-                        <div className="text-xs">{format(day, 'dd')}</div>
+                        <div className="text-xs">{format(dayItem.date, 'dd')}</div>
                       </th>
                     )
                   })}
@@ -923,8 +947,8 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
                           </button>
                         </div>
                       </td>
-                      {days.map((day) => {
-                        const ds = formatLocalDateKey(day)
+                      {days.map((dayItem) => {
+                        const ds = dayItem.key
                         const val = draft[user.id]?.[ds] || ''
                         const toReq = timeoffsForCycle.find(
                           (t) =>
@@ -933,8 +957,11 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
                         )
                         const isTO = !!toReq
                         const isPendingTO = toReq?.status === 'pending'
+                        const isWeekendDay = dayItem.dayOfWeek === 6 || dayItem.dayOfWeek === 0
                         const isWeekendOff =
-                          (!val || val === 'F') && (weekendOffMap.get(user.id)?.has(ds) ?? false)
+                          isWeekendDay &&
+                          (!val || val === 'F') &&
+                          (weekendOffMap.get(user.id)?.has(ds) ?? false)
 
                         return (
                           <td
