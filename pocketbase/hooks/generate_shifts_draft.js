@@ -2150,6 +2150,11 @@ routerAdd(
       ? JSON.parse(JSON.stringify(backendWeekendOffAssignments))
       : {}
 
+    var applicableMonthsList = Object.keys(valMonths).filter(function (mKey) {
+      return isWeekendOffApplicableMonth(cycleStart, cycleEnd, mKey)
+    })
+    var expectedCountPerStaff = applicableMonthsList.length
+
     eligible.forEach(function (u) {
       var is12x36 = u.work_hours === 12 && u.rest_hours >= 36
       var uNatSet = naturalWorkedMap[u.id] || {}
@@ -2168,11 +2173,7 @@ routerAdd(
       var userAssignedWeekendOffs = weekendOffAssignments[u.id] || []
       // Verify existing or compute if not present
       if (userAssignedWeekendOffs.length === 0) {
-        Object.keys(valMonths).forEach(function (monthKey) {
-          if (!isWeekendOffApplicableMonth(cycleStart, cycleEnd, monthKey)) {
-            return
-          }
-
+        applicableMonthsList.forEach(function (monthKey) {
           var parts = monthKey.split('-')
           var y = Number(parts[0])
           var m = Number(parts[1])
@@ -2241,6 +2242,19 @@ routerAdd(
             )
           }
         }
+      }
+
+      // Check expectedAssignments count per eligible staff
+      var assignedPairCount = Math.floor((userAssignedWeekendOffs.length || 0) / 2)
+      if (assignedPairCount !== expectedCountPerStaff) {
+        var missing = expectedCountPerStaff - assignedPairCount
+        violations.push(
+          'Fim de semana obrigatório não atendido: ' +
+            u.name +
+            '. Faltam ' +
+            missing +
+            ' fins de semana de folga.',
+        )
       }
     })
     if (weekendOffEnforcementIssues && weekendOffEnforcementIssues.length > 0) {

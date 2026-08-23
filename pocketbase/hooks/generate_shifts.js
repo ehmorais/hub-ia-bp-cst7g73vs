@@ -1196,11 +1196,13 @@ routerAdd(
           ? computeNaturalPatternByStaff(u.id, usersWithContracts, cycleStart, cycleEnd)
           : null
 
-        Object.keys(genMonths).forEach(function (monthKey) {
-          if (!isWeekendOffApplicableMonth(cycleStart, cycleEnd, monthKey)) {
-            return
-          }
+        var applicableGenMonths = Object.keys(genMonths).filter(function (mKey) {
+          return isWeekendOffApplicableMonth(cycleStart, cycleEnd, mKey)
+        })
+        var expectedCountGen = applicableGenMonths.length
+        var validWeekendCount = 0
 
+        applicableGenMonths.forEach(function (monthKey) {
           var parts = monthKey.split('-')
           var y = Number(parts[0])
           var m = Number(parts[1])
@@ -1232,7 +1234,9 @@ routerAdd(
             dCur = addDaysDateOnly(dCur, 1)
           }
 
-          if (!foundValidWeekend) {
+          if (foundValidWeekend) {
+            validWeekendCount++
+          } else {
             violations.push(
               'Fim de semana obrigatório não atendido: ' +
                 u.name +
@@ -1242,6 +1246,17 @@ routerAdd(
             )
           }
         })
+
+        if (validWeekendCount < expectedCountGen) {
+          var missingGen = expectedCountGen - validWeekendCount
+          violations.push(
+            'Fim de semana obrigatório não atendido: ' +
+              u.name +
+              '. Faltam ' +
+              missingGen +
+              ' fins de semana de folga.',
+          )
+        }
       })
 
       if (weekendOffEnforcementIssuesGen && weekendOffEnforcementIssuesGen.length > 0) {

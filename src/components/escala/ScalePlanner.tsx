@@ -38,6 +38,7 @@ import { useRealtime } from '@/hooks/use-realtime'
 import { format, eachDayOfInterval, addDays, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import pb from '@/lib/pocketbase/client'
+import { assertWeekendPair, formatLocalDateKey } from '@/lib/escala-weekend-off'
 import {
   Dialog,
   DialogContent,
@@ -280,7 +281,7 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
     > = {}
 
     days.forEach((day) => {
-      const ds = format(day, 'yyyy-MM-dd')
+      const ds = formatLocalDateKey(day)
       let count = 0
       draftUsers.forEach((u) => {
         const val = draft[u.id]?.[ds]
@@ -304,20 +305,33 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
     [timeoffs, selectedCycleId],
   )
 
-  // Mapa de fins de semana de folga para destaque visual na grade
+  // Mapa de fins de semana de folga para destaque visual na grade exclusivamente de activeDraftRecord
   const weekendOffMap = useMemo(() => {
     const persistedAssignments = activeDraftRecord?.validation_summary?.weekend_off_assignments
+    const map = new Map<string, Set<string>>()
     if (persistedAssignments && typeof persistedAssignments === 'object') {
-      const map = new Map<string, Set<string>>()
       Object.entries(persistedAssignments).forEach(([staffId, dates]) => {
-        if (Array.isArray(dates)) {
-          map.set(staffId, new Set(dates as string[]))
+        if (Array.isArray(dates) && dates.length >= 2) {
+          const validDates: string[] = []
+          for (let i = 0; i < dates.length; i += 2) {
+            const sat = dates[i]
+            const sun = dates[i + 1]
+            if (sat && sun && assertWeekendPair(sat, sun)) {
+              validDates.push(sat, sun)
+            }
+          }
+          if (validDates.length > 0) {
+            map.set(staffId, new Set(validDates))
+          }
         }
       })
-      return map
     }
-    return new Map<string, Set<string>>()
+    return map
   }, [activeDraftRecord])
+
+  const hasWeekendOffMetadata = useMemo(() => {
+    return weekendOffMap.size > 0
+  }, [weekendOffMap])
 
   const validations = useMemo(() => {
     if (!selectedSector || days.length === 0) return []
@@ -328,7 +342,7 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
       : 0
 
     days.forEach((day) => {
-      const dateStr = format(day, 'yyyy-MM-dd')
+      const dateStr = formatLocalDateKey(day)
       let count = 0,
         supCount = 0,
         reqSupCount = 0
@@ -358,7 +372,7 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
     // Group covered calendar months
     const cycleMonths: string[] = []
     days.forEach((d) => {
-      const mKey = format(d, 'yyyy-MM')
+      const mKey = formatLocalDateKey(d).substring(0, 7)
       if (!cycleMonths.includes(mKey)) cycleMonths.push(mKey)
     })
 
@@ -371,7 +385,7 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
         lastEnd: Date | null = null
 
       days.forEach((day) => {
-        const dateStr = format(day, 'yyyy-MM-dd')
+        const dateStr = formatLocalDateKey(day)
         const cell = draft[user.id]?.[dateStr]
         const matchingTimeoff = timeoffsForCycle.find((t) => {
           if ((t.staff_profile || t.user) !== user.id) return false
@@ -439,11 +453,6 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
     })
     return Array.from(new Set(alerts))
   }, [days, draft, draftUsers, selectedSector, contracts, timeoffsForCycle, weekendOffMap])
-
-  const hasWeekendOffMetadata = useMemo(() => {
-    const assignments = activeDraftRecord?.validation_summary?.weekend_off_assignments
-    return !!assignments && typeof assignments === 'object' && Object.keys(assignments).length > 0
-  }, [activeDraftRecord])
 
   const handleDragStart = (
     e: React.DragEvent,
@@ -527,7 +536,7 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
     draftUsers.forEach((user) => {
       const row = [user.name, user.expand?.staff_role?.name || '']
       days.forEach((day) => {
-        const ds = format(day, 'yyyy-MM-dd')
+        const ds = formatLocalDateKey(day)
         const cell = draft[user.id]?.[ds] || ''
         let displayCell = cell
         if (cell === 'D') displayCell = '07:00 - 19:00'
@@ -588,7 +597,7 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
       const toCreate: any[] = []
       draftUsers.forEach((u) =>
         days.forEach((d) => {
-          const dateStr = format(d, 'yyyy-MM-dd')
+          const dateStr = formatLocalDateKey(d)
           const cell = draft[u.id]?.[dateStr]
           if (cell && cell !== 'F') {
             let st = '07:00:00'
@@ -856,11 +865,11 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
                     Colaborador
                   </th>
                   {days.map((day) => {
-                    const ds = format(day, 'yyyy-MM-dd')
+                    const ds = formatLocalDateKey(day)
                     const dc = dailyCounts[ds]
                     return (
                       <th
-                        key={day.toISOString()}
+                        key={ds}
                         className="border-b border-r p-1.5 min-w-[95px] bg-slate-50 text-center relative"
                       >
                         <div className="text-[10px] uppercase text-slate-500">
@@ -915,7 +924,7 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
                         </div>
                       </td>
                       {days.map((day) => {
-                        const ds = format(day, 'yyyy-MM-dd')
+                        const ds = formatLocalDateKey(day)
                         const val = draft[user.id]?.[ds] || ''
                         const toReq = timeoffsForCycle.find(
                           (t) =>
@@ -970,7 +979,7 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
                                       isPendingTO,
                                     'cursor-move hover:opacity-80 border-2 border-dashed border-transparent hover:border-slate-400':
                                       !!val && val !== 'F',
-                                    'bg-orange-100 text-orange-800 font-medium':
+                                    'bg-orange-100 border border-orange-300 rounded px-1 py-0.5 text-xs text-orange-900 font-medium':
                                       isWeekendOff && !isTO && (!val || val === 'F'),
                                     'bg-transparent': (!val || val === 'F') && !isWeekendOff,
                                   },
@@ -981,45 +990,75 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
                                 {val === 'M' && '07:00 - 13:00'}
                                 {val === 'T' && '13:00 - 19:00'}
                                 {val === 'F' && (isWeekendOff ? 'Folga fim de semana' : 'Folga')}
-                                {!val && isWeekendOff && 'Folga fim de semana'}
+                                {!val && isWeekendOff && (
+                                  <div className="flex flex-col items-center justify-center">
+                                    <span className="font-semibold text-slate-900">
+                                      {user.name}
+                                    </span>
+                                    <span className="text-[10px] text-orange-800">
+                                      Folga fim de semana
+                                    </span>
+                                  </div>
+                                )}
                               </div>
                             ) : (
-                              <select
-                                value={val}
-                                onChange={(e) =>
-                                  setDraft((p) => ({
-                                    ...p,
-                                    [user.id]: { ...p[user.id], [ds]: e.target.value as DraftCell },
-                                  }))
-                                }
-                                disabled={isTO || selectedCycle?.status !== 'draft'}
-                                className={cn(
-                                  'w-full h-11 appearance-none bg-transparent text-center text-[11px] md:text-xs outline-none cursor-pointer hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 transition-colors',
-                                  {
-                                    'font-bold text-black bg-white':
-                                      val === 'D' || val === 'M' || val === 'T',
-                                    'font-bold text-black bg-slate-200 hover:bg-slate-300':
-                                      val === 'N',
-                                    'text-red-400 font-bold bg-red-50/80 hover:bg-red-100':
-                                      isTO && !isPendingTO,
-                                    'text-amber-500 font-bold bg-amber-50/80 hover:bg-amber-100':
-                                      isPendingTO,
-                                    'bg-orange-100 text-orange-800 font-medium':
-                                      isWeekendOff && !isTO && (!val || val === 'F'),
-                                  },
+                              <div className="relative w-full h-11 flex items-center justify-center">
+                                {isWeekendOff && !isTO && (!val || val === 'F') && !val ? (
+                                  <div
+                                    className="w-full h-full bg-orange-100 border border-orange-300 rounded px-1 py-0.5 text-xs flex flex-col items-center justify-center cursor-pointer"
+                                    onClick={() => {
+                                      // allows opening select or editing
+                                    }}
+                                  >
+                                    <span className="font-semibold text-slate-900 text-[11px] truncate max-w-full">
+                                      {user.name}
+                                    </span>
+                                    <span className="text-[10px] text-orange-800 leading-tight">
+                                      Folga fim de semana
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <select
+                                    value={val}
+                                    onChange={(e) =>
+                                      setDraft((p) => ({
+                                        ...p,
+                                        [user.id]: {
+                                          ...p[user.id],
+                                          [ds]: e.target.value as DraftCell,
+                                        },
+                                      }))
+                                    }
+                                    disabled={isTO || selectedCycle?.status !== 'draft'}
+                                    className={cn(
+                                      'w-full h-11 appearance-none bg-transparent text-center text-[11px] md:text-xs outline-none cursor-pointer hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 transition-colors',
+                                      {
+                                        'font-bold text-black bg-white':
+                                          val === 'D' || val === 'M' || val === 'T',
+                                        'font-bold text-black bg-slate-200 hover:bg-slate-300':
+                                          val === 'N',
+                                        'text-red-400 font-bold bg-red-50/80 hover:bg-red-100':
+                                          isTO && !isPendingTO,
+                                        'text-amber-500 font-bold bg-amber-50/80 hover:bg-amber-100':
+                                          isPendingTO,
+                                        'bg-orange-100 text-orange-800 font-medium':
+                                          isWeekendOff && !isTO && (!val || val === 'F'),
+                                      },
+                                    )}
+                                  >
+                                    <option value="">
+                                      {isWeekendOff ? 'Folga fim de semana' : ''}
+                                    </option>
+                                    <option value="D">07:00 - 19:00</option>
+                                    <option value="N">19:00 - 07:00</option>
+                                    <option value="M">07:00 - 13:00</option>
+                                    <option value="T">13:00 - 19:00</option>
+                                    <option value="F">
+                                      {isWeekendOff ? 'Folga fim de semana' : 'Folga'}
+                                    </option>
+                                  </select>
                                 )}
-                              >
-                                <option value="">
-                                  {isWeekendOff ? 'Folga fim de semana' : ''}
-                                </option>
-                                <option value="D">07:00 - 19:00</option>
-                                <option value="N">19:00 - 07:00</option>
-                                <option value="M">07:00 - 13:00</option>
-                                <option value="T">13:00 - 19:00</option>
-                                <option value="F">
-                                  {isWeekendOff ? 'Folga fim de semana' : 'Folga'}
-                                </option>
-                              </select>
+                              </div>
                             )}
                             {isTO && (
                               <div

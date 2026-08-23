@@ -39,6 +39,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { useToast } from '@/components/ui/use-toast'
 import pb from '@/lib/pocketbase/client'
 import { useRealtime } from '@/hooks/use-realtime'
+import { assertWeekendPair, formatLocalDateKey } from '@/lib/escala-weekend-off'
 
 type ViewMode = 'cycle' | 'month' | 'week' | 'day'
 
@@ -150,29 +151,33 @@ export function ShiftCalendar({
     return Array.from(map.values())
   }, [staffProfiles, selectedSectorId, visibleShifts])
 
-  // Computa o mapa de fins de semana de folga (staffId -> Set<dateStr>)
+  // Computa o mapa de fins de semana de folga (staffId -> Set<dateStr>) exclusivamente de draft.validation_summary.weekend_off_assignments
   const weekendOffMap = useMemo(() => {
-    // Assignments persistidos pelo backend no validation_summary do draft
     const persistedAssignments = draft?.validation_summary?.weekend_off_assignments
+    const map = new Map<string, Set<string>>()
     if (persistedAssignments && typeof persistedAssignments === 'object') {
-      const map = new Map<string, Set<string>>()
       Object.entries(persistedAssignments).forEach(([staffId, dates]) => {
-        if (Array.isArray(dates)) {
-          map.set(staffId, new Set(dates as string[]))
+        if (Array.isArray(dates) && dates.length >= 2) {
+          const validDates: string[] = []
+          for (let i = 0; i < dates.length; i += 2) {
+            const sat = dates[i]
+            const sun = dates[i + 1]
+            if (sat && sun && assertWeekendPair(sat, sun)) {
+              validDates.push(sat, sun)
+            }
+          }
+          if (validDates.length > 0) {
+            map.set(staffId, new Set(validDates))
+          }
         }
       })
-      if (map.size > 0) {
-        return map
-      }
     }
-
-    return new Map<string, Set<string>>()
+    return map
   }, [draft])
 
   const hasWeekendOffMetadata = useMemo(() => {
-    const assignments = draft?.validation_summary?.weekend_off_assignments
-    return !!assignments && typeof assignments === 'object' && Object.keys(assignments).length > 0
-  }, [draft])
+    return weekendOffMap.size > 0
+  }, [weekendOffMap])
 
   // A shift-type selection filters only what is rendered. Staffing, rest and
   // hour validations must continue to consider the complete schedule.
@@ -660,30 +665,30 @@ export function ShiftCalendar({
 
                     {/* Placeholders de Fim de Semana de Folga Mensal (WEEKEND_OFF) */}
                     {(() => {
-                      const dayStr = format(day, 'yyyy-MM-dd')
+                      const dateKey = formatLocalDateKey(day)
                       const workedStaffIds = new Set(
                         dayShifts.map((s) => s.staff_profile || s.user_id || s.user),
                       )
 
                       const weekendOffPlaceholders = sectorStaffProfiles.filter((staff) => {
-                        // Não renderiza se o colaborador já tem plantão no dia
+                        // Não renderiza se a célula tem shifts (a folga não é real)
                         if (workedStaffIds.has(staff.id)) return false
                         const offDates = weekendOffMap.get(staff.id)
-                        return offDates && offDates.has(dayStr)
+                        return offDates && offDates.has(dateKey)
                       })
 
                       return weekendOffPlaceholders.map((staff) => (
                         <div
-                          key={`weekend-off-${staff.id}-${dayStr}`}
-                          data-testid={`weekend-off-${staff.id}-${dayStr}`}
+                          key={`weekend-off-${staff.id}-${dateKey}`}
+                          data-testid={`weekend-off-${staff.id}-${dateKey}`}
                           title="Fim de semana de folga mensal"
-                          className="text-xs p-2 rounded bg-orange-100 border border-orange-300 shadow-sm flex flex-col gap-1 transition-colors select-none"
+                          className="bg-orange-100 border border-orange-300 rounded px-1 py-0.5 text-xs shadow-sm flex flex-col gap-0.5 transition-colors select-none"
                         >
                           <div className="font-semibold text-slate-900 truncate" title={staff.name}>
                             {staff.name}
                           </div>
-                          <div className="flex items-center gap-1 text-orange-700 text-[10px] font-medium min-w-0">
-                            <span className="truncate">Folga fim de semana</span>
+                          <div className="text-orange-800 text-[10px] truncate">
+                            Folga fim de semana
                           </div>
                         </div>
                       ))
@@ -691,9 +696,9 @@ export function ShiftCalendar({
 
                     {dayShifts.length === 0 &&
                       !sectorStaffProfiles.some((staff) => {
-                        const dayStr = format(day, 'yyyy-MM-dd')
+                        const dateKey = formatLocalDateKey(day)
                         const offDates = weekendOffMap.get(staff.id)
-                        return offDates && offDates.has(dayStr)
+                        return offDates && offDates.has(dateKey)
                       }) &&
                       view !== 'month' &&
                       view !== 'cycle' && (

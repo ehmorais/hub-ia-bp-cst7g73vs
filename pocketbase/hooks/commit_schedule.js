@@ -477,6 +477,11 @@ routerAdd(
       })
     })
 
+    var applicableCommitMonths = Object.keys(commitMonths).filter(function (mKey) {
+      return isWeekendOffApplicableMonth(cycleStart, cycleEnd, mKey)
+    })
+    var expectedCountCommit = applicableCommitMonths.length
+
     sortedProfileIds.forEach(function (profileId) {
       var profile = profileMap[profileId]
       var contract = contractMap[profileId]
@@ -512,6 +517,7 @@ routerAdd(
 
       if (staffAssignments && Array.isArray(staffAssignments) && staffAssignments.length > 0) {
         // 2. Validate against explicit assignments from draft
+        var validPairCount = 0
         for (var ai = 0; ai < staffAssignments.length; ai += 2) {
           var satD = staffAssignments[ai]
           var sunD = staffAssignments[ai + 1]
@@ -534,15 +540,24 @@ routerAdd(
                 (sunD ? ' / ' + sunD : '') +
                 ').',
             )
+          } else {
+            validPairCount++
           }
+        }
+        if (validPairCount < expectedCountCommit) {
+          var missingDraft = expectedCountCommit - validPairCount
+          violations.push(
+            'Fim de semana obrigatório não atendido: ' +
+              profile.name +
+              '. Faltam ' +
+              missingDraft +
+              ' fins de semana de folga.',
+          )
         }
       } else {
         // 3. Fallback: verify every month has a valid free weekend satisfying natural rotation
-        Object.keys(commitMonths).forEach(function (monthKey) {
-          if (!isWeekendOffApplicableMonth(cycleStart, cycleEnd, monthKey)) {
-            return
-          }
-
+        var freeCount = 0
+        applicableCommitMonths.forEach(function (monthKey) {
           var parts = monthKey.split('-')
           var y = Number(parts[0])
           var m = Number(parts[1])
@@ -570,7 +585,9 @@ routerAdd(
             dCur = addDaysDateOnly(dCur, 1)
           }
 
-          if (!foundValidWeekend) {
+          if (foundValidWeekend) {
+            freeCount++
+          } else {
             violations.push(
               'Fim de semana obrigatório não atendido: ' +
                 profile.name +
@@ -580,6 +597,17 @@ routerAdd(
             )
           }
         })
+
+        if (freeCount < expectedCountCommit) {
+          var missingCommit = expectedCountCommit - freeCount
+          violations.push(
+            'Fim de semana obrigatório não atendido: ' +
+              profile.name +
+              '. Faltam ' +
+              missingCommit +
+              ' fins de semana de folga.',
+          )
+        }
       }
     })
 

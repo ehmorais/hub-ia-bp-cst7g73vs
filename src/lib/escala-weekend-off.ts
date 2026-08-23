@@ -62,6 +62,17 @@ export function dayOfWeekDateOnly(dateStr: string): number {
   return new Date(Date.UTC(y, m - 1, d)).getUTCDay()
 }
 
+/**
+ * Formata um objeto Date do JS local diretamente para YYYY-MM-DD
+ * usando métodos locais (getFullYear, getMonth, getDate) sem qualquer conversão de timezone ou UTC shift.
+ */
+export const formatLocalDateKey = (d: Date): string => {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
 // Retorna true se saturday é sábado (weekday=6), sunday é saturday+1 e domingo (weekday=0)
 export function assertWeekendPair(saturday: string, sunday: string): boolean {
   if (!saturday || !sunday) return false
