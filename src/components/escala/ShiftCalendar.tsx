@@ -47,6 +47,7 @@ import {
   dayOfWeekDateOnly,
   buildWeekendOffMap,
 } from '@/lib/escala-weekend-off'
+import { StaffFilter } from './StaffFilter'
 
 type ViewMode = 'cycle' | 'month' | 'week' | 'day'
 
@@ -116,6 +117,7 @@ export function ShiftCalendar({
   const [currentDate, setCurrentDate] = useState(cycleStart)
   const [sectors, setSectors] = useState<any[]>([])
   const [selectedSectorId, setSelectedSectorId] = useState<string>('')
+  const [selectedStaffId, setSelectedStaffId] = useState<string>('')
   const { toast } = useToast()
   const [shiftRules, setShiftRules] = useState<any[]>([])
 
@@ -429,7 +431,12 @@ export function ShiftCalendar({
     return visibleShifts
       .filter((s) => {
         const sDateStr = s.start_time ? s.start_time.split(' ')[0].split('T')[0] : ''
-        return sDateStr === dayKey
+        if (sDateStr !== dayKey) return false
+        if (selectedStaffId) {
+          const pid = s.staff_profile || s.user_id || s.user
+          if (pid !== selectedStaffId) return false
+        }
+        return true
       })
       .sort((a, b) => a.start_time.localeCompare(b.start_time))
   }
@@ -539,32 +546,44 @@ export function ShiftCalendar({
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
-          <div className="flex items-center gap-3">
-            <Select value={selectedSectorId} onValueChange={setSelectedSectorId}>
-              <SelectTrigger className="w-[200px] bg-white">
-                <SelectValue placeholder="Selecione o Setor" />
-              </SelectTrigger>
-              <SelectContent>
-                {sectors.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    {s.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="flex flex-wrap items-center gap-3">
+            <StaffFilter
+              staffList={sectorStaffProfiles}
+              selectedStaffId={selectedStaffId}
+              onSelectedStaffChange={setSelectedStaffId}
+            />
 
-            <Select value={view} onValueChange={(v: ViewMode) => setView(v)}>
-              <SelectTrigger className="w-[120px] bg-white">
-                <CalendarIcon className="w-4 h-4 mr-2 text-slate-500" />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="cycle">Ciclo completo</SelectItem>
-                <SelectItem value="month">Mês</SelectItem>
-                <SelectItem value="week">Semana</SelectItem>
-                <SelectItem value="day">Dia</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-slate-700 select-none">Setor</span>
+              <Select value={selectedSectorId} onValueChange={setSelectedSectorId}>
+                <SelectTrigger className="w-[180px] bg-white h-9">
+                  <SelectValue placeholder="Selecione o Setor" />
+                </SelectTrigger>
+                <SelectContent>
+                  {sectors.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-slate-700 select-none">Visualização</span>
+              <Select value={view} onValueChange={(v: ViewMode) => setView(v)}>
+                <SelectTrigger className="w-[120px] bg-white h-9">
+                  <CalendarIcon className="w-4 h-4 mr-2 text-slate-500" />
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cycle">Ciclo completo</SelectItem>
+                  <SelectItem value="month">Mês</SelectItem>
+                  <SelectItem value="week">Semana</SelectItem>
+                  <SelectItem value="day">Dia</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </div>
 
@@ -723,11 +742,20 @@ export function ShiftCalendar({
                       // NUNCA renderizar em dias que não sejam sábado ou domingo
                       if (!isWeekendDay) return null
 
+                      // Se houver filtro de colaborador ativo, consideramos apenas os plantões do próprio colaborador
+                      // para não ocultar a folga se outro colaborador trabalhou
+                      const allVisibleDayShifts = visibleShifts.filter((s) => {
+                        const sDateStr = s.start_time
+                          ? s.start_time.split(' ')[0].split('T')[0]
+                          : ''
+                        return sDateStr === dateKey
+                      })
                       const workedStaffIds = new Set(
-                        dayShifts.map((s) => s.staff_profile || s.user_id || s.user),
+                        allVisibleDayShifts.map((s) => s.staff_profile || s.user_id || s.user),
                       )
 
                       const weekendOffPlaceholders = sectorStaffProfiles.filter((staff) => {
+                        if (selectedStaffId && staff.id !== selectedStaffId) return false
                         // Não renderiza se a célula tem shifts (a folga não é real ou há conflito)
                         if (workedStaffIds.has(staff.id)) return false
                         const offDates = weekendOffMap.get(staff.id)
@@ -753,6 +781,7 @@ export function ShiftCalendar({
 
                     {dayShifts.length === 0 &&
                       !sectorStaffProfiles.some((staff) => {
+                        if (selectedStaffId && staff.id !== selectedStaffId) return false
                         if (!isWeekendDay) return false
                         const offDates = weekendOffMap.get(staff.id)
                         return offDates && offDates.has(dateKey)

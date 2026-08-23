@@ -57,6 +57,7 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
+import { StaffFilter } from './StaffFilter'
 
 type DraftCell = 'D' | 'N' | 'M' | 'T' | 'F' | ''
 
@@ -70,6 +71,7 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
 
   const [selectedCycleId, setSelectedCycleId] = useState<string>('')
   const [selectedSectorId, setSelectedSectorId] = useState<string>('')
+  const [selectedStaffId, setSelectedStaffId] = useState<string>('')
   const [draftUsers, setDraftUsers] = useState<any[]>([])
   const [draft, setDraft] = useState<Record<string, Record<string, DraftCell>>>({})
   const [isSaving, setIsSaving] = useState(false)
@@ -267,6 +269,11 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
     () => sectors.find((s) => s.id === selectedSectorId),
     [sectors, selectedSectorId],
   )
+
+  const visibleDraftUsers = useMemo(() => {
+    if (!selectedStaffId) return draftUsers
+    return draftUsers.filter((u) => u.id === selectedStaffId)
+  }, [draftUsers, selectedStaffId])
   interface PlannerDayItem {
     date: Date
     key: string
@@ -678,7 +685,7 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
               !selectedSectorId ||
               selectedCycle?.status !== 'draft'
             }
-            className="gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-sm"
+            className="gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-sm h-9"
           >
             {isGenerating ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -688,7 +695,7 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
             Gerar com IA
           </Button>
           <Select value={selectedCycleId} onValueChange={setSelectedCycleId}>
-            <SelectTrigger className="w-[200px]">
+            <SelectTrigger className="w-[200px] h-9 bg-white">
               <SelectValue placeholder="Selecione o Ciclo" />
             </SelectTrigger>
             <SelectContent>
@@ -700,7 +707,7 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
             </SelectContent>
           </Select>
           <Select value={selectedSectorId} onValueChange={setSelectedSectorId}>
-            <SelectTrigger className="w-[200px]">
+            <SelectTrigger className="w-[200px] h-9 bg-white">
               <SelectValue placeholder="Selecione o Setor" />
             </SelectTrigger>
             <SelectContent>
@@ -711,6 +718,12 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
               ))}
             </SelectContent>
           </Select>
+
+          <StaffFilter
+            staffList={draftUsers}
+            selectedStaffId={selectedStaffId}
+            onSelectedStaffChange={setSelectedStaffId}
+          />
         </div>
 
         <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto">
@@ -871,7 +884,7 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
                 </tr>
               </thead>
               <tbody>
-                {draftUsers.map((user) => {
+                {visibleDraftUsers.map((user) => {
                   const isCov =
                     !allShifts.some(
                       (s) =>
