@@ -287,6 +287,41 @@ routerAdd(
       cursor = new Date(cursor.getTime() + 86400000)
     }
 
+    // --- isWeekendOffApplicableMonth helper (shared logic) ---
+    var isWeekendOffApplicableMonth = function (rangeStart, rangeEnd, yearMonth) {
+      if (!rangeStart || !rangeEnd || !yearMonth) return false
+      var rStart = rangeStart.split(' ')[0].split('T')[0]
+      var rEnd = rangeEnd.split(' ')[0].split('T')[0]
+      if (!rStart || !rEnd || rStart > rEnd) return false
+
+      var parts = yearMonth.split('-')
+      var y = Number(parts[0])
+      var m = Number(parts[1])
+      if (isNaN(y) || isNaN(m) || m < 1 || m > 12) return false
+
+      var dCur = new Date(Date.UTC(y, m - 1, 1))
+      var dLast = new Date(Date.UTC(y, m, 0))
+      var cStart = new Date(rStart + 'T00:00:00Z')
+      var cEnd = new Date(rEnd + 'T00:00:00Z')
+
+      if (dCur < cStart) dCur = new Date(cStart)
+      var effectiveEnd = dLast < cEnd ? dLast : cEnd
+
+      var completePairs = 0
+      while (dCur <= effectiveEnd) {
+        if (dCur.getUTCDay() === 6) {
+          var sunDate = new Date(dCur.getTime() + 86400000)
+          var satIso = dCur.toISOString().split('T')[0]
+          var sunIso = sunDate.toISOString().split('T')[0]
+          if (satIso >= rStart && satIso <= rEnd && sunIso >= rStart && sunIso <= rEnd) {
+            completePairs++
+          }
+        }
+        dCur = new Date(dCur.getTime() + 86400000)
+      }
+      return completePairs >= 2
+    }
+
     // --- WEEKEND_OFF validation BEFORE allowing commit/publish (v0.0.251) ---
     var computeNaturalPatternByStaff = function (staffId, staffContracts, cStart, cEnd) {
       var contract = null
@@ -467,6 +502,10 @@ routerAdd(
       } else {
         // 3. Fallback: verify every month has a valid free weekend satisfying natural rotation
         Object.keys(commitMonths).forEach(function (monthKey) {
+          if (!isWeekendOffApplicableMonth(cycleStart, cycleEnd, monthKey)) {
+            return
+          }
+
           var parts = monthKey.split('-')
           var y = Number(parts[0])
           var m = Number(parts[1])

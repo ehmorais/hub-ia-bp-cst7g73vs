@@ -14,6 +14,55 @@ export interface WeekendOffShift {
   [key: string]: any
 }
 
+/**
+ * Retorna true apenas quando o mês especificado contém pelo menos 2 pares sábado+domingo completos
+ * (ambos os dias dentro de [rangeStart, rangeEnd]).
+ *
+ * @param rangeStart - Data inicial do ciclo ("YYYY-MM-DD")
+ * @param rangeEnd - Data final do ciclo ("YYYY-MM-DD")
+ * @param yearMonth - Mês a avaliar ("YYYY-MM")
+ */
+export function isWeekendOffApplicableMonth(
+  rangeStart: string,
+  rangeEnd: string,
+  yearMonth: string,
+): boolean {
+  if (!rangeStart || !rangeEnd || !yearMonth) return false
+  const rStart = rangeStart.split(' ')[0].split('T')[0]
+  const rEnd = rangeEnd.split(' ')[0].split('T')[0]
+  if (!rStart || !rEnd || rStart > rEnd) return false
+
+  const parts = yearMonth.split('-')
+  const y = Number(parts[0])
+  const m = Number(parts[1])
+  if (isNaN(y) || isNaN(m) || m < 1 || m > 12) return false
+
+  let dCur = new Date(Date.UTC(y, m - 1, 1))
+  const dLast = new Date(Date.UTC(y, m, 0))
+  const cStart = new Date(rStart + 'T00:00:00Z')
+  const cEnd = new Date(rEnd + 'T00:00:00Z')
+
+  if (dCur < cStart) dCur = new Date(cStart)
+  const effectiveEnd = dLast < cEnd ? dLast : cEnd
+
+  let completePairs = 0
+  while (dCur <= effectiveEnd) {
+    if (dCur.getUTCDay() === 6) {
+      // Sábado
+      const sunDate = new Date(dCur.getTime() + 86400000)
+      const satIso = dCur.toISOString().split('T')[0]
+      const sunIso = sunDate.toISOString().split('T')[0]
+      // Ambos os dias devem estar dentro de [rangeStart, rangeEnd]
+      if (satIso >= rStart && satIso <= rEnd && sunIso >= rStart && sunIso <= rEnd) {
+        completePairs++
+      }
+    }
+    dCur = new Date(dCur.getTime() + 86400000)
+  }
+
+  return completePairs >= 2
+}
+
 export interface WeekendOffContract {
   id?: string
   staff_profile?: string
@@ -207,6 +256,10 @@ export function computeWeekendOffAssignments(
 
     let foundForAnyMonth = false
     commitMonths.forEach((monthKey) => {
+      if (!isWeekendOffApplicableMonth(normalizedCycleStart, normalizedCycleEnd, monthKey)) {
+        return
+      }
+
       const parts = monthKey.split('-')
       const y = Number(parts[0])
       const m = Number(parts[1])
@@ -346,6 +399,10 @@ export function computeWeekendOffAssignmentsSimple(
     const workedSet = workedDaysMap.get(staffId) || new Set<string>()
 
     commitMonths.forEach((monthKey) => {
+      if (!isWeekendOffApplicableMonth(normalizedCycleStart, normalizedCycleEnd, monthKey)) {
+        return
+      }
+
       const parts = monthKey.split('-')
       const y = Number(parts[0])
       const m = Number(parts[1])

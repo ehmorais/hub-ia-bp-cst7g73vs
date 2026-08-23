@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { isWeekendOffApplicableMonth } from '../src/lib/escala-weekend-off'
 
 // Core simulation matching generate_shifts_draft.js / generate_shifts.js v0.0.251
 
@@ -164,77 +165,110 @@ function runCompleteAndEnforceWeekendOff(
 
   const assignments: Record<string, string[]> = {}
   const protectedDates: Record<string, boolean> = {}
-  const protectedWeekends: Record<string, Record<string, boolean>> = {}
   const issues: string[] = []
 
-  staffList.forEach((u, staffIndex) => {
-    const is12x36 = u.work_hours === 12 && u.rest_hours >= 36
-    const uNatSet = naturalWorkedMap[u.id] || {}
+  // --- FASE 1: Planejamento (antes de qualquer swap) ---
+  const plannedByStaff: Record<
+    string,
+    Array<{
+      monthKey: string
+      orderedCandidates: Array<{ sat: string; sun: string; sunIsNat: boolean }>
+      currentChoice: { sat: string; sun: string; sunIsNat: boolean }
+    }>
+  > = {}
+  staffList.forEach((u) => {
+    plannedByStaff[u.id] = []
+  })
+
+  Object.keys(months).forEach((mKey) => {
+    if (!isWeekendOffApplicableMonth(cStart, cEnd, mKey)) {
+      return
+    }
+
+    const parts = mKey.split('-')
+    const y = Number(parts[0])
+    const m = Number(parts[1])
+    let dCur = new Date(Date.UTC(y, m - 1, 1))
+    let dLast = new Date(Date.UTC(y, m, 0))
+    const cStartDate = new Date(cStart + 'T00:00:00Z')
+    const cEndDate = new Date(cEnd + 'T00:00:00Z')
+    if (dCur < cStartDate) dCur = new Date(cStartDate)
+    if (dLast > cEndDate) dLast = new Date(cEndDate)
+
+    const monthWeekends: Array<{ sat: string; sun: string }> = []
+    while (dCur <= dLast) {
+      if (dCur.getUTCDay() === 6) {
+        const satStr = dCur.toISOString().split('T')[0]
+        const sunDate = new Date(dCur.getTime() + 86400000)
+        const sunStr = sunDate.toISOString().split('T')[0]
+        if (sunDate <= cEndDate && sunDate >= cStartDate) {
+          monthWeekends.push({ sat: satStr, sun: sunStr })
+        }
+      }
+      dCur = new Date(dCur.getTime() + 86400000)
+    }
+
+    if (monthWeekends.length === 0) {
+      return
+    }
+
+    staffList.forEach((u, staffIndex) => {
+      const is12x36 = u.work_hours === 12 && u.rest_hours >= 36
+      const uNatSet = naturalWorkedMap[u.id] || {}
+
+      const userCandidates = monthWeekends.map((w) => ({
+        sat: w.sat,
+        sun: w.sun,
+        sunIsNat: is12x36 ? !!uNatSet[w.sun] : true,
+      }))
+
+      let natCandidates = userCandidates.filter((w) => w.sunIsNat)
+      if (natCandidates.length === 0) {
+        natCandidates = userCandidates.slice()
+      }
+
+      const assignedIdx = staffIndex % natCandidates.length
+      const orderedCandidates: typeof natCandidates = []
+      for (let oi = 0; oi < natCandidates.length; oi++) {
+        orderedCandidates.push(natCandidates[(assignedIdx + oi) % natCandidates.length])
+      }
+
+      const initialChoice = orderedCandidates[0]
+      plannedByStaff[u.id].push({
+        monthKey: mKey,
+        orderedCandidates,
+        currentChoice: initialChoice,
+      })
+
+      // Pré-preenche protectedDates imediatamente
+      protectedDates[u.id + ':' + initialChoice.sat] = true
+      protectedDates[u.id + ':' + initialChoice.sun] = true
+    })
+  })
+
+  // --- FASE 2: Execução (swaps) ---
+  staffList.forEach((u) => {
+    const userPlans = plannedByStaff[u.id] || []
     const userPairs: string[] = []
 
-    Object.keys(months).forEach((mKey) => {
-      const parts = mKey.split('-')
-      const y = Number(parts[0])
-      const m = Number(parts[1])
-      let dCur = new Date(Date.UTC(y, m - 1, 1))
-      let dLast = new Date(Date.UTC(y, m, 0))
-      const cStartDate = new Date(cStart + 'T00:00:00Z')
-      const cEndDate = new Date(cEnd + 'T00:00:00Z')
-      if (dCur < cStartDate) dCur = new Date(cStartDate)
-      if (dLast > cEndDate) dLast = new Date(cEndDate)
-
-      const allMonthWeekends: Array<{
-        sat: string
-        sun: string
-        satWorked: boolean
-        sunWorked: boolean
-        sunIsNat: boolean
-      }> = []
-
-      while (dCur <= dLast) {
-        if (dCur.getUTCDay() === 6) {
-          const satStr = dCur.toISOString().split('T')[0]
-          const sunDate = new Date(dCur.getTime() + 86400000)
-          const sunStr = sunDate.toISOString().split('T')[0]
-          if (sunDate <= cEndDate && sunDate >= cStartDate) {
-            const satWorked = !!shiftsByStaff[u.id][satStr]
-            const sunWorked = !!shiftsByStaff[u.id][sunStr]
-            const sunIsNat = is12x36 ? !!uNatSet[sunStr] : true
-            allMonthWeekends.push({
-              sat: satStr,
-              sun: sunStr,
-              satWorked,
-              sunWorked,
-              sunIsNat,
-            })
-          }
-        }
-        dCur = new Date(dCur.getTime() + 86400000)
-      }
-
-      if (allMonthWeekends.length === 0) {
-        issues.push(`Sem fim de semana para ${u.name} em ${mKey}`)
-        return
-      }
-
-      let natCandidates = allMonthWeekends.filter((w) => w.sunIsNat)
-      if (natCandidates.length === 0) {
-        natCandidates = allMonthWeekends.slice()
-      }
-
-      const revCandidates = natCandidates.slice().reverse()
-      const offset = staffIndex % revCandidates.length
-      const orderedCandidates: typeof natCandidates = []
-      for (let oi = 0; oi < revCandidates.length; oi++) {
-        orderedCandidates.push(revCandidates[(offset + oi) % revCandidates.length])
-      }
-
-      let committedWeekend: (typeof natCandidates)[0] | null = null
+    userPlans.forEach((plan) => {
+      const mKey = plan.monthKey
+      const orderedCandidates = plan.orderedCandidates
+      let initialChoice = plan.currentChoice
+      let committedWeekend: (typeof orderedCandidates)[0] | null = null
 
       for (let ci = 0; ci < orderedCandidates.length; ci++) {
         const candidate = orderedCandidates[ci]
         const satStr = candidate.sat
         const sunStr = candidate.sun
+
+        if (candidate !== initialChoice) {
+          delete protectedDates[u.id + ':' + initialChoice.sat]
+          delete protectedDates[u.id + ':' + initialChoice.sun]
+          protectedDates[u.id + ':' + satStr] = true
+          protectedDates[u.id + ':' + sunStr] = true
+          initialChoice = candidate
+        }
 
         const snapshot = cloneState(workingShifts, shiftsByStaff)
         const candidateShifts = snapshot.shifts
@@ -253,8 +287,7 @@ function runCompleteAndEnforceWeekendOff(
             return (
               cand.id !== u.id &&
               !candidateStaffMap[cand.id][dt] &&
-              !protectedDates[cand.id + ':' + dt] &&
-              !(protectedWeekends[cand.id] && protectedWeekends[cand.id][dt])
+              !protectedDates[cand.id + ':' + dt]
             )
           })
 
@@ -328,9 +361,6 @@ function runCompleteAndEnforceWeekendOff(
       if (committedWeekend) {
         userPairs.push(committedWeekend.sat)
         userPairs.push(committedWeekend.sun)
-        if (!protectedWeekends[u.id]) protectedWeekends[u.id] = {}
-        protectedWeekends[u.id][committedWeekend.sat] = true
-        protectedWeekends[u.id][committedWeekend.sun] = true
         protectedDates[u.id + ':' + committedWeekend.sat] = true
         protectedDates[u.id + ':' + committedWeekend.sun] = true
       } else {
@@ -449,5 +479,72 @@ describe('Weekend Off Regression & Consistency Test (v0.0.251)', () => {
       expect(dayCounts[dStr] || 0).toBeGreaterThanOrEqual(minStaffing)
       cur = new Date(cur.getTime() + 86400000)
     }
+  })
+
+  it('Teste A — Setembro parcial não exige weekend-off (ciclo 26/09/2026-25/10/2026)', () => {
+    const rStart = '2026-09-26'
+    const rEnd = '2026-10-25'
+
+    // Assert helper
+    expect(isWeekendOffApplicableMonth(rStart, rEnd, '2026-09')).toBe(false)
+    expect(isWeekendOffApplicableMonth(rStart, rEnd, '2026-10')).toBe(true)
+
+    const result = runCompleteAndEnforceWeekendOff(staffFixture, rStart, rEnd, 2)
+
+    // Assert: nenhuma issue WEEKEND_OFF para Setembro
+    expect(result.issues).toEqual([])
+
+    // Assert: 6 assignments válidos para Outubro (cada colaboradora tem 1 par de folga apenas em Outubro)
+    staffFixture.forEach((staff) => {
+      const userAssigned = result.assignments[staff.id] || []
+      // Apenas outubro tem fim de semana de folga obrigatório (2 datas: 1 sábado + 1 domingo de outubro)
+      expect(userAssigned.length).toBe(2)
+      const sat = userAssigned[0]
+      const sun = userAssigned[1]
+      expect(sat.startsWith('2026-10-')).toBe(true)
+      expect(sun.startsWith('2026-10-')).toBe(true)
+    })
+  })
+
+  it('Teste B — protectedDates pré-preenchido impede roubo de fim de semana', () => {
+    // 4 colaboradoras 12x36 em um ciclo com 2 fins de semana (ex: 2026-10-01 a 2026-10-15)
+    // Fins de semana: 03-04/10 e 10-11/10
+    const fourStaff: StaffMember[] = [
+      { id: 'staff_A', name: 'Colaboradora A', work_hours: 12, rest_hours: 36, monthly_hour_limit: 180, requires_supervision: false },
+      { id: 'staff_B', name: 'Colaboradora B', work_hours: 12, rest_hours: 36, monthly_hour_limit: 180, requires_supervision: false },
+      { id: 'staff_C', name: 'Colaboradora C', work_hours: 12, rest_hours: 36, monthly_hour_limit: 180, requires_supervision: false },
+      { id: 'staff_D', name: 'Colaboradora D', work_hours: 12, rest_hours: 36, monthly_hour_limit: 180, requires_supervision: false },
+    ]
+
+    const shortCycleStart = '2026-10-01'
+    const shortCycleEnd = '2026-10-15'
+
+    const result = runCompleteAndEnforceWeekendOff(fourStaff, shortCycleStart, shortCycleEnd, 1)
+
+    expect(result.issues).toEqual([])
+
+    const assignA = result.assignments['staff_A'] || []
+    const assignB = result.assignments['staff_B'] || []
+
+    expect(assignA.length).toBe(2)
+    expect(assignB.length).toBe(2)
+
+    // Colaboradora A e B não têm shifts em seus próprios fins de semana reservados
+    const shiftsA = result.shifts.filter((s) => s.user_id === 'staff_A').map((s) => s.date)
+    const shiftsB = result.shifts.filter((s) => s.user_id === 'staff_B').map((s) => s.date)
+
+    assignA.forEach((d) => {
+      expect(shiftsA.includes(d)).toBe(false)
+    })
+
+    assignB.forEach((d) => {
+      expect(shiftsB.includes(d)).toBe(false)
+    })
+
+    // Colaboradora B não roubou o fim de semana da colaboradora A (A não tem plantão nos seus dias protegidos)
+    expect(result.protectedDates['staff_A:' + assignA[0]]).toBe(true)
+    expect(result.protectedDates['staff_A:' + assignA[1]]).toBe(true)
+    expect(result.protectedDates['staff_B:' + assignB[0]]).toBe(true)
+    expect(result.protectedDates['staff_B:' + assignB[1]]).toBe(true)
   })
 })

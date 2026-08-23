@@ -1405,6 +1405,41 @@ routerAdd(
     }
     var naturalWorkedMap = getNaturalWorkedDays(eligible, cycleStart, cycleEnd)
 
+    // --- isWeekendOffApplicableMonth helper (shared logic) ---
+    var isWeekendOffApplicableMonth = function (rangeStart, rangeEnd, yearMonth) {
+      if (!rangeStart || !rangeEnd || !yearMonth) return false
+      var rStart = rangeStart.split(' ')[0].split('T')[0]
+      var rEnd = rangeEnd.split(' ')[0].split('T')[0]
+      if (!rStart || !rEnd || rStart > rEnd) return false
+
+      var parts = yearMonth.split('-')
+      var y = Number(parts[0])
+      var m = Number(parts[1])
+      if (isNaN(y) || isNaN(m) || m < 1 || m > 12) return false
+
+      var dCur = new Date(Date.UTC(y, m - 1, 1))
+      var dLast = new Date(Date.UTC(y, m, 0))
+      var cStart = new Date(rStart + 'T00:00:00Z')
+      var cEnd = new Date(rEnd + 'T00:00:00Z')
+
+      if (dCur < cStart) dCur = new Date(cStart)
+      var effectiveEnd = dLast < cEnd ? dLast : cEnd
+
+      var completePairs = 0
+      while (dCur <= effectiveEnd) {
+        if (dCur.getUTCDay() === 6) {
+          var sunDate = new Date(dCur.getTime() + 86400000)
+          var satIso = dCur.toISOString().split('T')[0]
+          var sunIso = sunDate.toISOString().split('T')[0]
+          if (satIso >= rStart && satIso <= rEnd && sunIso >= rStart && sunIso <= rEnd) {
+            completePairs++
+          }
+        }
+        dCur = new Date(dCur.getTime() + 86400000)
+      }
+      return completePairs >= 2
+    }
+
     // --- enforceWeekendOff function ---
     var enforceWeekendOff = function (currentShifts, staffList, cStart, cEnd, minStaff) {
       // 1. Months in cycle
@@ -1480,85 +1515,112 @@ routerAdd(
       }
 
       var assignments = {} // staffId -> [sat, sun, ...]
-      var protectedWeekends = {} // { [staffId]: { [dateStr]: true } }
       var protectedDates = {} // Set keyed by staffId + ":" + dateStr across ALL iterations
       var issues = []
 
-      staffList.forEach(function (u, staffIndex) {
-        var is12x36 = u.work_hours === 12 && u.rest_hours >= 36
-        var uNatSet = naturalWorkedMap[u.id] || {}
-        var userPairs = []
+      // --- FASE 1: Planejamento (antes de qualquer swap) ---
+      // Para cada mês aplicável, pré-calcula os candidateWeekends e atribui por round-robin.
+      // Pré-preenche protectedDates para TODOS os assignments antes de iniciar qualquer swap.
+      var plannedByStaff = {} // staffId -> [ { monthKey, candidateIndex, orderedCandidates } ]
+      staffList.forEach(function (u) {
+        plannedByStaff[u.id] = []
+      })
 
-        Object.keys(months).forEach(function (mKey) {
-          var parts = mKey.split('-')
-          var y = Number(parts[0])
-          var m = Number(parts[1])
-          var dCur = new Date(Date.UTC(y, m - 1, 1))
-          var dLast = new Date(Date.UTC(y, m, 0))
-          var cStartDate = new Date(cStart + 'T00:00:00Z')
-          var cEndDate = new Date(cEnd + 'T00:00:00Z')
-          if (dCur < cStartDate) dCur = new Date(cStartDate)
-          if (dLast > cEndDate) dLast = new Date(cEndDate)
+      Object.keys(months).forEach(function (mKey) {
+        if (!isWeekendOffApplicableMonth(cStart, cEnd, mKey)) {
+          return
+        }
 
-          var allMonthWeekends = []
-          while (dCur <= dLast) {
-            if (dCur.getUTCDay() === 6) {
-              // Sat
-              var satStr = dCur.toISOString().split('T')[0]
-              var sunDate = new Date(dCur.getTime() + 86400000)
-              var sunStr = sunDate.toISOString().split('T')[0]
-              if (sunDate <= cEndDate && sunDate >= cStartDate) {
-                var satWorked = !!shiftsByStaff[u.id][satStr]
-                var sunWorked = !!shiftsByStaff[u.id][sunStr]
-                var sunIsNat = is12x36 ? !!uNatSet[sunStr] : true
-                allMonthWeekends.push({
-                  sat: satStr,
-                  sun: sunStr,
-                  satWorked: satWorked,
-                  sunWorked: sunWorked,
-                  sunIsNat: sunIsNat,
-                })
-              }
+        var parts = mKey.split('-')
+        var y = Number(parts[0])
+        var m = Number(parts[1])
+        var dCur = new Date(Date.UTC(y, m - 1, 1))
+        var dLast = new Date(Date.UTC(y, m, 0))
+        var cStartDate = new Date(cStart + 'T00:00:00Z')
+        var cEndDate = new Date(cEnd + 'T00:00:00Z')
+        if (dCur < cStartDate) dCur = new Date(cStartDate)
+        if (dLast > cEndDate) dLast = new Date(cEndDate)
+
+        var monthWeekends = []
+        while (dCur <= dLast) {
+          if (dCur.getUTCDay() === 6) {
+            var satStr = dCur.toISOString().split('T')[0]
+            var sunDate = new Date(dCur.getTime() + 86400000)
+            var sunStr = sunDate.toISOString().split('T')[0]
+            if (sunDate <= cEndDate && sunDate >= cStartDate) {
+              monthWeekends.push({ sat: satStr, sun: sunStr })
             }
-            dCur = new Date(dCur.getTime() + 86400000)
           }
+          dCur = new Date(dCur.getTime() + 86400000)
+        }
 
-          if (allMonthWeekends.length === 0) {
-            issues.push(
-              'Fim de semana obrigatório não atendido: ' +
-                u.name +
-                ' não possui sábado+domingo no período de ' +
-                mKey +
-                '.',
-            )
-            return
-          }
+        if (monthWeekends.length === 0) {
+          return
+        }
 
-          // 1. Collect candidate weekends where sunIsNat === true (or all if non-12x36)
-          var natCandidates = allMonthWeekends.filter(function (w) {
+        staffList.forEach(function (u, staffIndex) {
+          var is12x36 = u.work_hours === 12 && u.rest_hours >= 36
+          var uNatSet = naturalWorkedMap[u.id] || {}
+
+          var userCandidates = monthWeekends.map(function (w) {
+            return {
+              sat: w.sat,
+              sun: w.sun,
+              sunIsNat: is12x36 ? !!uNatSet[w.sun] : true,
+            }
+          })
+
+          var natCandidates = userCandidates.filter(function (w) {
             return w.sunIsNat
           })
           if (natCandidates.length === 0) {
-            natCandidates = allMonthWeekends.slice()
+            natCandidates = userCandidates.slice()
           }
 
-          // Order from LAST to FIRST
-          var revCandidates = natCandidates.slice().reverse()
-
-          // Round-robin offset starting from the end
-          var offset = staffIndex % revCandidates.length
+          // Round-robin distribution: colaborador N -> candidato N % candidatos.length
+          var assignedIdx = staffIndex % natCandidates.length
           var orderedCandidates = []
-          for (var oi = 0; oi < revCandidates.length; oi++) {
-            orderedCandidates.push(revCandidates[(offset + oi) % revCandidates.length])
+          for (var oi = 0; oi < natCandidates.length; oi++) {
+            orderedCandidates.push(natCandidates[(assignedIdx + oi) % natCandidates.length])
           }
 
-          // 2. Transactional attempt per candidate
+          var initialChoice = orderedCandidates[0]
+          plannedByStaff[u.id].push({
+            monthKey: mKey,
+            orderedCandidates: orderedCandidates,
+            currentChoice: initialChoice,
+          })
+
+          // Pré-preenche protectedDates imediatamente para TODOS os assignments
+          protectedDates[u.id + ':' + initialChoice.sat] = true
+          protectedDates[u.id + ':' + initialChoice.sun] = true
+        })
+      })
+
+      // --- FASE 2: Execução (swaps) ---
+      staffList.forEach(function (u) {
+        var userPlans = plannedByStaff[u.id] || []
+        var userPairs = []
+
+        userPlans.forEach(function (plan) {
+          var mKey = plan.monthKey
+          var orderedCandidates = plan.orderedCandidates
+          var initialChoice = plan.currentChoice
           var committedWeekend = null
 
           for (var ci = 0; ci < orderedCandidates.length; ci++) {
             var candidate = orderedCandidates[ci]
             var satStr = candidate.sat
             var sunStr = candidate.sun
+
+            // Se mudamos de candidato (rollback / tentativa de próximo candidato), atualiza protectedDates
+            if (candidate !== initialChoice) {
+              delete protectedDates[u.id + ':' + initialChoice.sat]
+              delete protectedDates[u.id + ':' + initialChoice.sun]
+              protectedDates[u.id + ':' + satStr] = true
+              protectedDates[u.id + ':' + sunStr] = true
+              initialChoice = candidate
+            }
 
             // Snapshot state for rollback
             var snapshot = cloneState(workingShifts, shiftsByStaff)
@@ -1574,14 +1636,13 @@ routerAdd(
             for (var di = 0; di < datesToFree.length; di++) {
               var dt = datesToFree[di]
 
-              // Find substitute (skips any candidate where date is protected)
+              // Find substitute (skips any candidate whose date is protected in protectedDates)
               var candList = staffList.filter(function (cand) {
                 return (
                   cand.id !== u.id &&
                   !candidateStaffMap[cand.id][dt] &&
                   (unavailableMap[cand.id] || []).indexOf(dt) === -1 &&
-                  !protectedDates[cand.id + ':' + dt] &&
-                  !(protectedWeekends[cand.id] && protectedWeekends[cand.id][dt])
+                  !protectedDates[cand.id + ':' + dt]
                 )
               })
 
@@ -1656,15 +1717,12 @@ routerAdd(
               committedWeekend = candidate
               break
             }
-            // Otherwise ROLLBACK (discard candidateShifts/candidateStaffMap and loop to next)
+            // Otherwise ROLLBACK (discard candidateShifts/candidateStaffMap and loop to next candidate)
           }
 
           if (committedWeekend) {
             userPairs.push(committedWeekend.sat)
             userPairs.push(committedWeekend.sun)
-            if (!protectedWeekends[u.id]) protectedWeekends[u.id] = {}
-            protectedWeekends[u.id][committedWeekend.sat] = true
-            protectedWeekends[u.id][committedWeekend.sun] = true
             protectedDates[u.id + ':' + committedWeekend.sat] = true
             protectedDates[u.id + ':' + committedWeekend.sun] = true
           } else {
@@ -2081,6 +2139,10 @@ routerAdd(
       // Verify existing or compute if not present
       if (userAssignedWeekendOffs.length === 0) {
         Object.keys(valMonths).forEach(function (monthKey) {
+          if (!isWeekendOffApplicableMonth(cycleStart, cycleEnd, monthKey)) {
+            return
+          }
+
           var parts = monthKey.split('-')
           var y = Number(parts[0])
           var m = Number(parts[1])
