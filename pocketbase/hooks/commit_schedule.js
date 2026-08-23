@@ -287,6 +287,40 @@ routerAdd(
       cursor = new Date(cursor.getTime() + 86400000)
     }
 
+    // --- Pure date-only helpers (immune to timezone differences in goja/JS) ---
+    var parseDateOnly = function (s) {
+      var clean = (s || '').split('T')[0].split(' ')[0]
+      var parts = clean.split('-')
+      return { y: +parts[0], m: +parts[1], d: +parts[2] }
+    }
+
+    var formatDateOnly = function (y, m, d) {
+      var utc = new Date(Date.UTC(y, m - 1, d))
+      var fY = utc.getUTCFullYear()
+      var fM = utc.getUTCMonth() + 1
+      var fD = utc.getUTCDate()
+      return fY + '-' + (fM < 10 ? '0' + fM : '' + fM) + '-' + (fD < 10 ? '0' + fD : '' + fD)
+    }
+
+    var addDaysDateOnly = function (dateStr, days) {
+      var parsed = parseDateOnly(dateStr)
+      var utc = new Date(Date.UTC(parsed.y, parsed.m - 1, parsed.d + days))
+      return formatDateOnly(utc.getUTCFullYear(), utc.getUTCMonth() + 1, utc.getUTCDate())
+    }
+
+    var dayOfWeekDateOnly = function (dateStr) {
+      var parsed = parseDateOnly(dateStr)
+      return new Date(Date.UTC(parsed.y, parsed.m - 1, parsed.d)).getUTCDay()
+    }
+
+    var assertWeekendPair = function (saturday, sunday) {
+      if (!saturday || !sunday) return false
+      if (dayOfWeekDateOnly(saturday) !== 6) return false
+      if (dayOfWeekDateOnly(sunday) !== 0) return false
+      if (addDaysDateOnly(saturday, 1) !== sunday) return false
+      return true
+    }
+
     // --- isWeekendOffApplicableMonth helper (shared logic) ---
     var isWeekendOffApplicableMonth = function (rangeStart, rangeEnd, yearMonth) {
       if (!rangeStart || !rangeEnd || !yearMonth) return false
@@ -299,31 +333,29 @@ routerAdd(
       var m = Number(parts[1])
       if (isNaN(y) || isNaN(m) || m < 1 || m > 12) return false
 
-      var dCur = new Date(Date.UTC(y, m - 1, 1))
-      var dLast = new Date(Date.UTC(y, m, 0))
-      var cStart = new Date(rStart + 'T00:00:00Z')
-      var cEnd = new Date(rEnd + 'T00:00:00Z')
+      var monthStart = formatDateOnly(y, m, 1)
+      var monthEnd = formatDateOnly(y, m + 1, 0)
 
-      if (dCur < cStart) dCur = new Date(cStart)
-      var effectiveEnd = dLast < cEnd ? dLast : cEnd
+      var dCur = rStart > monthStart ? rStart : monthStart
+      var effectiveEnd = rEnd < monthEnd ? rEnd : monthEnd
 
       var completePairs = 0
       while (dCur <= effectiveEnd) {
-        if (dCur.getUTCDay() === 6) {
-          var sunDate = new Date(dCur.getTime() + 86400000)
-          var satIso = dCur.toISOString().split('T')[0]
-          var sunIso = sunDate.toISOString().split('T')[0]
-          if (satIso >= rStart && satIso <= rEnd && sunIso >= rStart && sunIso <= rEnd) {
+        if (dayOfWeekDateOnly(dCur) === 6) {
+          var sunStr = addDaysDateOnly(dCur, 1)
+          if (sunStr >= rStart && sunStr <= rEnd && sunStr <= effectiveEnd) {
             completePairs++
           }
         }
-        dCur = new Date(dCur.getTime() + 86400000)
+        dCur = addDaysDateOnly(dCur, 1)
       }
       return completePairs >= 2
     }
 
     // --- WEEKEND_OFF validation BEFORE allowing commit/publish (v0.0.251) ---
     var computeNaturalPatternByStaff = function (staffId, staffContracts, cStart, cEnd) {
+      var normStart = cStart.split(' ')[0].split('T')[0]
+      var normEnd = cEnd.split(' ')[0].split('T')[0]
       var contract = null
       if (Array.isArray(staffContracts)) {
         for (var sci = 0; sci < staffContracts.length; sci++) {
@@ -359,26 +391,21 @@ routerAdd(
 
       var offset = is12x36 ? stableIdx % stepDays : 0
       var map = {}
-      var cur = new Date(cStart + 'T00:00:00Z')
-      cur = new Date(cur.getTime() + offset * 86400000)
-      var end = new Date(cEnd + 'T00:00:00Z')
-      while (cur <= end) {
-        map[cur.toISOString().split('T')[0]] = true
-        cur = new Date(cur.getTime() + stepDays * 86400000)
+      var cur = addDaysDateOnly(normStart, offset)
+      while (cur <= normEnd) {
+        map[cur] = true
+        cur = addDaysDateOnly(cur, stepDays)
       }
       return map
     }
 
     var commitMonths = {}
-    var commitMonthCursor = new Date(cycleStart + 'T00:00:00Z')
-    var commitMonthEnd = new Date(cycleEnd + 'T00:00:00Z')
-    while (commitMonthCursor <= commitMonthEnd) {
-      var cMKey =
-        commitMonthCursor.getUTCFullYear() +
-        '-' +
-        String(commitMonthCursor.getUTCMonth() + 1).padStart(2, '0')
+    var commitMonthCursor = cycleStart
+    while (commitMonthCursor <= cycleEnd) {
+      var pMonth = parseDateOnly(commitMonthCursor)
+      var cMKey = pMonth.y + '-' + (pMonth.m < 10 ? '0' + pMonth.m : '' + pMonth.m)
       commitMonths[cMKey] = true
-      commitMonthCursor = new Date(commitMonthCursor.getTime() + 86400000)
+      commitMonthCursor = addDaysDateOnly(commitMonthCursor, 1)
     }
 
     // 1. Check if there is an existing schedule_draft with validation_summary.weekend_off_assignments
@@ -488,7 +515,17 @@ routerAdd(
         for (var ai = 0; ai < staffAssignments.length; ai += 2) {
           var satD = staffAssignments[ai]
           var sunD = staffAssignments[ai + 1]
-          if (uShiftSet[satD] || (sunD && uShiftSet[sunD])) {
+          if (!assertWeekendPair(satD, sunD)) {
+            violations.push(
+              'Fim de semana obrigatório inválido: ' +
+                profile.name +
+                ' possui designação (' +
+                satD +
+                ' / ' +
+                sunD +
+                ') que não é Sábado + Domingo.',
+            )
+          } else if (uShiftSet[satD] || (sunD && uShiftSet[sunD])) {
             violations.push(
               'Fim de semana obrigatório não atendido: ' +
                 profile.name +
@@ -509,21 +546,18 @@ routerAdd(
           var parts = monthKey.split('-')
           var y = Number(parts[0])
           var m = Number(parts[1])
-          var dCur = new Date(Date.UTC(y, m - 1, 1))
-          var dLast = new Date(Date.UTC(y, m, 0))
-          var cStart = new Date(cycleStart + 'T00:00:00Z')
-          var cEnd = new Date(cycleEnd + 'T00:00:00Z')
-          if (dCur < cStart) dCur = new Date(cStart)
-          if (dLast > cEnd) dLast = new Date(cEnd)
+          var monthStart = formatDateOnly(y, m, 1)
+          var monthEnd = formatDateOnly(y, m + 1, 0)
+          var dCur = cycleStart > monthStart ? cycleStart : monthStart
+          var effectiveEnd = cycleEnd < monthEnd ? cycleEnd : monthEnd
 
           var foundValidWeekend = false
-          while (dCur <= dLast) {
-            if (dCur.getUTCDay() === 6) {
+          while (dCur <= effectiveEnd) {
+            if (dayOfWeekDateOnly(dCur) === 6) {
               // Sat
-              var satStr = dCur.toISOString().split('T')[0]
-              var sunDate = new Date(dCur.getTime() + 86400000)
-              var sunStr = sunDate.toISOString().split('T')[0]
-              if (sunDate <= cEnd && sunDate >= cStart) {
+              var satStr = dCur
+              var sunStr = addDaysDateOnly(dCur, 1)
+              if (sunStr <= cycleEnd && sunStr >= cycleStart && assertWeekendPair(satStr, sunStr)) {
                 var satFree = !uShiftSet[satStr]
                 var sunFree = !uShiftSet[sunStr]
                 var isNatWorked = is12x36 ? !!(naturalDays && naturalDays[sunStr]) : true
@@ -533,7 +567,7 @@ routerAdd(
                 }
               }
             }
-            dCur = new Date(dCur.getTime() + 86400000)
+            dCur = addDaysDateOnly(dCur, 1)
           }
 
           if (!foundValidWeekend) {

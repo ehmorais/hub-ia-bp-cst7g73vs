@@ -415,22 +415,24 @@ routerAdd(
           if (kpos !== -1) stableIdx = kpos
         }
 
+        var normStart = cStart.split(' ')[0].split('T')[0]
+        var normEnd = cEnd.split(' ')[0].split('T')[0]
         var offset = is12x36 ? stableIdx % stepDays : 0
         var map = {}
-        var cur = new Date(cStart + 'T00:00:00Z')
-        cur = new Date(cur.getTime() + offset * 86400000)
-        var end = new Date(cEnd + 'T00:00:00Z')
-        while (cur <= end) {
-          map[cur.toISOString().split('T')[0]] = true
-          cur = new Date(cur.getTime() + stepDays * 86400000)
+        var cur = addDaysDateOnly(normStart, offset)
+        while (cur <= normEnd) {
+          map[cur] = true
+          cur = addDaysDateOnly(cur, stepDays)
         }
         return map
       }
 
       var getNaturalWorkedDaysGen = function (staffList, cStart, cEnd) {
         var map = {}
+        var normStart = cStart.split(' ')[0].split('T')[0]
+        var normEnd = cEnd.split(' ')[0].split('T')[0]
         staffList.forEach(function (u) {
-          map[u.id] = computeNaturalPatternByStaff(u.id, staffList, cStart, cEnd)
+          map[u.id] = computeNaturalPatternByStaff(u.id, staffList, normStart, normEnd)
         })
         return map
       }
@@ -461,16 +463,17 @@ routerAdd(
         var bestDates = []
         var bestScore = Number.MAX_SAFE_INTEGER
 
+        var normGenStart = generationStart.split(' ')[0].split('T')[0]
+        var normGenEnd = generationEnd.split(' ')[0].split('T')[0]
+
         for (var offset = 0; offset < stepDays; offset++) {
           var dates = []
-          var dateCursor = new Date(generationStart + 'T00:00:00Z')
-          dateCursor = new Date(dateCursor.getTime() + offset * 86400000)
-          while (dateCursor <= new Date(generationEnd + 'T00:00:00Z') && dates.length < maxShifts) {
-            var candidateDate = dateCursor.toISOString().split('T')[0]
-            if ((timeoffMap[u.id] || []).indexOf(candidateDate) === -1) {
-              dates.push(candidateDate)
+          var dateCursor = addDaysDateOnly(normGenStart, offset)
+          while (dateCursor <= normGenEnd && dates.length < maxShifts) {
+            if ((timeoffMap[u.id] || []).indexOf(dateCursor) === -1) {
+              dates.push(dateCursor)
             }
-            dateCursor = new Date(dateCursor.getTime() + stepDays * 86400000)
+            dateCursor = addDaysDateOnly(dateCursor, stepDays)
           }
 
           var score = -dates.length * 1000
@@ -505,6 +508,40 @@ routerAdd(
         })
       })
 
+      // --- Pure date-only helpers (immune to timezone differences in goja/JS) ---
+      var parseDateOnly = function (s) {
+        var clean = (s || '').split('T')[0].split(' ')[0]
+        var parts = clean.split('-')
+        return { y: +parts[0], m: +parts[1], d: +parts[2] }
+      }
+
+      var formatDateOnly = function (y, m, d) {
+        var utc = new Date(Date.UTC(y, m - 1, d))
+        var fY = utc.getUTCFullYear()
+        var fM = utc.getUTCMonth() + 1
+        var fD = utc.getUTCDate()
+        return fY + '-' + (fM < 10 ? '0' + fM : '' + fM) + '-' + (fD < 10 ? '0' + fD : '' + fD)
+      }
+
+      var addDaysDateOnly = function (dateStr, days) {
+        var parsed = parseDateOnly(dateStr)
+        var utc = new Date(Date.UTC(parsed.y, parsed.m - 1, parsed.d + days))
+        return formatDateOnly(utc.getUTCFullYear(), utc.getUTCMonth() + 1, utc.getUTCDate())
+      }
+
+      var dayOfWeekDateOnly = function (dateStr) {
+        var parsed = parseDateOnly(dateStr)
+        return new Date(Date.UTC(parsed.y, parsed.m - 1, parsed.d)).getUTCDay()
+      }
+
+      var assertWeekendPair = function (saturday, sunday) {
+        if (!saturday || !sunday) return false
+        if (dayOfWeekDateOnly(saturday) !== 6) return false
+        if (dayOfWeekDateOnly(sunday) !== 0) return false
+        if (addDaysDateOnly(saturday, 1) !== sunday) return false
+        return true
+      }
+
       // --- isWeekendOffApplicableMonth helper (shared logic) ---
       var isWeekendOffApplicableMonth = function (rangeStart, rangeEnd, yearMonth) {
         if (!rangeStart || !rangeEnd || !yearMonth) return false
@@ -517,39 +554,38 @@ routerAdd(
         var m = Number(parts[1])
         if (isNaN(y) || isNaN(m) || m < 1 || m > 12) return false
 
-        var dCur = new Date(Date.UTC(y, m - 1, 1))
-        var dLast = new Date(Date.UTC(y, m, 0))
-        var cStart = new Date(rStart + 'T00:00:00Z')
-        var cEnd = new Date(rEnd + 'T00:00:00Z')
+        var monthStart = formatDateOnly(y, m, 1)
+        var monthEnd = formatDateOnly(y, m + 1, 0)
 
-        if (dCur < cStart) dCur = new Date(cStart)
-        var effectiveEnd = dLast < cEnd ? dLast : cEnd
+        var dCur = rStart > monthStart ? rStart : monthStart
+        var effectiveEnd = rEnd < monthEnd ? rEnd : monthEnd
 
         var completePairs = 0
         while (dCur <= effectiveEnd) {
-          if (dCur.getUTCDay() === 6) {
-            var sunDate = new Date(dCur.getTime() + 86400000)
-            var satIso = dCur.toISOString().split('T')[0]
-            var sunIso = sunDate.toISOString().split('T')[0]
-            if (satIso >= rStart && satIso <= rEnd && sunIso >= rStart && sunIso <= rEnd) {
+          if (dayOfWeekDateOnly(dCur) === 6) {
+            var sunStr = addDaysDateOnly(dCur, 1)
+            if (sunStr >= rStart && sunStr <= rEnd && sunStr <= effectiveEnd) {
               completePairs++
             }
           }
-          dCur = new Date(dCur.getTime() + 86400000)
+          dCur = addDaysDateOnly(dCur, 1)
         }
         return completePairs >= 2
       }
 
       // enforceWeekendOff for generate_shifts.js
       var enforceWeekendOffGen = function (currentShifts, staffList, cStart, cEnd, sectorsList) {
+        var normStart = cStart.split(' ')[0].split('T')[0]
+        var normEnd = cEnd.split(' ')[0].split('T')[0]
+
         // 1. Months in cycle
         var months = {}
-        var mCur = new Date(cStart + 'T00:00:00Z')
-        var mEnd = new Date(cEnd + 'T00:00:00Z')
-        while (mCur <= mEnd) {
-          var mKey = mCur.getUTCFullYear() + '-' + String(mCur.getUTCMonth() + 1).padStart(2, '0')
+        var mCur = normStart
+        while (mCur <= normEnd) {
+          var pM = parseDateOnly(mCur)
+          var mKey = pM.y + '-' + (pM.m < 10 ? '0' + pM.m : '' + pM.m)
           months[mKey] = true
-          mCur = new Date(mCur.getTime() + 86400000)
+          mCur = addDaysDateOnly(mCur, 1)
         }
 
         // Helper map for sector min staffing
@@ -630,15 +666,13 @@ routerAdd(
             var reqMin = sectorMinStaffMap[sId] || 0
             if (reqMin <= 0) continue
 
-            var curDate = new Date(cStart + 'T00:00:00Z')
-            var endDate = new Date(cEnd + 'T00:00:00Z')
-            while (curDate <= endDate) {
-              var dayStr = curDate.toISOString().split('T')[0]
-              var count = (dCountsBySector[sId] && dCountsBySector[sId][dayStr]) || 0
+            var curDate = normStart
+            while (curDate <= normEnd) {
+              var count = (dCountsBySector[sId] && dCountsBySector[sId][curDate]) || 0
               if (count < reqMin) {
                 return false
               }
-              curDate = new Date(curDate.getTime() + 86400000)
+              curDate = addDaysDateOnly(curDate, 1)
             }
           }
           return true
@@ -655,31 +689,28 @@ routerAdd(
         })
 
         Object.keys(months).forEach(function (mKey) {
-          if (!isWeekendOffApplicableMonth(cStart, cEnd, mKey)) {
+          if (!isWeekendOffApplicableMonth(normStart, normEnd, mKey)) {
             return
           }
 
           var parts = mKey.split('-')
           var y = Number(parts[0])
           var m = Number(parts[1])
-          var dCur = new Date(Date.UTC(y, m - 1, 1))
-          var dLast = new Date(Date.UTC(y, m, 0))
-          var cStartDate = new Date(cStart + 'T00:00:00Z')
-          var cEndDate = new Date(cEnd + 'T00:00:00Z')
-          if (dCur < cStartDate) dCur = new Date(cStartDate)
-          if (dLast > cEndDate) dLast = new Date(cEndDate)
+          var monthStart = formatDateOnly(y, m, 1)
+          var monthEnd = formatDateOnly(y, m + 1, 0)
+          var dCur = normStart > monthStart ? normStart : monthStart
+          var effectiveEnd = normEnd < monthEnd ? normEnd : monthEnd
 
           var monthWeekends = []
-          while (dCur <= dLast) {
-            if (dCur.getUTCDay() === 6) {
-              var satStr = dCur.toISOString().split('T')[0]
-              var sunDate = new Date(dCur.getTime() + 86400000)
-              var sunStr = sunDate.toISOString().split('T')[0]
-              if (sunDate <= cEndDate && sunDate >= cStartDate) {
+          while (dCur <= effectiveEnd) {
+            if (dayOfWeekDateOnly(dCur) === 6) {
+              var satStr = dCur
+              var sunStr = addDaysDateOnly(dCur, 1)
+              if (sunStr <= normEnd && sunStr >= normStart && assertWeekendPair(satStr, sunStr)) {
                 monthWeekends.push({ sat: satStr, sun: sunStr })
               }
             }
-            dCur = new Date(dCur.getTime() + 86400000)
+            dCur = addDaysDateOnly(dCur, 1)
           }
 
           if (monthWeekends.length === 0) {
@@ -743,6 +774,10 @@ routerAdd(
               var satStr = candidate.sat
               var sunStr = candidate.sun
 
+              if (!assertWeekendPair(satStr, sunStr)) {
+                continue
+              }
+
               // Se mudamos de candidato (rollback / tentativa de próximo candidato), atualiza protectedDates
               if (candidate !== initialChoice) {
                 delete protectedDatesGen[u.id + ':' + initialChoice.sat]
@@ -787,9 +822,10 @@ routerAdd(
                     return candidateStaffMap[c.id][d]
                   })
                   for (var cdi = 0; cdi < cDates.length; cdi++) {
+                    var pDt = parseDateOnly(dt)
+                    var pCD = parseDateOnly(cDates[cdi])
                     var diffDays = Math.abs(
-                      (new Date(dt + 'T00:00:00Z').getTime() -
-                        new Date(cDates[cdi] + 'T00:00:00Z').getTime()) /
+                      (Date.UTC(pDt.y, pDt.m - 1, pDt.d) - Date.UTC(pCD.y, pCD.m - 1, pCD.d)) /
                         86400000,
                     )
                     if (diffDays < cNeedGap) {
@@ -875,7 +911,7 @@ routerAdd(
               // Otherwise ROLLBACK (discard candidateShifts/candidateStaffMap and loop to next)
             }
 
-            if (committedWeekend) {
+            if (committedWeekend && assertWeekendPair(committedWeekend.sat, committedWeekend.sun)) {
               userPairs.push(committedWeekend.sat)
               userPairs.push(committedWeekend.sun)
               protectedDatesGen[u.id + ':' + committedWeekend.sat] = true
@@ -1134,15 +1170,12 @@ routerAdd(
       })
 
       var genMonths = {}
-      var genMonthCursor = new Date(cycleStart + 'T00:00:00Z')
-      var genMonthEnd = new Date(cycleEnd + 'T00:00:00Z')
-      while (genMonthCursor <= genMonthEnd) {
-        var gMKey =
-          genMonthCursor.getUTCFullYear() +
-          '-' +
-          String(genMonthCursor.getUTCMonth() + 1).padStart(2, '0')
+      var genMonthCursor = cycleStart
+      while (genMonthCursor <= cycleEnd) {
+        var pGM = parseDateOnly(genMonthCursor)
+        var gMKey = pGM.y + '-' + (pGM.m < 10 ? '0' + pGM.m : '' + pGM.m)
         genMonths[gMKey] = true
-        genMonthCursor = new Date(genMonthCursor.getTime() + 86400000)
+        genMonthCursor = addDaysDateOnly(genMonthCursor, 1)
       }
 
       usersWithContracts.forEach(function (u) {
@@ -1171,21 +1204,18 @@ routerAdd(
           var parts = monthKey.split('-')
           var y = Number(parts[0])
           var m = Number(parts[1])
-          var dCur = new Date(Date.UTC(y, m - 1, 1))
-          var dLast = new Date(Date.UTC(y, m, 0))
-          var cStart = new Date(cycleStart + 'T00:00:00Z')
-          var cEnd = new Date(cycleEnd + 'T00:00:00Z')
-          if (dCur < cStart) dCur = new Date(cStart)
-          if (dLast > cEnd) dLast = new Date(cEnd)
+          var monthStart = formatDateOnly(y, m, 1)
+          var monthEnd = formatDateOnly(y, m + 1, 0)
+          var dCur = cycleStart > monthStart ? cycleStart : monthStart
+          var effectiveEnd = cycleEnd < monthEnd ? cycleEnd : monthEnd
 
           var foundValidWeekend = false
-          while (dCur <= dLast) {
-            if (dCur.getUTCDay() === 6) {
+          while (dCur <= effectiveEnd) {
+            if (dayOfWeekDateOnly(dCur) === 6) {
               // Sat
-              var satStr = dCur.toISOString().split('T')[0]
-              var sunDate = new Date(dCur.getTime() + 86400000)
-              var sunStr = sunDate.toISOString().split('T')[0]
-              if (sunDate <= cEnd && sunDate >= cStart) {
+              var satStr = dCur
+              var sunStr = addDaysDateOnly(dCur, 1)
+              if (sunStr <= cycleEnd && sunStr >= cycleStart && assertWeekendPair(satStr, sunStr)) {
                 var satFree = !uShiftSet[satStr]
                 var sunFree = !uShiftSet[sunStr]
                 if (satFree && sunFree) {
@@ -1199,7 +1229,7 @@ routerAdd(
                 }
               }
             }
-            dCur = new Date(dCur.getTime() + 86400000)
+            dCur = addDaysDateOnly(dCur, 1)
           }
 
           if (!foundValidWeekend) {

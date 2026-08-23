@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest'
-import { isWeekendOffApplicableMonth } from '../src/lib/escala-weekend-off'
+import {
+  parseDateOnly,
+  formatDateOnly,
+  addDaysDateOnly,
+  dayOfWeekDateOnly,
+  assertWeekendPair,
+  getSaturdaysInRange,
+  isWeekendOffApplicableMonth,
+} from '../src/lib/escala-weekend-off'
 
 // Core simulation matching generate_shifts_draft.js / generate_shifts.js v0.0.251
 
@@ -35,12 +43,10 @@ function computeNaturalPatternByStaff(
 
   const offset = is12x36 ? stableIdx % stepDays : 0
   const map: Record<string, boolean> = {}
-  let cur = new Date(cStart + 'T00:00:00Z')
-  cur = new Date(cur.getTime() + offset * 86400000)
-  const end = new Date(cEnd + 'T00:00:00Z')
-  while (cur <= end) {
-    map[cur.toISOString().split('T')[0]] = true
-    cur = new Date(cur.getTime() + stepDays * 86400000)
+  let cur = addDaysDateOnly(cStart, offset)
+  while (cur <= cEnd) {
+    map[cur] = true
+    cur = addDaysDateOnly(cur, stepDays)
   }
   return map
 }
@@ -77,12 +83,10 @@ function runCompleteAndEnforceWeekendOff(
 
     for (let offset = 0; offset < stepDays; offset++) {
       const dates: string[] = []
-      let offsetCursor = new Date(cStart + 'T00:00:00Z')
-      offsetCursor = new Date(offsetCursor.getTime() + offset * 86400000)
-      while (offsetCursor <= new Date(cEnd + 'T00:00:00Z') && dates.length < maxShifts) {
-        const offsetDate = offsetCursor.toISOString().split('T')[0]
-        dates.push(offsetDate)
-        offsetCursor = new Date(offsetCursor.getTime() + stepDays * 86400000)
+      let offsetCursor = addDaysDateOnly(cStart, offset)
+      while (offsetCursor <= cEnd && dates.length < maxShifts) {
+        dates.push(offsetCursor)
+        offsetCursor = addDaysDateOnly(offsetCursor, stepDays)
       }
 
       let score = -dates.length * 1000
@@ -110,12 +114,12 @@ function runCompleteAndEnforceWeekendOff(
 
   // 2. enforceWeekendOff with protectedDates and single-anchor natural pattern
   const months: Record<string, boolean> = {}
-  let mCur = new Date(cStart + 'T00:00:00Z')
-  const mEnd = new Date(cEnd + 'T00:00:00Z')
-  while (mCur <= mEnd) {
-    const mKey = mCur.getUTCFullYear() + '-' + String(mCur.getUTCMonth() + 1).padStart(2, '0')
+  let mCur = cStart
+  while (mCur <= cEnd) {
+    const p = parseDateOnly(mCur)
+    const mKey = p.y + '-' + String(p.m).padStart(2, '0')
     months[mKey] = true
-    mCur = new Date(mCur.getTime() + 86400000)
+    mCur = addDaysDateOnly(mCur, 1)
   }
 
   const naturalWorkedMap: Record<string, Record<string, boolean>> = {}
@@ -151,14 +155,12 @@ function runCompleteAndEnforceWeekendOff(
       const d = shiftsArr[si].date
       dCounts[d] = (dCounts[d] || 0) + 1
     }
-    let curDate = new Date(cStart + 'T00:00:00Z')
-    const endDate = new Date(cEnd + 'T00:00:00Z')
-    while (curDate <= endDate) {
-      const dayStr = curDate.toISOString().split('T')[0]
-      if ((dCounts[dayStr] || 0) < minStaff) {
+    let curDate = cStart
+    while (curDate <= cEnd) {
+      if ((dCounts[curDate] || 0) < minStaff) {
         return false
       }
-      curDate = new Date(curDate.getTime() + 86400000)
+      curDate = addDaysDateOnly(curDate, 1)
     }
     return true
   }
@@ -188,24 +190,21 @@ function runCompleteAndEnforceWeekendOff(
     const parts = mKey.split('-')
     const y = Number(parts[0])
     const m = Number(parts[1])
-    let dCur = new Date(Date.UTC(y, m - 1, 1))
-    let dLast = new Date(Date.UTC(y, m, 0))
-    const cStartDate = new Date(cStart + 'T00:00:00Z')
-    const cEndDate = new Date(cEnd + 'T00:00:00Z')
-    if (dCur < cStartDate) dCur = new Date(cStartDate)
-    if (dLast > cEndDate) dLast = new Date(cEndDate)
+    const monthStart = formatDateOnly(y, m, 1)
+    const monthEnd = formatDateOnly(y, m + 1, 0)
+    let dCur = cStart > monthStart ? cStart : monthStart
+    const effectiveEnd = cEnd < monthEnd ? cEnd : monthEnd
 
     const monthWeekends: Array<{ sat: string; sun: string }> = []
-    while (dCur <= dLast) {
-      if (dCur.getUTCDay() === 6) {
-        const satStr = dCur.toISOString().split('T')[0]
-        const sunDate = new Date(dCur.getTime() + 86400000)
-        const sunStr = sunDate.toISOString().split('T')[0]
-        if (sunDate <= cEndDate && sunDate >= cStartDate) {
+    while (dCur <= effectiveEnd) {
+      if (dayOfWeekDateOnly(dCur) === 6) {
+        const satStr = dCur
+        const sunStr = addDaysDateOnly(dCur, 1)
+        if (sunStr <= cEnd && sunStr >= cStart && assertWeekendPair(satStr, sunStr)) {
           monthWeekends.push({ sat: satStr, sun: sunStr })
         }
       }
-      dCur = new Date(dCur.getTime() + 86400000)
+      dCur = addDaysDateOnly(dCur, 1)
     }
 
     if (monthWeekends.length === 0) {
@@ -546,5 +545,50 @@ describe('Weekend Off Regression & Consistency Test (v0.0.251)', () => {
     expect(result.protectedDates['staff_A:' + assignA[1]]).toBe(true)
     expect(result.protectedDates['staff_B:' + assignB[0]]).toBe(true)
     expect(result.protectedDates['staff_B:' + assignB[1]]).toBe(true)
+  })
+
+  describe('Pure Date-Only Timezone Immobility Tests', () => {
+    it('1. Teste TZ UTC: assertWeekendPair("2026-10-03", "2026-10-04") deve retornar true (sábado+domingo)', () => {
+      expect(assertWeekendPair('2026-10-03', '2026-10-04')).toBe(true)
+    })
+
+    it('2. Teste TZ UTC: assertWeekendPair("2026-10-04", "2026-10-05") deve retornar false (domingo+segunda)', () => {
+      expect(assertWeekendPair('2026-10-04', '2026-10-05')).toBe(false)
+    })
+
+    it('3. Para TODOS os sábados de Outubro/2026 (03, 10, 17, 24, 31), assertWeekendPair(sat, addDaysDateOnly(sat,1)) deve retornar true', () => {
+      const saturdaysOct2026 = ['2026-10-03', '2026-10-10', '2026-10-17', '2026-10-24', '2026-10-31']
+      const detectedSats = getSaturdaysInRange('2026-10-01', '2026-10-31')
+      expect(detectedSats).toEqual(saturdaysOct2026)
+
+      saturdaysOct2026.forEach((sat) => {
+        const sun = addDaysDateOnly(sat, 1)
+        expect(assertWeekendPair(sat, sun)).toBe(true)
+      })
+    })
+
+    it('4. dayOfWeekDateOnly("2026-10-03") === 6 (Sábado)', () => {
+      expect(dayOfWeekDateOnly('2026-10-03')).toBe(6)
+    })
+
+    it('5. dayOfWeekDateOnly("2026-10-04") === 0 (Domingo)', () => {
+      expect(dayOfWeekDateOnly('2026-10-04')).toBe(0)
+    })
+
+    it('6. addDaysDateOnly("2026-10-03", 1) === "2026-10-04"', () => {
+      expect(addDaysDateOnly('2026-10-03', 1)).toBe('2026-10-04')
+    })
+
+    it('7. addDaysDateOnly("2026-12-31", 1) === "2027-01-01"', () => {
+      expect(addDaysDateOnly('2026-12-31', 1)).toBe('2027-01-01')
+    })
+
+    it('parseDateOnly and formatDateOnly works across leap years and month ends', () => {
+      expect(parseDateOnly('2024-02-28')).toEqual({ y: 2024, m: 2, d: 28 })
+      expect(addDaysDateOnly('2024-02-28', 1)).toBe('2024-02-29')
+      expect(addDaysDateOnly('2024-02-29', 1)).toBe('2024-03-01')
+      expect(formatDateOnly(2026, 10, 3)).toBe('2026-10-03')
+      expect(formatDateOnly(2026, 11, 0)).toBe('2026-10-31')
+    })
   })
 })
