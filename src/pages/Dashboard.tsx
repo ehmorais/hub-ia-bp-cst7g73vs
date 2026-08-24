@@ -63,72 +63,80 @@ export default function Dashboard() {
       : tools.filter((t) => t.associated_departments?.some((d: string) => userProjectDepts.has(d)))
 
   return (
-    <div className="container mx-auto p-4 md:p-8 space-y-10 max-w-7xl animate-fade-in-up bg-white">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-bold tracking-tight text-slate-900 font-heading">
-          Olá, {name}. Bem-vindo(a).
+    <div className="container mx-auto p-4 md:p-8 lg:p-10 space-y-12 max-w-7xl animate-fade-in-up bg-gradient-to-b from-[#06402B]/[0.02] via-white to-white motion-reduce:animate-none">
+      <div className="flex flex-col gap-2 pb-2 border-b border-slate-100">
+        <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-slate-900 font-heading">
+          Olá, <span className="text-slate-900">{name}</span>. Bem-vindo(a).
         </h1>
-        <p className="text-muted-foreground text-lg font-sans">
+        <p className="text-muted-foreground text-base sm:text-lg font-sans">
           Acompanhamento de uso, módulos e performance dos projetos.
         </p>
       </div>
 
       {/* Global KPIs */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card className="rounded-lg border-l-[6px] border-l-primary shadow-sm bg-white hover:bg-slate-50 transition-colors flex flex-col justify-center min-h-[120px]">
+      <div className="grid gap-4 sm:gap-6 md:grid-cols-3">
+        <Card className="rounded-xl border border-slate-100 border-l-[6px] border-l-primary shadow-soft hover:shadow-elevation bg-white transition-all duration-300 motion-reduce:transition-none motion-reduce:transform-none flex flex-col justify-center min-h-[124px]">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-interactive font-medium text-slate-600 uppercase tracking-wider">
+            <CardTitle className="text-xs sm:text-sm font-interactive font-medium text-slate-600 uppercase tracking-wider">
               Modelos Ativos
             </CardTitle>
-            <Zap className="h-4 w-4 text-primary" />
+            <div className="p-2 rounded-lg bg-primary/10 text-primary">
+              <Zap className="h-4 w-4 text-primary" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-4xl font-bold text-slate-800 font-metrics">
+            <div className="text-3xl sm:text-4xl font-bold text-slate-800 font-metrics tracking-tight">
               {tools.filter((t) => t.status === 'active').length}
             </div>
           </CardContent>
         </Card>
-        <Card className="rounded-lg border-l-[6px] border-l-primary shadow-sm bg-white hover:bg-slate-50 transition-colors flex flex-col justify-center min-h-[120px]">
+        <Card className="rounded-xl border border-slate-100 border-l-[6px] border-l-primary shadow-soft hover:shadow-elevation bg-white transition-all duration-300 motion-reduce:transition-none motion-reduce:transform-none flex flex-col justify-center min-h-[124px]">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-interactive font-medium text-slate-600 uppercase tracking-wider">
+            <CardTitle className="text-xs sm:text-sm font-interactive font-medium text-slate-600 uppercase tracking-wider">
               Projetos em Andamento
             </CardTitle>
-            <Activity className="h-4 w-4 text-primary" />
+            <div className="p-2 rounded-lg bg-primary/10 text-primary">
+              <Activity className="h-4 w-4 text-primary" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-4xl font-bold text-slate-800 font-metrics">
+            <div className="text-3xl sm:text-4xl font-bold text-slate-800 font-metrics tracking-tight">
               {projects.filter((p) => p.status === 'active').length}
             </div>
           </CardContent>
         </Card>
-        <Card className="rounded-lg border-l-[6px] border-l-primary shadow-sm bg-white hover:bg-slate-50 transition-colors flex flex-col justify-center min-h-[120px]">
+        <Card className="rounded-xl border border-slate-100 border-l-[6px] border-l-primary shadow-soft hover:shadow-elevation bg-white transition-all duration-300 motion-reduce:transition-none motion-reduce:transform-none flex flex-col justify-center min-h-[124px]">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-interactive font-medium text-slate-600 uppercase tracking-wider">
+            <CardTitle className="text-xs sm:text-sm font-interactive font-medium text-slate-600 uppercase tracking-wider">
               Departamentos
             </CardTitle>
-            <FolderKanban className="h-4 w-4 text-primary" />
+            <div className="p-2 rounded-lg bg-primary/10 text-primary">
+              <FolderKanban className="h-4 w-4 text-primary" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-4xl font-bold text-slate-800 font-metrics">
+            <div className="text-3xl sm:text-4xl font-bold text-slate-800 font-metrics tracking-tight">
               {departments.length}
             </div>
           </CardContent>
         </Card>
       </div>
 
-      <div className="space-y-4">
+      <div className="space-y-5">
         <h2 className="text-xl font-semibold tracking-tight text-slate-800 font-heading">
           Ferramentas de IA
         </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
           {filteredTools.map((tool) => (
             <Card
               key={tool.id}
-              className="rounded-lg border-t-[6px] border-t-primary shadow-sm hover:shadow-md transition-shadow bg-white flex flex-col justify-between aspect-square"
+              className="rounded-xl border border-slate-100 border-t-[6px] border-t-primary shadow-soft hover:shadow-elevation hover:scale-[1.01] transition-all duration-300 motion-reduce:transition-none motion-reduce:transform-none bg-white flex flex-col justify-between aspect-square"
             >
               <CardHeader className="pb-2 flex-none">
-                <CardTitle className="text-lg font-bold flex items-center gap-2 text-slate-800 font-heading">
-                  <BrainCircuit className="h-5 w-5 text-primary" />
+                <CardTitle className="text-lg font-bold flex items-center gap-2.5 text-slate-800 font-heading">
+                  <div className="p-2.5 rounded-xl bg-primary/10 text-primary shrink-0">
+                    <BrainCircuit className="h-5 w-5 text-primary" />
+                  </div>
                   <span className="truncate">{tool.name}</span>
                 </CardTitle>
                 <div className="text-sm text-slate-500 line-clamp-2 mt-1 min-h-[40px] font-sans">
@@ -145,7 +153,7 @@ export default function Dashboard() {
                 <div className="mt-4 pt-4 border-t flex justify-end flex-none">
                   <Link
                     to={`/ai/${tool.id}`}
-                    className="text-sm font-interactive font-medium text-primary hover:text-primary/80 transition-colors"
+                    className="text-sm font-interactive font-medium text-primary hover:text-primary/80 transition-colors focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 rounded-sm"
                   >
                     Acessar Ferramenta &rarr;
                   </Link>
@@ -161,11 +169,11 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="space-y-4">
+      <div className="space-y-5">
         <h2 className="text-xl font-semibold tracking-tight text-slate-800 font-heading">
           Módulos & Departamentos
         </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5 sm:gap-6">
           {departments.map((dept) => {
             const deptProjects = projects.filter(
               (p) => p.associated_departments?.includes(dept.id) || p.department === dept.id,
@@ -176,10 +184,10 @@ export default function Dashboard() {
             return (
               <Card
                 key={dept.id}
-                className="rounded-lg border-t-[6px] border-t-primary shadow-sm hover:shadow-md transition-shadow bg-white flex flex-col justify-between group aspect-square"
+                className="rounded-xl border border-slate-100 border-t-[6px] border-t-primary shadow-soft hover:shadow-elevation hover:scale-[1.01] transition-all duration-300 motion-reduce:transition-none motion-reduce:transform-none bg-white flex flex-col justify-between group aspect-square"
               >
                 <CardHeader className="pb-3 pt-5 px-5 flex flex-col items-start gap-3 space-y-0 border-b border-slate-100 flex-none">
-                  <div className="p-3 rounded-lg bg-primary/10 text-primary shrink-0 transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
+                  <div className="p-3 rounded-lg bg-primary/10 text-primary shrink-0 transition-all duration-300 group-hover:bg-primary group-hover:text-primary-foreground motion-reduce:transition-none">
                     <Icon className="h-6 w-6" />
                   </div>
                   <CardTitle className="text-lg font-heading font-bold leading-tight line-clamp-2 text-slate-800">
@@ -208,7 +216,7 @@ export default function Dashboard() {
                   <div className="mt-4 pt-4 border-t text-right">
                     <Link
                       to={`/department/${dept.id}`}
-                      className="text-sm font-interactive font-medium text-primary hover:text-primary/80 transition-colors"
+                      className="text-sm font-interactive font-medium text-primary hover:text-primary/80 transition-colors focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 rounded-sm"
                     >
                       Ver detalhes &rarr;
                     </Link>
