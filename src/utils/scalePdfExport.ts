@@ -73,8 +73,8 @@ export function exportScalePdf(data: ExportScalePdfParams) {
     author: 'Gestão de Escalas BP',
   })
 
-  // Chunk dates if there are more than 14 columns per page for readable layout in A4 landscape
-  const MAX_DAYS_PER_PAGE = 14
+  // Chunk dates if there are more than 12 columns per page for readable layout in A4 landscape
+  const MAX_DAYS_PER_PAGE = 12
   const dateChunks: string[][] = []
 
   if (dateHeaders.length === 0) {
@@ -147,9 +147,9 @@ export function exportScalePdf(data: ExportScalePdfParams) {
 
           let displayText = ''
           if (isDay) {
-            displayText = slot.start && slot.end ? `D\n${slot.start}-${slot.end}` : 'D\n07:00-19:00'
+            displayText = slot.start && slot.end ? `D ${slot.start}–${slot.end}` : 'D 07:00–19:00'
           } else if (isNight) {
-            displayText = slot.start && slot.end ? `N\n${slot.start}-${slot.end}` : 'N\n19:00-07:00'
+            displayText = slot.start && slot.end ? `N ${slot.start}–${slot.end}` : 'N 19:00–07:00'
           } else {
             displayText = typeUpper
           }
@@ -204,9 +204,9 @@ export function exportScalePdf(data: ExportScalePdfParams) {
       theme: 'grid',
       styles: {
         font: 'helvetica',
-        fontSize: 7.5,
-        cellPadding: 1.5,
-        overflow: 'linebreak',
+        fontSize: 6.5,
+        cellPadding: 1.2,
+        overflow: 'ellipsize',
         valign: 'middle',
         lineColor: [203, 213, 225], // Slate 300
         lineWidth: 0.2,
@@ -218,7 +218,7 @@ export function exportScalePdf(data: ExportScalePdfParams) {
         halign: 'center',
       },
       columnStyles: {
-        0: { cellWidth: 46, halign: 'left' },
+        0: { cellWidth: 42, halign: 'left' },
       },
       margin: { top: 12, right: 10, bottom: 12, left: 10 },
       showHead: 'everyPage',

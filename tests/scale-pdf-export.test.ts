@@ -17,6 +17,7 @@ const mockAddPage = vi.fn()
 const mockSetPage = vi.fn()
 const mockGetNumberOfPages = vi.fn().mockReturnValue(1)
 let lastAutoTableArgs: any = null
+let allAutoTableCalls: any[] = []
 
 vi.mock('jspdf', () => {
   return {
@@ -44,6 +45,7 @@ vi.mock('jspdf-autotable', () => {
   return {
     default: vi.fn((_doc, options) => {
       lastAutoTableArgs = options
+      allAutoTableCalls.push(options)
       return options
     }),
   }
@@ -139,7 +141,7 @@ describe('PDF Export for ScalePlanner (scalePdfExport)', () => {
     expect(lastAutoTableArgs.body[2][0].content).toBe('Carlos Eduardo')
   })
 
-  it('exportScalePdf inclui D/N e horários nas células de plantão com cores correspondentes', () => {
+  it('exportScalePdf inclui D/N e horários nas células de plantão com cores correspondentes e sem quebra de linha', () => {
     exportScalePdf({
       title: 'Escala de Plantões',
       sectorName: 'UTI Adulto',
@@ -155,13 +157,17 @@ describe('PDF Export for ScalePlanner (scalePdfExport)', () => {
     const body = lastAutoTableArgs.body
     // user_1 no dia 2026-10-01 (índice coluna 1): Plantão D
     const user1Day1 = body[0][1]
-    expect(user1Day1.content).toBe('D\n07:00-19:00')
+    expect(user1Day1.content).toBe('D 07:00–19:00')
+    expect(user1Day1.content).not.toContain('\n')
+    expect(user1Day1.content).not.toContain('\r')
     expect(user1Day1.styles.fillColor).toEqual([4, 120, 87]) // Verde escuro
     expect(user1Day1.styles.textColor).toEqual([255, 255, 255])
 
     // user_1 no dia 2026-10-02 (índice coluna 2): Plantão N
     const user1Day2 = body[0][2]
-    expect(user1Day2.content).toBe('N\n19:00-07:00')
+    expect(user1Day2.content).toBe('N 19:00–07:00')
+    expect(user1Day2.content).not.toContain('\n')
+    expect(user1Day2.content).not.toContain('\r')
     expect(user1Day2.styles.fillColor).toEqual([30, 58, 138]) // Azul escuro
     expect(user1Day2.styles.textColor).toEqual([255, 255, 255])
   })
@@ -193,28 +199,89 @@ describe('PDF Export for ScalePlanner (scalePdfExport)', () => {
     expect(user1Sun.styles.fillColor).toEqual([255, 243, 224])
   })
 
-  it('Paginação: divide em páginas quando houver mais de 14 colunas de datas e repete cabeçalhos', () => {
+  it('Paginação: limita a no máximo 12 colunas de dias por página e particiona ciclo de 31 dias em 12 + 12 + 7 colunas', () => {
     mockAddPage.mockClear()
-    const thirtyDays: string[] = []
-    for (let i = 1; i <= 30; i++) {
+    allAutoTableCalls = []
+
+    const thirtyOneDays: string[] = []
+    for (let i = 1; i <= 31; i++) {
       const day = String(i).padStart(2, '0')
-      thirtyDays.push(`2026-10-${day}`)
+      thirtyOneDays.push(`2026-10-${day}`)
     }
 
     exportScalePdf({
       title: 'Escala de Plantões Mensal',
       sectorName: 'Centro Cirúrgico',
       cycleStart: '2026-10-01',
-      cycleEnd: '2026-10-30',
+      cycleEnd: '2026-10-31',
       staffNames,
       staffRows,
-      dateHeaders: thirtyDays,
+      dateHeaders: thirtyOneDays,
       cellMap,
       weekendOffMap,
     })
 
-    // 30 dias com max 14 por página gera ceil(30/14) = 3 páginas (2 chamadas a doc.addPage)
+    // 31 dias com max 12 por página particiona em 12 + 12 + 7 (3 páginas / 3 tabelas, 2 chamadas a addPage)
+    expect(allAutoTableCalls.length).toBe(3)
     expect(mockAddPage).toHaveBeenCalledTimes(2)
+
+    // Colunas de cada página: 1 coluna do colaborador + N colunas de dias
+    // Página 1: 1 + 12 colunas = 13
+    const headPage1 = allAutoTableCalls[0].head[0]
+    const dayColsPage1 = headPage1.length - 1
+    expect(dayColsPage1).toBe(12)
+    expect(dayColsPage1).toBeLessThanOrEqual(12)
+
+    // Página 2: 1 + 12 colunas = 13
+    const headPage2 = allAutoTableCalls[1].head[0]
+    const dayColsPage2 = headPage2.length - 1
+    expect(dayColsPage2).toBe(12)
+    expect(dayColsPage2).toBeLessThanOrEqual(12)
+
+    // Página 3: 1 + 7 colunas = 8
+    const headPage3 = allAutoTableCalls[2].head[0]
+    const dayColsPage3 = headPage3.length - 1
+    expect(dayColsPage3).toBe(7)
+    expect(dayColsPage3).toBeLessThanOrEqual(12)
+
+    // Soma total de dias nas 3 páginas = 12 + 12 + 7 = 31
+    expect(dayColsPage1 + dayColsPage2 + dayColsPage3).toBe(31)
+  })
+
+  it('Cabeçalho e coluna do colaborador se repetem a cada página com showHead: everyPage', () => {
+    allAutoTableCalls = []
+    const twentyDays: string[] = []
+    for (let i = 1; i <= 20; i++) {
+      twentyDays.push(`2026-10-${String(i).padStart(2, '0')}`)
+    }
+
+    exportScalePdf({
+      title: 'Escala de Plantões',
+      sectorName: 'UTI Geral',
+      cycleStart: '2026-10-01',
+      cycleEnd: '2026-10-20',
+      staffNames,
+      staffRows,
+      dateHeaders: twentyDays,
+      cellMap,
+      weekendOffMap,
+    })
+
+    // 20 dias particiona em 12 + 8 = 2 páginas
+    expect(allAutoTableCalls.length).toBe(2)
+
+    allAutoTableCalls.forEach((tableCall) => {
+      // showHead configurado para 'everyPage'
+      expect(tableCall.showHead).toBe('everyPage')
+
+      // Primeira coluna do cabeçalho é sempre 'Colaborador'
+      expect(tableCall.head[0][0]).toBe('Colaborador')
+
+      // A primeira coluna de cada linha no body tem o nome de cada colaborador
+      expect(tableCall.body[0][0].content).toBe('Amanda Ribeiro')
+      expect(tableCall.body[1][0].content).toBe('Bruno Costa')
+      expect(tableCall.body[2][0].content).toBe('Carlos Eduardo')
+    })
   })
 
   it('Estrutura e contratos da UI do ScalePlanner: exportação de PDF, botões e filtros', () => {
