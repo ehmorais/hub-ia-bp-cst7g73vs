@@ -68,7 +68,7 @@ routerAdd(
 
     if (srcDow !== tgtDow) {
       return e.badRequestError(
-        'Movimento inválido: sábado só pode ser movido para sábado (weekday 6) e domingo somente para domingo (weekday 0).',
+        'Fim de semana incompatível: sábado só pode ser movido para sábado e domingo somente para domingo.',
       )
     }
 
@@ -112,13 +112,23 @@ routerAdd(
       }
     }
 
+    // Normalização defensiva de assignments (aceita map string->string[], map com datas completas ou strings simples)
     var assignments = valSummary.weekend_off_assignments || {}
     if (typeof assignments !== 'object' || Array.isArray(assignments)) {
       assignments = {}
     }
 
-    var staffDates = assignments[staffId] || []
-    if (!Array.isArray(staffDates) || staffDates.length < 2) {
+    var rawStaffDates = assignments[staffId]
+    var staffDates = []
+    if (Array.isArray(rawStaffDates)) {
+      staffDates = rawStaffDates
+        .map(function (d) {
+          return (String(d) || '').split(' ')[0].split('T')[0]
+        })
+        .filter(Boolean)
+    }
+
+    if (staffDates.length === 0) {
       return e.badRequestError(
         'O colaborador não possui folgas de fim de semana registradas no rascunho.',
       )
@@ -126,7 +136,7 @@ routerAdd(
 
     var srcIndex = -1
     for (var i = 0; i < staffDates.length; i++) {
-      if ((staffDates[i] || '').split(' ')[0].split('T')[0] === sourceDate) {
+      if (staffDates[i] === sourceDate) {
         srcIndex = i
         break
       }
@@ -140,7 +150,7 @@ routerAdd(
 
     // Verifica se targetDate já é a outra folga do colaborador
     for (var j = 0; j < staffDates.length; j++) {
-      if (j !== srcIndex && (staffDates[j] || '').split(' ')[0].split('T')[0] === targetDate) {
+      if (j !== srcIndex && staffDates[j] === targetDate) {
         return e.badRequestError(
           'A data de destino já está designada como folga para este colaborador.',
         )
@@ -210,15 +220,15 @@ routerAdd(
     // Se o colaborador já tinha plantão na origem (o que não deveria acontecer se era folga), loga aviso
     var minStaff = sector.getInt('min_staffing') || 0
 
-    // Simula a nova distribuição de plantões para validar regras duras e cobertura
-    // 1. O colaborador não pode ter plantão em targetDate (passa a ser folga)
-    // 2. Se havia plantão em targetDate, tentamos movê-lo para sourceDate (troca de data)
+    // Validação de cenário com ou sem shift no destino:
+    // Caso 1: Destino sem shift do colaborador -> Apenas move a folga (atualiza assignments, overrides, protectedDates).
+    // Caso 2: Destino COM shift do colaborador -> Swap atômico do plantão de targetDate para sourceDate.
     var simulatedShifts = []
     draftShifts.forEach(function (s) {
       var sp = s.getString('staff_profile') || s.getString('user')
       var d = (s.getString('start_time') || '').split(' ')[0].split('T')[0]
       if (sp === staffId && d === targetDate) {
-        // Este plantão vai para sourceDate
+        // Swap: Este plantão vai para sourceDate
         simulatedShifts.push({
           id: s.id,
           staff_profile: staffId,
@@ -237,7 +247,7 @@ routerAdd(
       }
     })
 
-    // Valida cobertura mínima em todas as datas do ciclo
+    // Valida cobertura mínima do setor pós-movimento / swap
     var dayCounts = {}
     simulatedShifts.forEach(function (s) {
       dayCounts[s.date] = (dayCounts[s.date] || 0) + 1
@@ -248,7 +258,7 @@ routerAdd(
       var cnt = dayCounts[cCur] || 0
       if (minStaff > 0 && cnt < minStaff) {
         return e.badRequestError(
-          'Não é possível mover a folga: o movimento deixaria o dia ' +
+          'Cobertura insuficiente no setor: o movimento deixaria o dia ' +
             cCur +
             ' abaixo do efetivo mínimo (' +
             cnt +

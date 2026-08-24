@@ -1216,10 +1216,13 @@ routerAdd(
       }
 
       // Replace the validated schedule atomically, preserving the previous version on any failure.
+      // Also persist/update schedule_drafts with validation_summary (including weekend_off_assignments).
       var validSectorIds = sectors.map(function (s) {
         return s.id
       })
       var savedCount = 0
+      var createdDraftIds = {}
+
       $app.runInTransaction((txApp) => {
         var existingShifts = txApp.findRecordsByFilter(
           'shifts',
@@ -1233,6 +1236,30 @@ routerAdd(
           if (validSectorIds.indexOf(shiftRecord.getString('sector')) !== -1) {
             txApp.delete(shiftRecord)
           }
+        })
+
+        // Persistir schedule_drafts para cada setor gerado com validation_summary completo
+        var draftsCol = txApp.findCollectionByNameOrId('schedule_drafts')
+        validSectorIds.forEach(function (sId) {
+          var draftRec = new Record(draftsCol)
+          draftRec.set('cycle', cycleId)
+          draftRec.set('sector', sId)
+          draftRec.set('status', 'draft')
+          draftRec.set('version', 1)
+          draftRec.set('generation_source', 'ai')
+          draftRec.set('generated_by', e.auth ? e.auth.id : '')
+          draftRec.set('created_by', e.auth ? e.auth.id : '')
+          draftRec.set('validation_summary', {
+            violations_count: 0,
+            warnings_count: overrideWarnings.length,
+            hard_violations: [],
+            warnings: overrideWarnings.slice(0, 20),
+            weekend_off_assignments: genAssignmentsMap,
+            cycle_start: cycleStart,
+            cycle_end: cycleEnd,
+          })
+          txApp.save(draftRec)
+          createdDraftIds[sId] = draftRec.id
         })
 
         var shiftsCol = txApp.findCollectionByNameOrId('shifts')
@@ -1262,6 +1289,9 @@ routerAdd(
           record.set('cycle', cycleId)
           record.set('start_time', generated.start_time)
           record.set('end_time', generated.end_time)
+          if (createdDraftIds[generated.sector_id]) {
+            record.set('draft', createdDraftIds[generated.sector_id])
+          }
           txApp.save(record)
           savedCount++
         }
