@@ -64,13 +64,25 @@ export default function Dashboard() {
 
   return (
     <div className="container mx-auto p-4 md:p-8 lg:p-10 space-y-12 max-w-7xl animate-fade-in-up bg-gradient-to-b from-[#06402B]/[0.02] via-white to-white motion-reduce:animate-none">
-      <div className="flex flex-col gap-2 pb-2 border-b border-slate-100">
-        <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-slate-900 font-heading">
-          Olá, <span className="text-slate-900">{name}</span>. Bem-vindo(a).
-        </h1>
-        <p className="text-muted-foreground text-base sm:text-lg font-sans">
-          Acompanhamento de uso, módulos e performance dos projetos.
-        </p>
+      <div className="flex flex-col gap-4 pb-4 border-b border-slate-100">
+        <div className="flex items-center gap-3.5 sm:gap-4">
+          <img
+            src="/assets/logo-hospital-bpscs.jpg"
+            alt="Beneficência Portuguesa São Caetano do Sul"
+            className="h-11 sm:h-14 md:h-16 w-auto object-contain shrink-0"
+          />
+          <span className="font-extrabold text-2xl sm:text-3xl md:text-4xl text-[#06402B] tracking-tighter">
+            HUB IA BPSCS
+          </span>
+        </div>
+        <div className="flex flex-col gap-1">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 font-heading">
+            Olá, <span className="text-slate-900">{name}</span>. Bem-vindo(a).
+          </h1>
+          <p className="text-muted-foreground text-base sm:text-lg font-sans">
+            Acompanhamento de uso, módulos e performance dos projetos.
+          </p>
+        </div>
       </div>
 
       {/* Global KPIs */}
