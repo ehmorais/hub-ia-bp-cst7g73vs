@@ -28,11 +28,14 @@ import {
   CalendarOff,
   Info,
   Download,
+  FileDown,
   AlertTriangle,
   Loader2,
   Move,
   Wand2,
 } from 'lucide-react'
+import { exportScalePdf, type ShiftSlot } from '@/utils/scalePdfExport'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { useRealtime } from '@/hooks/use-realtime'
 import { format, eachDayOfInterval, addDays, parseISO } from 'date-fns'
@@ -1034,6 +1037,98 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
           >
             <Download className="h-4 w-4" /> Exportar
           </Button>
+
+          {(() => {
+            const hasScaleData =
+              draftUsers.length > 0 &&
+              days.length > 0 &&
+              Object.keys(draft).some((uid) => Object.keys(draft[uid] || {}).length > 0)
+
+            const handleExportToPdf = () => {
+              const allStaffSorted = [...draftUsers].sort((a, b) =>
+                (a.name || '').localeCompare(b.name || '', 'pt-BR'),
+              )
+              const staffNames: Record<string, string> = {}
+              const staffRows: string[] = []
+              allStaffSorted.forEach((u) => {
+                staffNames[u.id] = u.name || `Colaborador ${u.id}`
+                staffRows.push(u.id)
+              })
+
+              const dateHeaders = days.map((d) => d.key)
+
+              const cellMap: Record<string, Record<string, ShiftSlot>> = {}
+              allStaffSorted.forEach((u) => {
+                cellMap[u.id] = {}
+                dateHeaders.forEach((ds) => {
+                  const val = draft[u.id]?.[ds]
+                  if (val && val !== 'F') {
+                    if (val === 'D') {
+                      cellMap[u.id][ds] = { type: 'day', start: '07:00', end: '19:00' }
+                    } else if (val === 'N') {
+                      cellMap[u.id][ds] = { type: 'night', start: '19:00', end: '07:00' }
+                    } else if (val === 'M') {
+                      cellMap[u.id][ds] = { type: 'day', start: '07:00', end: '13:00' }
+                    } else if (val === 'T') {
+                      cellMap[u.id][ds] = { type: 'day', start: '13:00', end: '19:00' }
+                    } else {
+                      cellMap[u.id][ds] = { type: String(val) }
+                    }
+                  }
+                })
+              })
+
+              const cycleStart = (selectedCycle?.start_date || '').split(' ')[0].split('T')[0]
+              const cycleEnd = (selectedCycle?.end_date || '').split(' ')[0].split('T')[0]
+
+              exportScalePdf({
+                title: 'Escala de Plantões',
+                sectorName: selectedSector?.name,
+                cycleStart: cycleStart || undefined,
+                cycleEnd: cycleEnd || undefined,
+                staffNames,
+                staffRows,
+                dateHeaders,
+                cellMap,
+                weekendOffMap,
+              })
+
+              toast({
+                title: 'PDF Gerado',
+                description: 'O arquivo PDF da escala foi exportado com sucesso.',
+              })
+            }
+
+            const exportPdfButton = (
+              <Button
+                variant="outline"
+                disabled={!hasScaleData}
+                onClick={handleExportToPdf}
+                className="gap-2 bg-white flex-1 xl:flex-none border-blue-200 hover:bg-blue-50 text-blue-800 disabled:opacity-50"
+              >
+                <FileDown className="h-4 w-4" /> Exportar para PDF
+              </Button>
+            )
+
+            if (!hasScaleData) {
+              return (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span tabIndex={0} className="inline-block flex-1 xl:flex-none">
+                        {exportPdfButton}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Gere uma escala primeiro</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )
+            }
+
+            return exportPdfButton
+          })()}
         </div>
       </div>
 
