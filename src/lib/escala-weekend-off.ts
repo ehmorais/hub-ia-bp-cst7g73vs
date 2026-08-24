@@ -6,13 +6,33 @@
  */
 
 export interface WeekendOffShift {
+  id?: string
   staff_profile?: string
   user_id?: string
   user?: string
   start_time?: string
+  end_time?: string
   date?: string
+  sector?: string
+  cycle?: string
   [key: string]: any
 }
+
+export interface WeekendOffOverrideDetail {
+  source_date: string
+  target_date: string
+  weekday: number // 6 = Saturday, 0 = Sunday
+  moved_at: string
+  moved_by?: string
+  manual_override: true
+}
+
+export interface StaffWeekendOffOverrides {
+  saturday?: WeekendOffOverrideDetail
+  sunday?: WeekendOffOverrideDetail
+}
+
+export type WeekendOffOverridesMap = Record<string, StaffWeekendOffOverrides>
 
 export interface WeekendOffContract {
   id?: string
@@ -212,6 +232,114 @@ export function buildWeekendOffMap(validationSummary: any): Map<string, Set<stri
   }
 
   return map
+}
+
+/**
+ * Retorna true se ambas as datas possuem o mesmo dia da semana (date-only, estável).
+ */
+export function isSameWeekday(dateStrA: string, dateStrB: string): boolean {
+  if (!dateStrA || !dateStrB) return false
+  return dayOfWeekDateOnly(dateStrA) === dayOfWeekDateOnly(dateStrB)
+}
+
+/**
+ * Valida se uma operação de override de weekend-off é teoricamente válida:
+ * - mesmo colaborador
+ * - origem e destino dentro do ciclo
+ * - mesmo weekday (6 para sábado, 0 para domingo)
+ * - origem é uma das folgas atuais do colaborador
+ * - destino é diferente da origem
+ */
+export function validateWeekendOffOverride({
+  staffId,
+  sourceDate,
+  targetDate,
+  cycleStart,
+  cycleEnd,
+  currentAssignments,
+}: {
+  staffId: string
+  sourceDate: string
+  targetDate: string
+  cycleStart: string
+  cycleEnd: string
+  currentAssignments?: string[]
+}): { valid: boolean; error?: string; weekday?: number } {
+  const normSrc = (sourceDate || '').split(' ')[0].split('T')[0]
+  const normTgt = (targetDate || '').split(' ')[0].split('T')[0]
+  const normStart = (cycleStart || '').split(' ')[0].split('T')[0]
+  const normEnd = (cycleEnd || '').split(' ')[0].split('T')[0]
+
+  if (!staffId) {
+    return { valid: false, error: 'Colaborador não informado.' }
+  }
+  if (!normSrc || !normTgt) {
+    return { valid: false, error: 'Data de origem e destino são obrigatórias.' }
+  }
+  if (normSrc === normTgt) {
+    return { valid: false, error: 'A data de destino deve ser diferente da data de origem.' }
+  }
+  if (normSrc < normStart || normSrc > normEnd) {
+    return { valid: false, error: `A data de origem (${normSrc}) está fora do ciclo.` }
+  }
+  if (normTgt < normStart || normTgt > normEnd) {
+    return { valid: false, error: `A data de destino (${normTgt}) está fora do ciclo.` }
+  }
+
+  const srcDow = dayOfWeekDateOnly(normSrc)
+  const tgtDow = dayOfWeekDateOnly(normTgt)
+
+  if (srcDow !== 6 && srcDow !== 0) {
+    return { valid: false, error: 'A data de origem não é um sábado nem um domingo.' }
+  }
+  if (srcDow !== tgtDow) {
+    return {
+      valid: false,
+      error: `Movimento inválido: não é permitido mover de ${srcDow === 6 ? 'sábado' : 'domingo'} para ${tgtDow === 6 ? 'sábado' : tgtDow === 0 ? 'domingo' : 'dia útil'}. Sábado só pode ir para sábado, domingo só para domingo.`,
+    }
+  }
+
+  if (currentAssignments && currentAssignments.length > 0) {
+    const hasSource = currentAssignments.some(
+      (d) => (d || '').split(' ')[0].split('T')[0] === normSrc,
+    )
+    if (!hasSource) {
+      return {
+        valid: false,
+        error: `A data ${normSrc} não está marcada como folga deste colaborador.`,
+      }
+    }
+  }
+
+  return { valid: true, weekday: srcDow }
+}
+
+/**
+ * Atualiza o array de assignments do colaborador com o novo destino,
+ * preservando exatamente 1 sábado e 1 domingo.
+ */
+export function moveWeekendOffAssignment(
+  currentAssignments: string[],
+  sourceDate: string,
+  targetDate: string,
+): string[] {
+  const normSrc = (sourceDate || '').split(' ')[0].split('T')[0]
+  const normTgt = (targetDate || '').split(' ')[0].split('T')[0]
+  const srcDow = dayOfWeekDateOnly(normSrc)
+
+  const remaining = currentAssignments.filter(
+    (d) => (d || '').split(' ')[0].split('T')[0] !== normSrc,
+  )
+
+  // Adiciona o novo destino e ordena: primeiro sábado (6), depois domingo (0) ou cronológico
+  const updated = [...remaining, normTgt]
+  return updated.sort((a, b) => {
+    const dowA = dayOfWeekDateOnly(a)
+    const dowB = dayOfWeekDateOnly(b)
+    if (dowA === 6 && dowB === 0) return -1
+    if (dowA === 0 && dowB === 6) return 1
+    return a.localeCompare(b)
+  })
 }
 
 /**

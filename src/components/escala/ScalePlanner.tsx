@@ -45,7 +45,10 @@ import {
   addDaysDateOnly,
   dayOfWeekDateOnly,
   buildWeekendOffMap,
+  validateWeekendOffOverride,
+  moveWeekendOffAssignment,
 } from '@/lib/escala-weekend-off'
+import { moveWeekendOff } from '@/services/escala'
 import {
   Dialog,
   DialogContent,
@@ -82,6 +85,27 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
   const [isLoadingShifts, setIsLoadingShifts] = useState(false)
   const [isSyncing, setIsSyncing] = useState(false)
   const [dragOverCell, setDragOverCell] = useState<{ userId: string; dateStr: string } | null>(null)
+  const [draggedWeekendOff, setDraggedWeekendOff] = useState<{
+    userId: string
+    dateStr: string
+    weekday: number
+    userName: string
+  } | null>(null)
+  const [keyboardMoveModal, setKeyboardMoveModal] = useState<{
+    isOpen: boolean
+    userId: string
+    userName: string
+    sourceDate: string
+    weekday: number
+    targetDate: string
+  }>({
+    isOpen: false,
+    userId: '',
+    userName: '',
+    sourceDate: '',
+    weekday: 6,
+    targetDate: '',
+  })
   const [isGenerating, setIsGenerating] = useState(false)
   const [generationError, setGenerationError] = useState<string | null>(null)
   const [activeDraftRecord, setActiveDraftRecord] = useState<any>(null)
@@ -456,13 +480,55 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
     dateStr: string,
     shiftVal: string,
   ) => {
-    e.dataTransfer.setData('text/plain', JSON.stringify({ userId, dateStr, shiftVal }))
+    e.dataTransfer.setData(
+      'text/plain',
+      JSON.stringify({ type: 'shift', userId, dateStr, shiftVal }),
+    )
     e.dataTransfer.effectAllowed = 'move'
+  }
+
+  const handleWeekendOffDragStart = (
+    e: React.DragEvent,
+    userId: string,
+    dateStr: string,
+    userName: string,
+  ) => {
+    const dow = dayOfWeekDateOnly(dateStr)
+    const payload = {
+      type: 'weekend_off',
+      userId,
+      dateStr,
+      weekday: dow,
+      userName,
+    }
+    setDraggedWeekendOff({ userId, dateStr, weekday: dow, userName })
+    e.dataTransfer.setData('text/plain', JSON.stringify(payload))
+    e.dataTransfer.setData('application/json', JSON.stringify(payload))
+    e.dataTransfer.effectAllowed = 'move'
+  }
+
+  const handleDragEnd = () => {
+    setDraggedWeekendOff(null)
+    setDragOverCell(null)
   }
 
   const handleDragOver = (e: React.DragEvent, userId: string, dateStr: string) => {
     e.preventDefault()
-    e.dataTransfer.dropEffect = 'move'
+    if (draggedWeekendOff) {
+      const tgtDow = dayOfWeekDateOnly(dateStr)
+      const isValidTarget =
+        draggedWeekendOff.userId === userId &&
+        draggedWeekendOff.weekday === tgtDow &&
+        draggedWeekendOff.dateStr !== dateStr
+      if (isValidTarget) {
+        e.dataTransfer.dropEffect = 'move'
+      } else {
+        e.dataTransfer.dropEffect = 'none'
+      }
+    } else {
+      e.dataTransfer.dropEffect = 'move'
+    }
+
     if (dragOverCell?.userId !== userId || dragOverCell?.dateStr !== dateStr) {
       setDragOverCell({ userId, dateStr })
     }
@@ -472,17 +538,172 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
     setDragOverCell(null)
   }
 
+  const executeMoveWeekendOff = async (
+    userId: string,
+    sourceDateStr: string,
+    targetDateStr: string,
+    userName: string,
+  ) => {
+    if (!selectedCycle) {
+      toast({
+        title: 'Erro',
+        description: 'Ciclo não selecionado.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    const cycleStartStr = (selectedCycle.start_date || '').split(' ')[0].split('T')[0]
+    const cycleEndStr = (selectedCycle.end_date || '').split(' ')[0].split('T')[0]
+    const currentAssignments =
+      activeDraftRecord?.validation_summary?.weekend_off_assignments?.[userId] || []
+
+    const preValidation = validateWeekendOffOverride({
+      staffId: userId,
+      sourceDate: sourceDateStr,
+      targetDate: targetDateStr,
+      cycleStart: cycleStartStr,
+      cycleEnd: cycleEndStr,
+      currentAssignments,
+    })
+
+    if (!preValidation.valid) {
+      toast({
+        title: 'Movimento Inválido',
+        description: preValidation.error || 'Não é permitido mover para esta data.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    // Se temos activeDraftRecord persistido, chama endpoint dedicado no backend
+    if (activeDraftRecord && activeDraftRecord.id) {
+      try {
+        const res: any = await moveWeekendOff(
+          activeDraftRecord.id,
+          userId,
+          sourceDateStr,
+          targetDateStr,
+        )
+
+        toast({
+          title: 'Folga Remanejada',
+          description: `Folga de ${userName} movida com sucesso de ${format(new Date(sourceDateStr + 'T12:00:00Z'), 'dd/MM')} para ${format(new Date(targetDateStr + 'T12:00:00Z'), 'dd/MM')}.`,
+        })
+
+        // Atualiza rascunho ativo localmente com os novos assignments e overrides retornados
+        setActiveDraftRecord((prev: any) => ({
+          ...prev,
+          validation_summary: {
+            ...(prev?.validation_summary || {}),
+            weekend_off_assignments: res.weekend_off_assignments,
+            weekend_off_overrides: res.weekend_off_overrides,
+          },
+        }))
+
+        // Recarrega shifts para refletir a troca
+        const reloaded = await pb.collection('shifts').getFullList({
+          filter: `cycle="${selectedCycleId}"`,
+          expand: 'staff_profile,staff_profile.staff_role,user,sector',
+        })
+        setAllShifts(reloaded)
+      } catch (err: any) {
+        const errorData = err?.response
+        const errorMsg =
+          errorData?.message ||
+          errorData?.error ||
+          err.message ||
+          'Falha ao remanejar folga de fim de semana.'
+        toast({
+          title: 'Movimento Rejeitado',
+          description: errorMsg,
+          variant: 'destructive',
+        })
+      }
+    } else {
+      // Atualização local do rascunho antes da persistência
+      setActiveDraftRecord((prev: any) => {
+        const currentSummary = prev?.validation_summary || {}
+        const currentAss = currentSummary.weekend_off_assignments || {}
+        const staffAss = currentAss[userId] || [sourceDateStr]
+        const updatedAss = moveWeekendOffAssignment(staffAss, sourceDateStr, targetDateStr)
+        const dow = dayOfWeekDateOnly(sourceDateStr)
+        const overrideKey = dow === 6 ? 'saturday' : 'sunday'
+
+        const currentOverrides = currentSummary.weekend_off_overrides || {}
+        const staffOverrides = currentOverrides[userId] || {}
+        staffOverrides[overrideKey] = {
+          source_date: sourceDateStr,
+          target_date: targetDateStr,
+          weekday: dow,
+          moved_at: new Date().toISOString(),
+          manual_override: true,
+        }
+
+        return {
+          ...prev,
+          validation_summary: {
+            ...currentSummary,
+            weekend_off_assignments: {
+              ...currentAss,
+              [userId]: updatedAss,
+            },
+            weekend_off_overrides: {
+              ...currentOverrides,
+              [userId]: staffOverrides,
+            },
+          },
+        }
+      })
+
+      // Troca plantão no draft local se houver
+      setDraft((prev) => {
+        const next = { ...prev }
+        if (!next[userId]) next[userId] = {}
+        const targetVal = next[userId][targetDateStr]
+        next[userId][sourceDateStr] = targetVal || ''
+        next[userId][targetDateStr] = ''
+        return next
+      })
+
+      toast({
+        title: 'Folga Remanejada',
+        description: `Folga de ${userName} movida para ${format(new Date(targetDateStr + 'T12:00:00Z'), 'dd/MM')}. Salve o rascunho para persistir.`,
+      })
+    }
+  }
+
   const handleDrop = async (e: React.DragEvent, targetUserId: string, targetDateStr: string) => {
     e.preventDefault()
     setDragOverCell(null)
-
-    if (!isEditMode) return
+    setDraggedWeekendOff(null)
 
     try {
       const dataStr = e.dataTransfer.getData('text/plain')
       if (!dataStr) return
 
       const data = JSON.parse(dataStr)
+
+      // 1. Drop de Weekend-Off
+      if (data.type === 'weekend_off') {
+        const { userId, dateStr: sourceDateStr, userName } = data
+        if (userId !== targetUserId) {
+          toast({
+            title: 'Destino Inválido',
+            description: 'Não é permitido mover a folga de fim de semana para outro colaborador.',
+            variant: 'destructive',
+          })
+          return
+        }
+        if (sourceDateStr === targetDateStr) return
+
+        await executeMoveWeekendOff(userId, sourceDateStr, targetDateStr, userName)
+        return
+      }
+
+      // 2. Drop de Turno Normal (Plantão)
+      if (!isEditMode) return
+
       const sourceUserId = data.userId
       const sourceDateStr = data.dateStr
       const shiftVal = data.shiftVal as DraftCell
@@ -507,7 +728,7 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
     } catch (err: any) {
       toast({
         title: 'Erro',
-        description: err.message || 'Falha ao mover turno',
+        description: err.message || 'Falha ao mover elemento',
         variant: 'destructive',
       })
       const reloaded = await pb.collection('shifts').getFullList({
@@ -631,7 +852,13 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
           }
         }),
       )
-      const result = await commitShiftSchedule(selectedCycleId, selectedSectorId, toCreate, publish)
+      const result = await commitShiftSchedule(
+        selectedCycleId,
+        selectedSectorId,
+        toCreate,
+        publish,
+        activeDraftRecord?.id,
+      )
 
       if (publish && selectedCycle?.status === 'draft') {
         setCycles((c) => c.map((x) => (x.id === selectedCycleId ? { ...x, status: 'active' } : x)))
@@ -941,27 +1168,121 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
                           (!val || val === 'F') &&
                           (weekendOffMap.get(user.id)?.has(ds) ?? false)
 
+                        const isDraggingCurrentWeekendOff =
+                          draggedWeekendOff?.userId === user.id && draggedWeekendOff?.dateStr === ds
+
+                        const isValidWeekendOffDropTarget =
+                          draggedWeekendOff &&
+                          draggedWeekendOff.userId === user.id &&
+                          draggedWeekendOff.weekday === dayItem.dayOfWeek &&
+                          draggedWeekendOff.dateStr !== ds
+
+                        const isInvalidWeekendOffDropTarget =
+                          draggedWeekendOff &&
+                          (draggedWeekendOff.userId !== user.id ||
+                            draggedWeekendOff.weekday !== dayItem.dayOfWeek) &&
+                          !isWeekendOff
+
                         return (
                           <td
                             key={ds}
                             data-testid={
                               isWeekendOff && !isTO ? `weekend-off-${user.id}-${ds}` : undefined
                             }
-                            className={cn('p-0 border-b border-r relative', {
-                              'bg-emerald-50':
-                                dragOverCell?.userId === user.id && dragOverCell?.dateStr === ds,
-                              'bg-orange-100': isWeekendOff && !isTO,
+                            className={cn('p-0 border-b border-r relative transition-colors', {
+                              'bg-emerald-100 border-2 border-dashed border-emerald-500':
+                                dragOverCell?.userId === user.id &&
+                                dragOverCell?.dateStr === ds &&
+                                (isValidWeekendOffDropTarget || (!draggedWeekendOff && isEditMode)),
+                              'bg-emerald-50/70 border-emerald-300':
+                                isValidWeekendOffDropTarget &&
+                                (dragOverCell?.userId !== user.id || dragOverCell?.dateStr !== ds),
+                              'opacity-40 cursor-not-allowed bg-slate-100/60':
+                                isInvalidWeekendOffDropTarget,
+                              'bg-orange-100':
+                                isWeekendOff && !isTO && !isDraggingCurrentWeekendOff,
+                              'opacity-50 ring-2 ring-orange-400': isDraggingCurrentWeekendOff,
                             })}
                             onDragOver={(e) =>
-                              isEditMode && !isTO ? handleDragOver(e, user.id, ds) : undefined
+                              (isEditMode || !!draggedWeekendOff) && !isTO
+                                ? handleDragOver(e, user.id, ds)
+                                : undefined
                             }
-                            onDragLeave={isEditMode && !isTO ? handleDragLeave : undefined}
+                            onDragLeave={
+                              (isEditMode || !!draggedWeekendOff) && !isTO
+                                ? handleDragLeave
+                                : undefined
+                            }
                             onDrop={(e) =>
-                              isEditMode && !isTO ? handleDrop(e, user.id, ds) : undefined
+                              (isEditMode || !!draggedWeekendOff) && !isTO
+                                ? handleDrop(e, user.id, ds)
+                                : undefined
                             }
-                            title={isWeekendOff ? 'Fim de semana de folga mensal' : undefined}
+                            title={
+                              isWeekendOff
+                                ? `Fim de semana de folga: ${user.name} em ${ds}`
+                                : undefined
+                            }
                           >
-                            {isEditMode ? (
+                            {/* Box de Folga de Fim de Semana Arrastável (mesmo sem modo edição geral de plantão) */}
+                            {isWeekendOff && !isTO && (!val || val === 'F') ? (
+                              <div
+                                draggable
+                                onDragStart={(e) =>
+                                  handleWeekendOffDragStart(e, user.id, ds, user.name)
+                                }
+                                onDragEnd={handleDragEnd}
+                                onClick={() => {
+                                  // Alternativa acessível: abre modal para mover por teclado/seleção
+                                  const dow = dayOfWeekDateOnly(ds)
+                                  const validCandidates = days
+                                    .filter((d) => d.dayOfWeek === dow && d.key !== ds)
+                                    .map((d) => d.key)
+                                  setKeyboardMoveModal({
+                                    isOpen: true,
+                                    userId: user.id,
+                                    userName: user.name,
+                                    sourceDate: ds,
+                                    weekday: dow,
+                                    targetDate: validCandidates[0] || '',
+                                  })
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault()
+                                    const dow = dayOfWeekDateOnly(ds)
+                                    const validCandidates = days
+                                      .filter((d) => d.dayOfWeek === dow && d.key !== ds)
+                                      .map((d) => d.key)
+                                    setKeyboardMoveModal({
+                                      isOpen: true,
+                                      userId: user.id,
+                                      userName: user.name,
+                                      sourceDate: ds,
+                                      weekday: dow,
+                                      targetDate: validCandidates[0] || '',
+                                    })
+                                  }
+                                }}
+                                tabIndex={0}
+                                role="button"
+                                aria-label={`Folga de Fim de Semana de ${user.name} no dia ${ds}. Pressione Enter para mover.`}
+                                className={cn(
+                                  'w-full h-11 bg-orange-100 border border-orange-300 rounded px-1 py-0.5 text-xs flex flex-col items-center justify-center cursor-grab active:cursor-grabbing hover:bg-orange-200/90 shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-orange-500 select-none group/box',
+                                  isDraggingCurrentWeekendOff && 'opacity-30 scale-95',
+                                )}
+                              >
+                                <div className="flex items-center gap-1 max-w-full">
+                                  <Move className="h-2.5 w-2.5 text-orange-700 opacity-60 group-hover/box:opacity-100 shrink-0" />
+                                  <span className="font-semibold text-slate-900 text-[11px] truncate">
+                                    {user.name}
+                                  </span>
+                                </div>
+                                <span className="text-[10px] text-orange-800 leading-tight">
+                                  Folga fim de semana
+                                </span>
+                              </div>
+                            ) : isEditMode ? (
                               <div
                                 draggable={!!val && val !== 'F'}
                                 onDragStart={(e) => {
@@ -984,9 +1305,7 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
                                       isPendingTO,
                                     'cursor-move hover:opacity-80 border-2 border-dashed border-transparent hover:border-slate-400':
                                       !!val && val !== 'F',
-                                    'bg-orange-100 border border-orange-300 rounded px-1 py-0.5 text-xs text-orange-900 font-medium':
-                                      isWeekendOff && !isTO && (!val || val === 'F'),
-                                    'bg-transparent': (!val || val === 'F') && !isWeekendOff,
+                                    'bg-transparent': !val || val === 'F',
                                   },
                                 )}
                               >
@@ -994,75 +1313,43 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
                                 {val === 'N' && '19:00 - 07:00'}
                                 {val === 'M' && '07:00 - 13:00'}
                                 {val === 'T' && '13:00 - 19:00'}
-                                {val === 'F' && (isWeekendOff ? 'Folga fim de semana' : 'Folga')}
-                                {!val && isWeekendOff && (
-                                  <div className="flex flex-col items-center justify-center">
-                                    <span className="font-semibold text-slate-900">
-                                      {user.name}
-                                    </span>
-                                    <span className="text-[10px] text-orange-800">
-                                      Folga fim de semana
-                                    </span>
-                                  </div>
-                                )}
+                                {val === 'F' && 'Folga'}
                               </div>
                             ) : (
                               <div className="relative w-full h-11 flex items-center justify-center">
-                                {isWeekendOff && !isTO && (!val || val === 'F') && !val ? (
-                                  <div
-                                    className="w-full h-full bg-orange-100 border border-orange-300 rounded px-1 py-0.5 text-xs flex flex-col items-center justify-center cursor-pointer"
-                                    onClick={() => {
-                                      // allows opening select or editing
-                                    }}
-                                  >
-                                    <span className="font-semibold text-slate-900 text-[11px] truncate max-w-full">
-                                      {user.name}
-                                    </span>
-                                    <span className="text-[10px] text-orange-800 leading-tight">
-                                      Folga fim de semana
-                                    </span>
-                                  </div>
-                                ) : (
-                                  <select
-                                    value={val}
-                                    onChange={(e) =>
-                                      setDraft((p) => ({
-                                        ...p,
-                                        [user.id]: {
-                                          ...p[user.id],
-                                          [ds]: e.target.value as DraftCell,
-                                        },
-                                      }))
-                                    }
-                                    disabled={isTO || selectedCycle?.status !== 'draft'}
-                                    className={cn(
-                                      'w-full h-11 appearance-none bg-transparent text-center text-[11px] md:text-xs outline-none cursor-pointer hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 transition-colors',
-                                      {
-                                        'font-bold text-black bg-white':
-                                          val === 'D' || val === 'M' || val === 'T',
-                                        'font-bold text-black bg-slate-200 hover:bg-slate-300':
-                                          val === 'N',
-                                        'text-red-400 font-bold bg-red-50/80 hover:bg-red-100':
-                                          isTO && !isPendingTO,
-                                        'text-amber-500 font-bold bg-amber-50/80 hover:bg-amber-100':
-                                          isPendingTO,
-                                        'bg-orange-100 text-orange-800 font-medium':
-                                          isWeekendOff && !isTO && (!val || val === 'F'),
+                                <select
+                                  value={val}
+                                  onChange={(e) =>
+                                    setDraft((p) => ({
+                                      ...p,
+                                      [user.id]: {
+                                        ...p[user.id],
+                                        [ds]: e.target.value as DraftCell,
                                       },
-                                    )}
-                                  >
-                                    <option value="">
-                                      {isWeekendOff ? 'Folga fim de semana' : ''}
-                                    </option>
-                                    <option value="D">07:00 - 19:00</option>
-                                    <option value="N">19:00 - 07:00</option>
-                                    <option value="M">07:00 - 13:00</option>
-                                    <option value="T">13:00 - 19:00</option>
-                                    <option value="F">
-                                      {isWeekendOff ? 'Folga fim de semana' : 'Folga'}
-                                    </option>
-                                  </select>
-                                )}
+                                    }))
+                                  }
+                                  disabled={isTO || selectedCycle?.status !== 'draft'}
+                                  className={cn(
+                                    'w-full h-11 appearance-none bg-transparent text-center text-[11px] md:text-xs outline-none cursor-pointer hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 transition-colors',
+                                    {
+                                      'font-bold text-black bg-white':
+                                        val === 'D' || val === 'M' || val === 'T',
+                                      'font-bold text-black bg-slate-200 hover:bg-slate-300':
+                                        val === 'N',
+                                      'text-red-400 font-bold bg-red-50/80 hover:bg-red-100':
+                                        isTO && !isPendingTO,
+                                      'text-amber-500 font-bold bg-amber-50/80 hover:bg-amber-100':
+                                        isPendingTO,
+                                    },
+                                  )}
+                                >
+                                  <option value="">{''}</option>
+                                  <option value="D">07:00 - 19:00</option>
+                                  <option value="N">19:00 - 07:00</option>
+                                  <option value="M">07:00 - 13:00</option>
+                                  <option value="T">13:00 - 19:00</option>
+                                  <option value="F">Folga</option>
+                                </select>
                               </div>
                             )}
                             {isTO && (
@@ -1087,6 +1374,91 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
             <ScrollBar orientation="horizontal" />
           </ScrollArea>
         </div>
+
+        {/* Modal de Acessibilidade por Teclado para remanejar Folga de Fim de Semana */}
+        <Dialog
+          open={keyboardMoveModal.isOpen}
+          onOpenChange={(open) => setKeyboardMoveModal((prev) => ({ ...prev, isOpen: open }))}
+        >
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Move className="h-5 w-5 text-orange-600" />
+                Remanejar Folga de Fim de Semana
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-3">
+              <div className="bg-slate-50 p-3 rounded-lg border text-xs space-y-1">
+                <div>
+                  <span className="font-semibold text-slate-700">Colaborador:</span>{' '}
+                  {keyboardMoveModal.userName}
+                </div>
+                <div>
+                  <span className="font-semibold text-slate-700">Data Atual:</span>{' '}
+                  {keyboardMoveModal.sourceDate} (
+                  {keyboardMoveModal.weekday === 6 ? 'Sábado' : 'Domingo'})
+                </div>
+                <p className="text-[11px] text-slate-500 mt-2">
+                  Regra:{' '}
+                  {keyboardMoveModal.weekday === 6
+                    ? 'Sábado só pode ir para Sábado'
+                    : 'Domingo só para Domingo'}{' '}
+                  do mesmo ciclo.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-slate-700">
+                  Nova Data de Folga ({keyboardMoveModal.weekday === 6 ? 'Sábados' : 'Domingos'} no
+                  ciclo):
+                </label>
+                <Select
+                  value={keyboardMoveModal.targetDate}
+                  onValueChange={(val) =>
+                    setKeyboardMoveModal((prev) => ({ ...prev, targetDate: val }))
+                  }
+                >
+                  <SelectTrigger className="w-full bg-white">
+                    <SelectValue placeholder="Selecione o destino" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {days
+                      .filter(
+                        (d) =>
+                          d.dayOfWeek === keyboardMoveModal.weekday &&
+                          d.key !== keyboardMoveModal.sourceDate,
+                      )
+                      .map((d) => (
+                        <SelectItem key={d.key} value={d.key}>
+                          {format(d.date, 'dd/MM/yyyy (EEEE)', { locale: ptBR })}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setKeyboardMoveModal((prev) => ({ ...prev, isOpen: false }))}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  className="bg-orange-600 hover:bg-orange-700 text-white"
+                  disabled={!keyboardMoveModal.targetDate}
+                  onClick={async () => {
+                    const { userId, sourceDate, targetDate, userName } = keyboardMoveModal
+                    setKeyboardMoveModal((prev) => ({ ...prev, isOpen: false }))
+                    await executeMoveWeekendOff(userId, sourceDate, targetDate, userName)
+                  }}
+                >
+                  Confirmar Remanejamento
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Alert Panel Below Calendar */}
         <div className="border rounded-lg bg-slate-50/80 p-4 shadow-sm mt-2">

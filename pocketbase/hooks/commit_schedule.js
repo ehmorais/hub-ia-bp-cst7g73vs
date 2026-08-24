@@ -325,6 +325,7 @@ routerAdd(
     // 1. Check if there is an existing schedule_draft with validation_summary.weekend_off_assignments
     var draftRecord = null
     var weekendOffAssignments = null
+    var weekendOffOverrides = {}
     var bodyDraftId = body.draft_id || body.draft || ''
 
     if (bodyDraftId) {
@@ -367,6 +368,13 @@ routerAdd(
             weekendOffAssignments = valSummary.weekend_off_assignments
           }
         }
+        if (
+          valSummary &&
+          valSummary.weekend_off_overrides &&
+          typeof valSummary.weekend_off_overrides === 'object'
+        ) {
+          weekendOffOverrides = valSummary.weekend_off_overrides
+        }
       } catch (_) {}
     }
 
@@ -391,6 +399,7 @@ routerAdd(
       })
 
       var staffAssignments = weekendOffAssignments ? weekendOffAssignments[profileId] : null
+      var staffOverrides = weekendOffOverrides ? weekendOffOverrides[profileId] : null
 
       if (staffAssignments && Array.isArray(staffAssignments) && staffAssignments.length >= 2) {
         if (staffAssignments.length > 2) {
@@ -398,33 +407,78 @@ routerAdd(
             'Fim de semana obrigatório inválido: payload legado com mais de um par por staff.',
           )
         } else {
-          // Valida contra designação explícita do rascunho persistido
-          var satD = staffAssignments[0]
-          var sunD = staffAssignments[1]
-          if (
-            !satD ||
-            !sunD ||
-            !assertWeekendPair(satD, sunD) ||
-            satD < cycleStart ||
-            sunD > cycleEnd
+          // Identifica se temos exatamente 1 sábado (6) e 1 domingo (0)
+          var date1 = staffAssignments[0]
+          var date2 = staffAssignments[1]
+          var dow1 = date1 ? dayOfWeekDateOnly(date1) : -1
+          var dow2 = date2 ? dayOfWeekDateOnly(date2) : -1
+
+          var hasOneSat = (dow1 === 6 && dow2 !== 6) || (dow2 === 6 && dow1 !== 6)
+          var hasOneSun = (dow1 === 0 && dow2 !== 0) || (dow2 === 0 && dow1 !== 0)
+          var satDate = dow1 === 6 ? date1 : dow2 === 6 ? date2 : null
+          var sunDate = dow1 === 0 ? date1 : dow2 === 0 ? date2 : null
+
+          var isConsecutivePair = satDate && sunDate && assertWeekendPair(satDate, sunDate)
+          var hasValidOverrideAudit = false
+
+          if (staffOverrides && typeof staffOverrides === 'object') {
+            // Verifica se há override válido para sábado ou domingo com manual_override=true
+            var satOverride = staffOverrides.saturday
+            var sunOverride = staffOverrides.sunday
+            if (
+              (satOverride &&
+                satOverride.manual_override === true &&
+                satOverride.target_date === satDate &&
+                satOverride.weekday === 6) ||
+              (sunOverride &&
+                sunOverride.manual_override === true &&
+                sunOverride.target_date === sunDate &&
+                sunOverride.weekday === 0)
+            ) {
+              hasValidOverrideAudit = true
+            }
+          }
+
+          if (!satDate || !sunDate || !hasOneSat || !hasOneSun) {
+            violations.push(
+              'Fim de semana obrigatório inválido: ' +
+                profile.name +
+                ' deve ter exatamente 1 sábado e 1 domingo marcados como folga.',
+            )
+          } else if (
+            satDate < cycleStart ||
+            satDate > cycleEnd ||
+            sunDate < cycleStart ||
+            sunDate > cycleEnd
           ) {
             violations.push(
               'Fim de semana obrigatório inválido: ' +
                 profile.name +
                 ' possui designação (' +
-                satD +
+                satDate +
                 ' / ' +
-                sunD +
-                ') que não é Sábado + Domingo dentro do ciclo.',
+                sunDate +
+                ') fora dos limites do ciclo.',
             )
-          } else if (uShiftSet[satD] || uShiftSet[sunD]) {
+          } else if (!isConsecutivePair && !hasValidOverrideAudit) {
+            // Se não é consecutivo e NÃO possui override auditado válido, rejeita!
+            violations.push(
+              'Fim de semana obrigatório inválido: ' +
+                profile.name +
+                ' possui sábado (' +
+                satDate +
+                ') e domingo (' +
+                sunDate +
+                ') não consecutivos sem trilha de auditoria de override manual válida.',
+            )
+          } else if (uShiftSet[satDate] || uShiftSet[sunDate]) {
             violations.push(
               'Fim de semana obrigatório não atendido: ' +
                 profile.name +
-                ' possui plantão no fim de semana de folga designado (' +
-                satD +
+                ' possui plantão na folga de fim de semana designada (' +
+                satDate +
                 ' / ' +
-                sunD +
+                sunDate +
                 ').',
             )
           }

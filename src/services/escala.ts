@@ -222,6 +222,7 @@ export const commitShiftSchedule = (
   sectorId: string,
   shifts: any[],
   publish = false,
+  draftId?: string,
 ) =>
   pb.send('/backend/v1/escala/commit', {
     method: 'POST',
@@ -230,6 +231,24 @@ export const commitShiftSchedule = (
       sector_id: sectorId,
       shifts,
       publish,
+      draft_id: draftId,
+    }),
+    headers: { 'Content-Type': 'application/json' },
+  })
+
+export const moveWeekendOff = (
+  draftId: string,
+  staffId: string,
+  sourceDate: string,
+  targetDate: string,
+) =>
+  pb.send('/backend/v1/escala/move-weekend-off', {
+    method: 'POST',
+    body: JSON.stringify({
+      draft_id: draftId,
+      staff_id: staffId,
+      source_date: sourceDate,
+      target_date: targetDate,
     }),
     headers: { 'Content-Type': 'application/json' },
   })
