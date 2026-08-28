@@ -437,12 +437,30 @@ export function DepartmentStaffList({ departmentId }: { departmentId?: string })
                         <span className="text-xs text-slate-400">Sem Cargo</span>
                       )}
                       {u.expand?.staff_profile && (
-                        <Badge
-                          variant="outline"
-                          className="font-normal text-[10px] uppercase border-blue-200 text-blue-700 bg-blue-50"
-                        >
-                          {u.expand.staff_profile.name}
-                        </Badge>
+                        <div className="flex items-center gap-1 flex-wrap">
+                          <Badge
+                            variant="outline"
+                            className="font-normal text-[10px] uppercase border-blue-200 text-blue-700 bg-blue-50"
+                          >
+                            {u.expand.staff_profile.name}
+                          </Badge>
+                          {u.expand.staff_profile.shift_parity === 'even' && (
+                            <Badge
+                              variant="outline"
+                              className="text-[10px] bg-blue-50 text-blue-600 border-blue-200"
+                            >
+                              Pares
+                            </Badge>
+                          )}
+                          {u.expand.staff_profile.shift_parity === 'odd' && (
+                            <Badge
+                              variant="outline"
+                              className="text-[10px] bg-purple-50 text-purple-600 border-purple-200"
+                            >
+                              Ímpares
+                            </Badge>
+                          )}
+                        </div>
                       )}
                     </div>
                   </TableCell>

@@ -47,6 +47,7 @@ import {
   createStaffProfile,
   deleteStaffProfile,
   getHospitalSectors,
+  getShiftCycles,
   getShiftRules,
   getShiftTypes,
   getStaffContracts,
@@ -56,15 +57,20 @@ import {
   updateStaffContract,
   updateStaffProfile,
 } from '@/services/escala'
+import { parseDateOnly } from '@/lib/escala-weekend-off'
 import { useRealtime } from '@/hooks/use-realtime'
 
-type ProfileForm = {
+export type ShiftParity = 'even' | 'odd'
+
+export type ProfileForm = {
   name: string
   professional_id: string
   staff_role: string
   default_sector: string
   rules: string[]
   active: boolean
+  shift_parity: 'none' | ShiftParity
+  cycle_start_date: string
   contract_type: string
   monthly_hour_limit: string
   shift_type: string
@@ -77,6 +83,8 @@ const emptyForm: ProfileForm = {
   default_sector: 'none',
   rules: [],
   active: true,
+  shift_parity: 'none',
+  cycle_start_date: '',
   contract_type: 'none',
   monthly_hour_limit: '',
   shift_type: 'none',
@@ -91,6 +99,8 @@ export function StaffProfiles({ departmentId }: { departmentId?: string; project
   const [rules, setRules] = useState<any[]>([])
   const [contracts, setContracts] = useState<any[]>([])
   const [shiftTypes, setShiftTypes] = useState<any[]>([])
+  const [cycles, setCycles] = useState<any[]>([])
+  const [activeCycle, setActiveCycle] = useState<any>(null)
   const [selectedProfiles, setSelectedProfiles] = useState<string[]>([])
   const [isBulkOpen, setIsBulkOpen] = useState(false)
   const [bulkSector, setBulkSector] = useState('none')
@@ -106,7 +116,7 @@ export function StaffProfiles({ departmentId }: { departmentId?: string; project
 
   const loadData = async () => {
     try {
-      const [profileList, roleList, sectorList, ruleList, contractList, shiftTypeList] =
+      const [profileList, roleList, sectorList, ruleList, contractList, shiftTypeList, cycleList] =
         await Promise.all([
           getStaffProfiles().catch(() => []),
           getStaffRoles().catch(() => []),
@@ -118,6 +128,7 @@ export function StaffProfiles({ departmentId }: { departmentId?: string; project
             : getShiftRules().catch(() => []),
           getStaffContracts().catch(() => []),
           getShiftTypes().catch(() => []),
+          getShiftCycles().catch(() => []),
         ])
       setProfiles(profileList)
       setRoles(roleList)
@@ -125,6 +136,10 @@ export function StaffProfiles({ departmentId }: { departmentId?: string; project
       setRules(ruleList)
       setContracts(contractList)
       setShiftTypes(shiftTypeList)
+      setCycles(cycleList)
+
+      const active = cycleList.find((c: any) => c.status === 'active') || cycleList[0] || null
+      setActiveCycle(active)
     } catch (error) {
       console.error('Failed to load collaborator profiles', error)
     }
@@ -139,7 +154,13 @@ export function StaffProfiles({ departmentId }: { departmentId?: string; project
 
   const openAdd = () => {
     setEditingProfile(null)
-    setFormData(emptyForm)
+    const initialCycleStartDate = activeCycle
+      ? activeCycle.start_date?.split(' ')[0].split('T')[0]
+      : ''
+    setFormData({
+      ...emptyForm,
+      cycle_start_date: initialCycleStartDate || '',
+    })
     setIsFormOpen(true)
   }
 
@@ -148,6 +169,9 @@ export function StaffProfiles({ departmentId }: { departmentId?: string; project
       contracts.find((contract) => contract.staff_profile === profile.id) ||
       profile.expand?.staff_contracts
     const contract = Array.isArray(linked) ? linked[0] : linked
+    const rawCycleStart = profile.cycle_start_date || ''
+    const cleanCycleStart = rawCycleStart ? rawCycleStart.split(' ')[0].split('T')[0] : ''
+
     setEditingProfile(profile)
     setFormData({
       name: profile.name || '',
@@ -156,6 +180,11 @@ export function StaffProfiles({ departmentId }: { departmentId?: string; project
       default_sector: profile.default_sector || 'none',
       rules: profile.rules || [],
       active: profile.active !== false,
+      shift_parity:
+        profile.shift_parity === 'even' || profile.shift_parity === 'odd'
+          ? profile.shift_parity
+          : 'none',
+      cycle_start_date: cleanCycleStart,
       contract_type: contract?.contract_type || 'none',
       monthly_hour_limit:
         contract && contract.monthly_hour_limit != null ? String(contract.monthly_hour_limit) : '',
@@ -181,6 +210,82 @@ export function StaffProfiles({ departmentId }: { departmentId?: string; project
       return
     }
 
+    // Validação obrigatória: Dias de plantão (Paridade)
+    if (formData.shift_parity !== 'even' && formData.shift_parity !== 'odd') {
+      toast({
+        title: 'Dias de plantão obrigatórios',
+        description:
+          'Selecione os dias de plantão do colaborador ("Dias pares" ou "Dias ímpares").',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    // Validação obrigatória: Início do plantão no ciclo
+    const cleanDate = formData.cycle_start_date.trim()
+    if (!cleanDate) {
+      toast({
+        title: 'Início do plantão obrigatório',
+        description: 'Informe a data de início do primeiro plantão do colaborador no ciclo.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(cleanDate)) {
+      toast({
+        title: 'Data inválida',
+        description: 'A data de início do plantão deve estar no formato AAAA-MM-DD.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    // Validação de ciclo e coerência de paridade relativa ao ciclo
+    if (activeCycle) {
+      const cStart = activeCycle.start_date
+        ? activeCycle.start_date.split(' ')[0].split('T')[0]
+        : ''
+      const cEnd = activeCycle.end_date ? activeCycle.end_date.split(' ')[0].split('T')[0] : ''
+
+      if (cStart && cEnd) {
+        if (cleanDate < cStart || cleanDate > cEnd) {
+          toast({
+            title: 'Data fora do ciclo',
+            description: `A data de início do plantão (${cleanDate}) deve pertencer ao período do ciclo ativo (${cStart} a ${cEnd}).`,
+            variant: 'destructive',
+          })
+          return
+        }
+
+        // Validação de coerência entre a data de início (posição relativa no ciclo) e a paridade selecionada
+        const diffFromStart = Math.round(
+          (new Date(cleanDate + 'T00:00:00Z').getTime() -
+            new Date(cStart + 'T00:00:00Z').getTime()) /
+            86400000,
+        )
+        const dayPositionParity = diffFromStart % 2 === 0 ? 'even' : 'odd'
+
+        if (formData.shift_parity !== dayPositionParity) {
+          const expectedParityLabel =
+            formData.shift_parity === 'even'
+              ? 'Dias pares (1º dia do ciclo / índice par)'
+              : 'Dias ímpares (2º dia do ciclo / índice ímpar)'
+          const actualPositionLabel =
+            dayPositionParity === 'even'
+              ? 'posição par relativa ao ciclo (1º dia, 3º dia...)'
+              : 'posição ímpar relativa ao ciclo (2º dia, 4º dia...)'
+
+          toast({
+            title: 'Incoerência com a paridade selecionada',
+            description: `A data de início informada (${cleanDate}) corresponde a uma ${actualPositionLabel}, mas você selecionou "${expectedParityLabel}". Ajuste a data ou a paridade para manter a alternância correta.`,
+            variant: 'destructive',
+          })
+          return
+        }
+      }
+    }
+
     const payload = {
       name: formData.name.trim(),
       professional_id: formData.professional_id.trim(),
@@ -188,6 +293,8 @@ export function StaffProfiles({ departmentId }: { departmentId?: string; project
       default_sector: formData.default_sector === 'none' ? null : formData.default_sector,
       rules: formData.rules,
       active: formData.active,
+      shift_parity: formData.shift_parity,
+      cycle_start_date: cleanDate,
     }
 
     // Contract data entered inline on the collaborator form. When a contract
@@ -389,6 +496,8 @@ export function StaffProfiles({ departmentId }: { departmentId?: string; project
                 <TableHead>Registro Profissional</TableHead>
                 <TableHead>Cargo / Função</TableHead>
                 <TableHead>Setor Padrão</TableHead>
+                <TableHead>Dias de Plantão</TableHead>
+                <TableHead>Início no Ciclo</TableHead>
                 <TableHead>Regras</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
@@ -433,6 +542,39 @@ export function StaffProfiles({ departmentId }: { departmentId?: string; project
                   </TableCell>
                   <TableCell className="text-sm text-slate-600">
                     {profile.expand?.default_sector?.name || 'Sem setor'}
+                  </TableCell>
+                  <TableCell>
+                    {profile.shift_parity === 'even' ? (
+                      <Badge
+                        variant="outline"
+                        className="bg-blue-50 text-blue-700 border-blue-200 font-medium"
+                      >
+                        Dias pares
+                      </Badge>
+                    ) : profile.shift_parity === 'odd' ? (
+                      <Badge
+                        variant="outline"
+                        className="bg-purple-50 text-purple-700 border-purple-200 font-medium"
+                      >
+                        Dias ímpares
+                      </Badge>
+                    ) : (
+                      <Badge
+                        variant="outline"
+                        className="text-amber-700 bg-amber-50 border-amber-200 font-normal"
+                      >
+                        Não definido (Legado)
+                      </Badge>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-sm text-slate-600">
+                    {profile.cycle_start_date ? (
+                      <span className="font-mono text-xs">
+                        {profile.cycle_start_date.split(' ')[0].split('T')[0]}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-amber-600">Padrão do setor/ciclo</span>
+                    )}
                   </TableCell>
                   <TableCell>
                     {profile.rules?.length ? (
@@ -490,7 +632,7 @@ export function StaffProfiles({ departmentId }: { departmentId?: string; project
               ))}
               {filteredProfiles.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground py-10">
+                  <TableCell colSpan={8} className="text-center text-muted-foreground py-10">
                     Nenhum colaborador encontrado.
                   </TableCell>
                 </TableRow>
@@ -644,6 +786,104 @@ export function StaffProfiles({ departmentId }: { departmentId?: string; project
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Configuração Obrigatória de Paridade e Âncora no Ciclo */}
+            <div className="space-y-3 pt-3 border-t bg-slate-50/50 p-3 rounded-lg border">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-semibold text-slate-800">
+                  Paridade e Alternância de Escala
+                </Label>
+                <Badge variant="secondary" className="text-[10px] font-normal">
+                  Obrigatório
+                </Badge>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="shift-parity-select" className="text-xs font-medium text-slate-700">
+                  Dias de plantão <span className="text-red-500">*</span>
+                </Label>
+                <Select
+                  value={formData.shift_parity}
+                  onValueChange={(value: 'even' | 'odd') => {
+                    setFormData((prev) => {
+                      const next = { ...prev, shift_parity: value }
+                      // Se houver ciclo ativo e data não preenchida ou vazia, sugere a data correspondente
+                      if (activeCycle) {
+                        const cStart = activeCycle.start_date
+                          ? activeCycle.start_date.split(' ')[0].split('T')[0]
+                          : ''
+                        if (cStart) {
+                          if (value === 'even') {
+                            next.cycle_start_date = cStart
+                          } else if (value === 'odd') {
+                            const { y, m, d } = parseDateOnly(cStart)
+                            const nextDate = new Date(Date.UTC(y, m - 1, d + 1))
+                              .toISOString()
+                              .split('T')[0]
+                            next.cycle_start_date = nextDate
+                          }
+                        }
+                      }
+                      return next
+                    })
+                  }}
+                >
+                  <SelectTrigger id="shift-parity-select" className="bg-white">
+                    <SelectValue placeholder="Selecione a paridade..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="even">Dias pares</SelectItem>
+                    <SelectItem value="odd">Dias ímpares</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground">
+                  Define a equipe de alternância 12x36 do colaborador dentro de cada ciclo
+                  operacional.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label
+                  htmlFor="cycle-start-date-input"
+                  className="text-xs font-medium text-slate-700"
+                >
+                  Início do plantão no ciclo <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="cycle-start-date-input"
+                  type="date"
+                  value={formData.cycle_start_date}
+                  min={
+                    activeCycle?.start_date
+                      ? activeCycle.start_date.split(' ')[0].split('T')[0]
+                      : undefined
+                  }
+                  max={
+                    activeCycle?.end_date
+                      ? activeCycle.end_date.split(' ')[0].split('T')[0]
+                      : undefined
+                  }
+                  onChange={(event) =>
+                    setFormData({ ...formData, cycle_start_date: event.target.value })
+                  }
+                  className="bg-white"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Data que ancora o primeiro plantão do colaborador no ciclo selecionado. A
+                  alternância é calculada pela posição relativa ao início do ciclo, garantindo
+                  consistência mesmo em ciclos que atravessam a virada do mês.
+                </p>
+                {activeCycle && (
+                  <div className="text-[11px] text-slate-500 bg-white/80 p-2 rounded border">
+                    Ciclo ativo:{' '}
+                    <span className="font-semibold text-slate-700">{activeCycle.name}</span> (
+                    {activeCycle.start_date?.split(' ')[0].split('T')[0]} a{' '}
+                    {activeCycle.end_date?.split(' ')[0].split('T')[0]})
+                  </div>
+                )}
+              </div>
+            </div>
+
             <div className="flex items-center gap-2 rounded-md border p-3 bg-slate-50">
               <Checkbox
                 id="profile-active"

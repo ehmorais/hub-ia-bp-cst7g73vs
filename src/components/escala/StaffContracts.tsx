@@ -261,6 +261,7 @@ export function StaffContracts({ departmentId }: { departmentId?: string; projec
               <TableHead>Colaborador</TableHead>
               <TableHead>Tipo</TableHead>
               <TableHead>Limite (h)</TableHead>
+              <TableHead>Dias de Plantão / Início</TableHead>
               <TableHead>Regime de Turno</TableHead>
               <TableHead className="text-right">Ações</TableHead>
             </TableRow>
@@ -288,6 +289,33 @@ export function StaffContracts({ departmentId }: { departmentId?: string; projec
                           </p>
                         </TooltipContent>
                       </Tooltip>
+                    )}
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <div className="flex flex-col gap-1 text-xs">
+                    {c.expand?.staff_profile?.shift_parity === 'even' ? (
+                      <Badge
+                        variant="outline"
+                        className="w-fit bg-blue-50 text-blue-700 border-blue-200"
+                      >
+                        Dias pares
+                      </Badge>
+                    ) : c.expand?.staff_profile?.shift_parity === 'odd' ? (
+                      <Badge
+                        variant="outline"
+                        className="w-fit bg-purple-50 text-purple-700 border-purple-200"
+                      >
+                        Dias ímpares
+                      </Badge>
+                    ) : (
+                      <span className="text-slate-400">Paridade não definida</span>
+                    )}
+                    {c.expand?.staff_profile?.cycle_start_date && (
+                      <span className="text-[11px] text-slate-500 font-mono">
+                        Início:{' '}
+                        {c.expand.staff_profile.cycle_start_date.split(' ')[0].split('T')[0]}
+                      </span>
                     )}
                   </div>
                 </TableCell>
