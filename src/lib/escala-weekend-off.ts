@@ -371,9 +371,9 @@ export function computeNaturalPatternByStaff(
 
   if (is12x36) {
     if (parity === 'even') {
-      offset = 0
-    } else if (parity === 'odd') {
       offset = 1
+    } else if (parity === 'odd') {
+      offset = 0
     } else if (anchorDate && anchorDate >= normStart && anchorDate <= normEnd) {
       const diffAnchor = Math.round(
         (new Date(anchorDate + 'T00:00:00Z').getTime() -

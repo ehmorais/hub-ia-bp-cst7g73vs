@@ -29,23 +29,23 @@ describe('Shift Parity by Cycle & Anchor Suite', () => {
     })
 
     it('simula criação e atualização de perfil com shift_parity e cycle_start_date', () => {
-      // Simulação de criação com dias pares
+      // Simulação de criação com dias ímpares (posição 1 no ciclo: 2026-09-26)
       const newProfile = {
         name: 'Dra. Roberta Kelli',
-        shift_parity: 'even' as const,
+        shift_parity: 'odd' as const,
         cycle_start_date: '2026-09-26',
         active: true,
       }
-      expect(newProfile.shift_parity).toBe('even')
+      expect(newProfile.shift_parity).toBe('odd')
       expect(newProfile.cycle_start_date).toBe('2026-09-26')
 
-      // Simulação de edição mudando para dias ímpares e recalculando a âncora
+      // Simulação de edição mudando para dias pares (posição 2 no ciclo: 2026-09-27)
       const updatedProfile = {
         ...newProfile,
-        shift_parity: 'odd' as const,
+        shift_parity: 'even' as const,
         cycle_start_date: '2026-09-27',
       }
-      expect(updatedProfile.shift_parity).toBe('odd')
+      expect(updatedProfile.shift_parity).toBe('even')
       expect(updatedProfile.cycle_start_date).toBe('2026-09-27')
     })
   })
@@ -74,12 +74,12 @@ describe('Shift Parity by Cycle & Anchor Suite', () => {
           if (d < cStart || d > cEnd) {
             errors.push('Data fora do ciclo')
           } else {
-            // Valida coerência com a paridade
+            // Valida coerência com a paridade 1-based (diff = 0 -> dia 1 = odd; diff = 1 -> dia 2 = even)
             const diffFromStart = Math.round(
               (new Date(d + 'T00:00:00Z').getTime() - new Date(cStart + 'T00:00:00Z').getTime()) /
                 86400000,
             )
-            const expectedParity = diffFromStart % 2 === 0 ? 'even' : 'odd'
+            const expectedParity = diffFromStart % 2 === 0 ? 'odd' : 'even'
             if (data.shift_parity !== expectedParity) {
               errors.push('Incoerência com a paridade selecionada')
             }
@@ -114,33 +114,35 @@ describe('Shift Parity by Cycle & Anchor Suite', () => {
     })
 
     it('valida erro quando há incoerência entre paridade selecionada e data de início', () => {
-      // 2026-09-26 é o 1º dia (offset 0, par relativo ao ciclo). Se selecionou odd, deve dar erro
-      const resOddConflict = validateProfileData(
-        { name: 'Dr. Teste', shift_parity: 'odd', cycle_start_date: '2026-09-26' },
-        currentCycle,
-      )
-      expect(resOddConflict).toContain('Incoerência com a paridade selecionada')
-
-      // 2026-09-27 é o 2º dia (offset 1, ímpar relativo ao ciclo). Se selecionou even, deve dar erro
+      // 2026-09-26 é o 1º dia do ciclo (posição 1 = ímpar). Se selecionou even, deve dar erro
       const resEvenConflict = validateProfileData(
-        { name: 'Dr. Teste', shift_parity: 'even', cycle_start_date: '2026-09-27' },
+        { name: 'Dr. Teste', shift_parity: 'even', cycle_start_date: '2026-09-26' },
         currentCycle,
       )
       expect(resEvenConflict).toContain('Incoerência com a paridade selecionada')
+
+      // 2026-09-27 é o 2º dia do ciclo (posição 2 = par). Se selecionou odd, deve dar erro
+      const resOddConflict = validateProfileData(
+        { name: 'Dr. Teste', shift_parity: 'odd', cycle_start_date: '2026-09-27' },
+        currentCycle,
+      )
+      expect(resOddConflict).toContain('Incoerência com a paridade selecionada')
     })
 
     it('aprova cadastro quando paridade e data de início são coerentes e pertencem ao ciclo', () => {
-      const resEven = validateProfileData(
-        { name: 'Dr. Par', shift_parity: 'even', cycle_start_date: '2026-09-26' },
-        currentCycle,
-      )
-      expect(resEven).toHaveLength(0)
-
+      // 2026-09-26 é o 1º dia do ciclo (posição 1 = Dias ímpares)
       const resOdd = validateProfileData(
-        { name: 'Dra. Impar', shift_parity: 'odd', cycle_start_date: '2026-09-27' },
+        { name: 'Dra. Impar', shift_parity: 'odd', cycle_start_date: '2026-09-26' },
         currentCycle,
       )
       expect(resOdd).toHaveLength(0)
+
+      // 2026-09-27 é o 2º dia do ciclo (posição 2 = Dias pares)
+      const resEven = validateProfileData(
+        { name: 'Dr. Par', shift_parity: 'even', cycle_start_date: '2026-09-27' },
+        currentCycle,
+      )
+      expect(resEven).toHaveLength(0)
     })
   })
 
@@ -149,23 +151,11 @@ describe('Shift Parity by Cycle & Anchor Suite', () => {
       // Ciclo: 26/09/2026 a 25/10/2026
       // Setembro tem 30 dias (26, 27, 28, 29, 30 -> 5 dias em setembro).
       // Em setembro:
-      // Equipe Par (offset 0): 26/09, 28/09, 30/09
-      // Virada: 30/09 -> próximo plantão é 02/10 (pois 30/09 + 2 dias = 02/10).
-      // Note que 02/10 é dia par no calendário e também na posição do ciclo (posição 0, 2, 4, 6 -> 26, 28, 30, 02).
-      // Equipe Ímpar (offset 1): 27/09, 29/09 -> próximo plantão é 01/10 (29/09 + 2 dias = 01/10).
-      // Posição no ciclo: 1, 3, 5 -> 27, 29, 01/10.
+      // Equipe Ímpar (posições 1, 3, 5... do ciclo -> offset 0): 26/09 (1º dia), 28/09 (3º dia), 30/09 (5º dia)
+      // Virada: 30/09 -> próximo plantão é 02/10 (pois 30/09 + 2 dias = 02/10 -> 7º dia do ciclo).
+      // Equipe Par (posições 2, 4, 6... do ciclo -> offset 1): 27/09 (2º dia), 29/09 (4º dia) -> próximo plantão é 01/10 (6º dia do ciclo).
 
       const allStaff = ['colab_par', 'colab_impar']
-
-      const patternPar = computeNaturalPatternByStaff(
-        'colab_par',
-        allStaff,
-        cycleStart,
-        cycleEnd,
-        12,
-        36,
-        { shift_parity: 'even', cycle_start_date: '2026-09-26' },
-      )
 
       const patternImpar = computeNaturalPatternByStaff(
         'colab_impar',
@@ -174,29 +164,39 @@ describe('Shift Parity by Cycle & Anchor Suite', () => {
         cycleEnd,
         12,
         36,
-        { shift_parity: 'odd', cycle_start_date: '2026-09-27' },
+        { shift_parity: 'odd', cycle_start_date: '2026-09-26' },
       )
 
-      // Equipe Par em Setembro e Outubro
-      expect(patternPar['2026-09-26']).toBe(true)
-      expect(patternPar['2026-09-27']).toBeUndefined()
-      expect(patternPar['2026-09-28']).toBe(true)
-      expect(patternPar['2026-09-29']).toBeUndefined()
-      expect(patternPar['2026-09-30']).toBe(true)
-      expect(patternPar['2026-10-01']).toBeUndefined()
-      expect(patternPar['2026-10-02']).toBe(true)
-      expect(patternPar['2026-10-04']).toBe(true)
-      expect(patternPar['2026-10-06']).toBe(true)
+      const patternPar = computeNaturalPatternByStaff(
+        'colab_par',
+        allStaff,
+        cycleStart,
+        cycleEnd,
+        12,
+        36,
+        { shift_parity: 'even', cycle_start_date: '2026-09-27' },
+      )
 
-      // Equipe Ímpar em Setembro e Outubro
-      expect(patternImpar['2026-09-26']).toBeUndefined()
-      expect(patternImpar['2026-09-27']).toBe(true)
-      expect(patternImpar['2026-09-28']).toBeUndefined()
-      expect(patternImpar['2026-09-29']).toBe(true)
-      expect(patternImpar['2026-09-30']).toBeUndefined()
-      expect(patternImpar['2026-10-01']).toBe(true)
-      expect(patternImpar['2026-10-03']).toBe(true)
-      expect(patternImpar['2026-10-05']).toBe(true)
+      // Equipe Ímpar em Setembro e Outubro (posições 1, 3, 5, 7, 9, 11)
+      expect(patternImpar['2026-09-26']).toBe(true)
+      expect(patternImpar['2026-09-27']).toBeUndefined()
+      expect(patternImpar['2026-09-28']).toBe(true)
+      expect(patternImpar['2026-09-29']).toBeUndefined()
+      expect(patternImpar['2026-09-30']).toBe(true)
+      expect(patternImpar['2026-10-01']).toBeUndefined()
+      expect(patternImpar['2026-10-02']).toBe(true)
+      expect(patternImpar['2026-10-04']).toBe(true)
+      expect(patternImpar['2026-10-06']).toBe(true)
+
+      // Equipe Par em Setembro e Outubro (posições 2, 4, 6, 8, 10)
+      expect(patternPar['2026-09-26']).toBeUndefined()
+      expect(patternPar['2026-09-27']).toBe(true)
+      expect(patternPar['2026-09-28']).toBeUndefined()
+      expect(patternPar['2026-09-29']).toBe(true)
+      expect(patternPar['2026-09-30']).toBeUndefined()
+      expect(patternPar['2026-10-01']).toBe(true)
+      expect(patternPar['2026-10-03']).toBe(true)
+      expect(patternPar['2026-10-05']).toBe(true)
 
       // Nunca há sobreposição entre as equipes no padrão natural
       let cur = cycleStart
@@ -213,25 +213,25 @@ describe('Shift Parity by Cycle & Anchor Suite', () => {
       const julCycleStart = '2026-07-26'
       const julCycleEnd = '2026-08-25'
       // Julho tem 31 dias: 26, 27, 28, 29, 30, 31 (6 dias em julho).
-      // Equipe Par (início 26/07): 26/07, 28/07, 30/07 -> próximo plantão: 30/07 + 2 dias = 01/08!
-      // Se usasse paridade do dia do mês pura, 01/08 seria ímpar e o colaborador ficaria sem plantão ou com descanso de 72h.
-      // Com posição relativa / âncora: o plantão ocorre perfeitamente em 01/08 (descanso 36h).
+      // Equipe Ímpar (início 26/07, posição 1 no ciclo): 26/07, 28/07, 30/07 -> próximo plantão: 30/07 + 2 dias = 01/08 (posição 7 do ciclo)!
+      // Se usasse paridade do dia do mês pura, 01/08 seria ímpar e 26/07 seria par no calendário, quebrando a alternância.
+      // Com posição relativa / âncora: o plantão ocorre perfeitamente em 01/08 (descanso 36h, ritmo 12x36 contínuo).
 
-      const patternParJul = computeNaturalPatternByStaff(
+      const patternImparJul = computeNaturalPatternByStaff(
         'staff_p',
         ['staff_p'],
         julCycleStart,
         julCycleEnd,
         12,
         36,
-        { shift_parity: 'even', cycle_start_date: '2026-07-26' },
+        { shift_parity: 'odd', cycle_start_date: '2026-07-26' },
       )
 
-      expect(patternParJul['2026-07-30']).toBe(true)
-      expect(patternParJul['2026-07-31']).toBeUndefined()
-      expect(patternParJul['2026-08-01']).toBe(true) // Perfeita continuidade 12x36
-      expect(patternParJul['2026-08-02']).toBeUndefined()
-      expect(patternParJul['2026-08-03']).toBe(true)
+      expect(patternImparJul['2026-07-30']).toBe(true)
+      expect(patternImparJul['2026-07-31']).toBeUndefined()
+      expect(patternImparJul['2026-08-01']).toBe(true) // Perfeita continuidade 12x36
+      expect(patternImparJul['2026-08-02']).toBeUndefined()
+      expect(patternImparJul['2026-08-03']).toBe(true)
     })
   })
 
@@ -283,10 +283,10 @@ describe('Shift Parity by Cycle & Anchor Suite', () => {
       expect(candidates).toHaveLength(5)
 
       const staffList = [
-        { id: 'user_a', name: 'Enf. Ana', shift_parity: 'even', cycle_start_date: '2026-09-26' },
-        { id: 'user_b', name: 'Enf. Bruno', shift_parity: 'odd', cycle_start_date: '2026-09-27' },
-        { id: 'user_c', name: 'Enf. Carla', shift_parity: 'even', cycle_start_date: '2026-09-26' },
-        { id: 'user_d', name: 'Enf. Diego', shift_parity: 'odd', cycle_start_date: '2026-09-27' },
+        { id: 'user_a', name: 'Enf. Ana', shift_parity: 'odd', cycle_start_date: '2026-09-26' },
+        { id: 'user_b', name: 'Enf. Bruno', shift_parity: 'even', cycle_start_date: '2026-09-27' },
+        { id: 'user_c', name: 'Enf. Carla', shift_parity: 'odd', cycle_start_date: '2026-09-26' },
+        { id: 'user_d', name: 'Enf. Diego', shift_parity: 'even', cycle_start_date: '2026-09-27' },
       ]
 
       const staffIds = staffList.map((s) => s.id)

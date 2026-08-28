@@ -259,22 +259,23 @@ export function StaffProfiles({ departmentId }: { departmentId?: string; project
         }
 
         // Validação de coerência entre a data de início (posição relativa no ciclo) e a paridade selecionada
+        // Posição 1-based: diffFromStart = 0 -> dia 1 (ímpar); diffFromStart = 1 -> dia 2 (par)
         const diffFromStart = Math.round(
           (new Date(cleanDate + 'T00:00:00Z').getTime() -
             new Date(cStart + 'T00:00:00Z').getTime()) /
             86400000,
         )
-        const dayPositionParity = diffFromStart % 2 === 0 ? 'even' : 'odd'
+        const dayPositionParity = diffFromStart % 2 === 0 ? 'odd' : 'even'
 
         if (formData.shift_parity !== dayPositionParity) {
           const expectedParityLabel =
             formData.shift_parity === 'even'
-              ? 'Dias pares (1º dia do ciclo / índice par)'
-              : 'Dias ímpares (2º dia do ciclo / índice ímpar)'
+              ? 'Dias pares (2º dia, 4º dia... / posições pares do ciclo)'
+              : 'Dias ímpares (1º dia, 3º dia... / posições ímpares do ciclo)'
           const actualPositionLabel =
             dayPositionParity === 'even'
-              ? 'posição par relativa ao ciclo (1º dia, 3º dia...)'
-              : 'posição ímpar relativa ao ciclo (2º dia, 4º dia...)'
+              ? 'posição par relativa ao ciclo (2º dia, 4º dia...)'
+              : 'posição ímpar relativa ao ciclo (1º dia, 3º dia...)'
 
           toast({
             title: 'Incoerência com a paridade selecionada',
@@ -813,9 +814,11 @@ export function StaffProfiles({ departmentId }: { departmentId?: string; project
                           ? activeCycle.start_date.split(' ')[0].split('T')[0]
                           : ''
                         if (cStart) {
-                          if (value === 'even') {
+                          if (value === 'odd') {
+                            // Dias ímpares -> posição 1 (início do ciclo)
                             next.cycle_start_date = cStart
-                          } else if (value === 'odd') {
+                          } else if (value === 'even') {
+                            // Dias pares -> posição 2 (segundo dia do ciclo)
                             const { y, m, d } = parseDateOnly(cStart)
                             const nextDate = new Date(Date.UTC(y, m - 1, d + 1))
                               .toISOString()

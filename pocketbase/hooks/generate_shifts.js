@@ -416,9 +416,9 @@ routerAdd(
 
         if (is12x36) {
           if (parity === 'even') {
-            offset = 0
-          } else if (parity === 'odd') {
             offset = 1
+          } else if (parity === 'odd') {
+            offset = 0
           } else if (anchorDate && anchorDate >= normStart && anchorDate <= normEnd) {
             var diffAnchor = Math.round(
               (new Date(anchorDate + 'T00:00:00Z').getTime() -
@@ -491,10 +491,10 @@ routerAdd(
         var fixedOffset = false
 
         if (uParity === 'even') {
-          targetOffset = 0
+          targetOffset = 1
           fixedOffset = true
         } else if (uParity === 'odd') {
-          targetOffset = 1
+          targetOffset = 0
           fixedOffset = true
         } else if (uCycleStart && uCycleStart >= normGenStart && uCycleStart <= normGenEnd) {
           var diffFromCycleStart = Math.round(
