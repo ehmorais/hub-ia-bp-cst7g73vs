@@ -398,6 +398,8 @@ routerAdd(
         excluded.push({ name: p.getString('name'), reason: 'tipo de turno inválido no contrato' })
         return
       }
+      var profileParity = p.getString('shift_parity') || ''
+      var profileCycleStart = (p.getString('cycle_start_date') || '').split(' ')[0].split('T')[0]
       eligible.push({
         id: p.id,
         name: p.getString('name'),
@@ -413,6 +415,8 @@ routerAdd(
         work_hours: st.work_hours,
         rest_hours: st.rest_hours,
         shift_start_time: st.start_time,
+        shift_parity: profileParity,
+        cycle_start_date: profileCycleStart,
       })
     })
 
@@ -1367,26 +1371,50 @@ routerAdd(
       var is12x36 = workHours === 12 && restHours >= 36
       var stepDays = Math.max(2, Math.round((workHours + restHours) / 24))
 
-      // stableIndex: alphabetically sorted eligible IDs
-      var stableIdx = 0
-      if (Array.isArray(staffContracts)) {
-        var sortedIds = staffContracts
-          .map(function (c) {
-            return c.id
-          })
-          .filter(Boolean)
-          .sort()
-        var pos = sortedIds.indexOf(staffId)
-        if (pos !== -1) stableIdx = pos
-      } else if (staffContracts && typeof staffContracts === 'object') {
-        var keys = Object.keys(staffContracts).sort()
-        var kpos = keys.indexOf(staffId)
-        if (kpos !== -1) stableIdx = kpos
-      }
-
       var normStart = cStart.split(' ')[0].split('T')[0]
       var normEnd = cEnd.split(' ')[0].split('T')[0]
-      var offset = is12x36 ? stableIdx % stepDays : 0
+
+      // Regra de paridade configurada por colaborador (shift_parity e cycle_start_date)
+      var offset = 0
+      var parity = contract ? contract.shift_parity : ''
+      var anchorDate =
+        contract && contract.cycle_start_date
+          ? (contract.cycle_start_date || '').split(' ')[0].split('T')[0]
+          : ''
+
+      if (is12x36) {
+        if (parity === 'even') {
+          offset = 0
+        } else if (parity === 'odd') {
+          offset = 1
+        } else if (anchorDate && anchorDate >= normStart && anchorDate <= normEnd) {
+          var diffAnchor = Math.round(
+            (new Date(anchorDate + 'T00:00:00Z').getTime() -
+              new Date(normStart + 'T00:00:00Z').getTime()) /
+              86400000,
+          )
+          offset = ((diffAnchor % stepDays) + stepDays) % stepDays
+        } else {
+          // Fallback determinístico legado por ID estável
+          var stableIdx = 0
+          if (Array.isArray(staffContracts)) {
+            var sortedIds = staffContracts
+              .map(function (c) {
+                return c.id
+              })
+              .filter(Boolean)
+              .sort()
+            var pos = sortedIds.indexOf(staffId)
+            if (pos !== -1) stableIdx = pos
+          } else if (staffContracts && typeof staffContracts === 'object') {
+            var keys = Object.keys(staffContracts).sort()
+            var kpos = keys.indexOf(staffId)
+            if (kpos !== -1) stableIdx = kpos
+          }
+          offset = stableIdx % stepDays
+        }
+      }
+
       var map = {}
       var cur = addDaysDateOnly(normStart, offset)
       while (cur <= normEnd) {
@@ -1395,7 +1423,6 @@ routerAdd(
       }
       return map
     }
-
     // --- Pure date-only helpers (immune to timezone differences in goja/JS) ---
     var parseDateOnly = function (s) {
       var clean = (s || '').split('T')[0].split(' ')[0]
@@ -1786,22 +1813,51 @@ routerAdd(
         customPromptText && u.name && customPromptText.indexOf(u.name.toLowerCase()) !== -1
       if (!isRegular12x36 || hasNamedOverride) return
 
-      var sortedEligibleIds = eligible
-        .map(function (c) {
-          return c.id
-        })
-        .filter(Boolean)
-        .sort()
-      var stableIdx = sortedEligibleIds.indexOf(u.id)
-      if (stableIdx === -1) stableIdx = 0
-
       var stepDays = Math.max(2, Math.round((u.work_hours + u.rest_hours) / 24))
       var maxShifts = Math.floor((u.monthly_hour_limit || 0) / u.work_hours)
-      var targetOffset = stableIdx % stepDays
+
+      // Resolve offset do colaborador a partir de sua paridade ou âncora
+      var uParity = u.shift_parity || ''
+      var uCycleStart = u.cycle_start_date
+        ? (u.cycle_start_date || '').split(' ')[0].split('T')[0]
+        : ''
+      var targetOffset = 0
+      var fixedOffset = false
+
+      if (uParity === 'even') {
+        targetOffset = 0
+        fixedOffset = true
+      } else if (uParity === 'odd') {
+        targetOffset = 1
+        fixedOffset = true
+      } else if (uCycleStart && uCycleStart >= cycleStart && uCycleStart <= cycleEnd) {
+        var diffFromCycleStart = Math.round(
+          (new Date(uCycleStart + 'T00:00:00Z').getTime() -
+            new Date(cycleStart + 'T00:00:00Z').getTime()) /
+            86400000,
+        )
+        targetOffset = ((diffFromCycleStart % stepDays) + stepDays) % stepDays
+        fixedOffset = true
+      } else {
+        var sortedEligibleIds = eligible
+          .map(function (c) {
+            return c.id
+          })
+          .filter(Boolean)
+          .sort()
+        var stableIdx = sortedEligibleIds.indexOf(u.id)
+        if (stableIdx === -1) stableIdx = 0
+        targetOffset = stableIdx % stepDays
+      }
+
       var bestDates = []
       var bestScore = Number.MAX_SAFE_INTEGER
 
-      for (var offset = 0; offset < stepDays; offset++) {
+      // Se o colaborador tem paridade/âncora definida, usa estritamente esse offset
+      var offsetRangeStart = fixedOffset ? targetOffset : 0
+      var offsetRangeEnd = fixedOffset ? targetOffset + 1 : stepDays
+
+      for (var offset = offsetRangeStart; offset < offsetRangeEnd; offset++) {
         var dates = []
         var offsetCursor = new Date(cycleStart + 'T00:00:00Z')
         offsetCursor = new Date(offsetCursor.getTime() + offset * 86400000)

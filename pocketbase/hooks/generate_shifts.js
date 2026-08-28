@@ -164,6 +164,8 @@ routerAdd(
           }
         }
 
+        var profileParity = u.getString('shift_parity') || ''
+        var profileCycleStart = (u.getString('cycle_start_date') || '').split(' ')[0].split('T')[0]
         usersWithContracts.push({
           id: u.id,
           name: u.getString('name'),
@@ -178,6 +180,8 @@ routerAdd(
           shift_work_hours: sTypeHours,
           shift_rest_hours: sTypeRest,
           shift_start_time: sTypeStart,
+          shift_parity: profileParity,
+          cycle_start_date: profileCycleStart,
           weekend_off_sundays: weekendOffSundays.length > 0 ? weekendOffSundays : undefined,
           assigned_rules: userRules.length > 0 ? userRules : undefined,
         })
@@ -399,25 +403,49 @@ routerAdd(
         var is12x36 = workHours === 12 && restHours >= 36
         var stepDays = Math.max(2, Math.round((workHours + restHours) / 24))
 
-        var stableIdx = 0
-        if (Array.isArray(staffContracts)) {
-          var sortedIds = staffContracts
-            .map(function (c) {
-              return c.id
-            })
-            .filter(Boolean)
-            .sort()
-          var pos = sortedIds.indexOf(staffId)
-          if (pos !== -1) stableIdx = pos
-        } else if (staffContracts && typeof staffContracts === 'object') {
-          var keys = Object.keys(staffContracts).sort()
-          var kpos = keys.indexOf(staffId)
-          if (kpos !== -1) stableIdx = kpos
-        }
-
         var normStart = cStart.split(' ')[0].split('T')[0]
         var normEnd = cEnd.split(' ')[0].split('T')[0]
-        var offset = is12x36 ? stableIdx % stepDays : 0
+
+        // Regra de paridade configurada por colaborador (shift_parity e cycle_start_date)
+        var offset = 0
+        var parity = contract ? contract.shift_parity : ''
+        var anchorDate =
+          contract && contract.cycle_start_date
+            ? (contract.cycle_start_date || '').split(' ')[0].split('T')[0]
+            : ''
+
+        if (is12x36) {
+          if (parity === 'even') {
+            offset = 0
+          } else if (parity === 'odd') {
+            offset = 1
+          } else if (anchorDate && anchorDate >= normStart && anchorDate <= normEnd) {
+            var diffAnchor = Math.round(
+              (new Date(anchorDate + 'T00:00:00Z').getTime() -
+                new Date(normStart + 'T00:00:00Z').getTime()) /
+                86400000,
+            )
+            offset = ((diffAnchor % stepDays) + stepDays) % stepDays
+          } else {
+            var stableIdx = 0
+            if (Array.isArray(staffContracts)) {
+              var sortedIds = staffContracts
+                .map(function (c) {
+                  return c.id
+                })
+                .filter(Boolean)
+                .sort()
+              var pos = sortedIds.indexOf(staffId)
+              if (pos !== -1) stableIdx = pos
+            } else if (staffContracts && typeof staffContracts === 'object') {
+              var keys = Object.keys(staffContracts).sort()
+              var kpos = keys.indexOf(staffId)
+              if (kpos !== -1) stableIdx = kpos
+            }
+            offset = stableIdx % stepDays
+          }
+        }
+
         var map = {}
         var cur = addDaysDateOnly(normStart, offset)
         while (cur <= normEnd) {
@@ -448,25 +476,53 @@ routerAdd(
           customPromptText && u.name && customPromptText.indexOf(u.name.toLowerCase()) !== -1
         if (!isRegular12x36 || namedOverride) return
 
-        var sortedStaffIds = usersWithContracts
-          .map(function (c) {
-            return c.id
-          })
-          .filter(Boolean)
-          .sort()
-        var stableIdx = sortedStaffIds.indexOf(u.id)
-        if (stableIdx === -1) stableIdx = 0
-
-        var stepDays = Math.max(2, Math.round((u.shift_work_hours + u.shift_rest_hours) / 24))
-        var maxShifts = Math.floor((u.hour_limit || 0) / u.shift_work_hours)
-        var targetOffset = stableIdx % stepDays
-        var bestDates = []
-        var bestScore = Number.MAX_SAFE_INTEGER
-
         var normGenStart = generationStart.split(' ')[0].split('T')[0]
         var normGenEnd = generationEnd.split(' ')[0].split('T')[0]
 
-        for (var offset = 0; offset < stepDays; offset++) {
+        var stepDays = Math.max(2, Math.round((u.shift_work_hours + u.shift_rest_hours) / 24))
+        var maxShifts = Math.floor((u.hour_limit || 0) / u.shift_work_hours)
+
+        // Resolve offset do colaborador a partir de sua paridade ou âncora
+        var uParity = u.shift_parity || ''
+        var uCycleStart = u.cycle_start_date
+          ? (u.cycle_start_date || '').split(' ')[0].split('T')[0]
+          : ''
+        var targetOffset = 0
+        var fixedOffset = false
+
+        if (uParity === 'even') {
+          targetOffset = 0
+          fixedOffset = true
+        } else if (uParity === 'odd') {
+          targetOffset = 1
+          fixedOffset = true
+        } else if (uCycleStart && uCycleStart >= normGenStart && uCycleStart <= normGenEnd) {
+          var diffFromCycleStart = Math.round(
+            (new Date(uCycleStart + 'T00:00:00Z').getTime() -
+              new Date(normGenStart + 'T00:00:00Z').getTime()) /
+              86400000,
+          )
+          targetOffset = ((diffFromCycleStart % stepDays) + stepDays) % stepDays
+          fixedOffset = true
+        } else {
+          var sortedStaffIds = usersWithContracts
+            .map(function (c) {
+              return c.id
+            })
+            .filter(Boolean)
+            .sort()
+          var stableIdx = sortedStaffIds.indexOf(u.id)
+          if (stableIdx === -1) stableIdx = 0
+          targetOffset = stableIdx % stepDays
+        }
+
+        var bestDates = []
+        var bestScore = Number.MAX_SAFE_INTEGER
+
+        var offsetRangeStart = fixedOffset ? targetOffset : 0
+        var offsetRangeEnd = fixedOffset ? targetOffset + 1 : stepDays
+
+        for (var offset = offsetRangeStart; offset < offsetRangeEnd; offset++) {
           var dates = []
           var dateCursor = addDaysDateOnly(normGenStart, offset)
           while (dateCursor <= normGenEnd && dates.length < maxShifts) {

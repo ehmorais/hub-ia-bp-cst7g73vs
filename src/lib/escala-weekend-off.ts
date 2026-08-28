@@ -353,15 +353,41 @@ export function computeNaturalPatternByStaff(
   cEnd: string,
   wHours: number = 12,
   rHours: number = 36,
+  options?: {
+    shift_parity?: 'even' | 'odd' | string
+    cycle_start_date?: string
+  },
 ): Record<string, boolean> {
   const normStart = cStart.split(' ')[0].split('T')[0]
   const normEnd = cEnd.split(' ')[0].split('T')[0]
   const is12x36 = wHours === 12 && rHours >= 36
   const stepDays = Math.max(2, Math.round((wHours + rHours) / 24))
-  const sortedIds = allStaffIds.slice().sort()
-  const pos = sortedIds.indexOf(staffId)
-  const stableIdx = pos !== -1 ? pos : 0
-  const offset = is12x36 ? stableIdx % stepDays : 0
+
+  let offset = 0
+  const parity = options?.shift_parity
+  const anchorDate = options?.cycle_start_date
+    ? options.cycle_start_date.split(' ')[0].split('T')[0]
+    : ''
+
+  if (is12x36) {
+    if (parity === 'even') {
+      offset = 0
+    } else if (parity === 'odd') {
+      offset = 1
+    } else if (anchorDate && anchorDate >= normStart && anchorDate <= normEnd) {
+      const diffAnchor = Math.round(
+        (new Date(anchorDate + 'T00:00:00Z').getTime() -
+          new Date(normStart + 'T00:00:00Z').getTime()) /
+          86400000,
+      )
+      offset = ((diffAnchor % stepDays) + stepDays) % stepDays
+    } else {
+      const sortedIds = allStaffIds.slice().sort()
+      const pos = sortedIds.indexOf(staffId)
+      const stableIdx = pos !== -1 ? pos : 0
+      offset = stableIdx % stepDays
+    }
+  }
 
   const natDays: Record<string, boolean> = {}
   let cur = addDaysDateOnly(normStart, offset)

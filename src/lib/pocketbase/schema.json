@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-24T18:51:41.305Z",
+  "generatedAt": "2026-08-28T14:11:17.114Z",
   "collections": [
     {
       "name": "users",
@@ -931,6 +931,19 @@
         {
           "name": "active",
           "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "shift_parity",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["even", "odd"]
+        },
+        {
+          "name": "cycle_start_date",
+          "type": "date",
           "required": false,
           "system": false
         }
