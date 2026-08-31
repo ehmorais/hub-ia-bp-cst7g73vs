@@ -48,6 +48,7 @@ import {
   buildWeekendOffMap,
 } from '@/lib/escala-weekend-off'
 import { StaffFilter } from './StaffFilter'
+import { formatCorenLabel, formatShiftCalendarSecondLine } from '@/lib/escala-calendar-formatter'
 
 type ViewMode = 'cycle' | 'month' | 'week' | 'day'
 
@@ -684,11 +685,19 @@ export function ShiftCalendar({
                         (item) => (item.staff_profile || item.user) === (s.staff_profile || s.user),
                       )
                       const shiftType = contract?.expand?.shift_type
+                      const profileId = s.staff_profile || s.user_id || s.user
+                      const matchedProfile = staffProfiles.find((sp) => sp.id === profileId)
                       const name =
                         s.expand?.staff_profile?.name ||
                         s.expand?.user?.name ||
+                        matchedProfile?.name ||
                         s.name ||
                         'Sem nome'
+                      const professionalId =
+                        s.expand?.staff_profile?.professional_id ??
+                        matchedProfile?.professional_id ??
+                        s.professional_id ??
+                        null
                       const startTime = (
                         String(s.start_time || '').split(/[ T]/)[1] || ''
                       ).substring(0, 5)
@@ -702,36 +711,45 @@ export function ShiftCalendar({
                         startTime,
                         endTime,
                       )
-                      const periodLetter = isNight ? 'N' : 'D'
-                      const timeRange = `${startTime}–${endTime}`
+                      const periodLetter: 'D' | 'N' = isNight ? 'N' : 'D'
+                      const corenText = formatCorenLabel(professionalId)
+                      const secondLineText = formatShiftCalendarSecondLine(periodLetter, professionalId)
                       return (
                         <div
                           key={s.id}
                           draggable
                           onDragStart={(e) => handleDragStart(e, s)}
                           className={cn(
-                            'text-xs p-2 rounded bg-white border shadow-sm flex flex-col gap-1 transition-colors cursor-move active:cursor-grabbing',
+                            'text-xs p-2 rounded bg-white border shadow-sm flex flex-col gap-1 transition-colors cursor-move active:cursor-grabbing min-h-max',
                             movedShiftIds.has(s.id)
                               ? 'border-orange-500 hover:border-orange-600'
                               : 'border-slate-200 hover:border-primary/50',
                           )}
                         >
-                          <div className="font-semibold text-slate-800 truncate" title={name}>
+                          {/* 1. Primeira linha: nome COMPLETO do colaborador, sem ellipsis/truncamento, sem corte */}
+                          <div
+                            className="font-semibold text-slate-800 break-words whitespace-normal leading-snug"
+                            title={name}
+                          >
                             {name}
                           </div>
+                          {/* 2. Segunda linha: tipo de plantão somente "D" ou "N", seguido do número do COREN no lugar do horário */}
                           <div
-                            className="flex items-center gap-1 text-slate-500 text-[10px] min-w-0"
-                            title={`${periodLetter} ${timeRange}`}
+                            className="flex items-center gap-1.5 text-slate-600 text-[11px] min-w-0 break-words whitespace-normal leading-tight font-medium"
+                            title={secondLineText}
                           >
                             <span
                               className={cn(
-                                'font-bold shrink-0',
+                                'font-bold shrink-0 text-xs',
                                 isNight ? 'text-indigo-700' : 'text-emerald-700',
                               )}
                             >
                               {periodLetter}
                             </span>
-                            <span className="truncate">{timeRange}</span>
+                            <span className="text-slate-400 select-none">•</span>
+                            <span className={cn('break-words', !professionalId ? 'text-slate-400 italic' : 'text-slate-700')}>
+                              {corenText}
+                            </span>
                           </div>
                         </div>
                       )
@@ -767,12 +785,12 @@ export function ShiftCalendar({
                           key={`weekend-off-${staff.id}-${dateKey}`}
                           data-testid={`weekend-off-${staff.id}-${dateKey}`}
                           title="Fim de semana de folga mensal"
-                          className="bg-orange-100 border border-orange-300 rounded px-1 py-0.5 text-xs shadow-sm flex flex-col gap-0.5 transition-colors select-none"
+                          className="bg-orange-100 border border-orange-300 rounded px-1.5 py-1 text-xs shadow-sm flex flex-col gap-0.5 transition-colors select-none min-h-max"
                         >
-                          <div className="font-semibold text-slate-900 truncate" title={staff.name}>
+                          <div className="font-semibold text-slate-900 break-words whitespace-normal leading-snug" title={staff.name}>
                             {staff.name}
                           </div>
-                          <div className="text-orange-800 text-[10px] truncate">
+                          <div className="text-orange-800 text-[10px] leading-tight">
                             Folga Fim de Semana
                           </div>
                         </div>

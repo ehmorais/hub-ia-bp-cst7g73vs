@@ -1623,7 +1623,7 @@ function AutoGenerateInner({
                 try {
                   const existing = await pb.collection('shifts').getFullList({
                     filter: `cycle="${draftExists.cycle_id}" && sector="${draftExists.sector_id}"`,
-                    expand: 'staff_profile,sector',
+                    expand: 'staff_profile,staff_profile.staff_role,sector,cycle',
                     sort: 'start_time',
                   })
                   setDraftShifts(existing)
