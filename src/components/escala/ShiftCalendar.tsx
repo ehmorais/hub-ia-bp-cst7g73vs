@@ -713,7 +713,10 @@ export function ShiftCalendar({
                       )
                       const periodLetter: 'D' | 'N' = isNight ? 'N' : 'D'
                       const corenText = formatCorenLabel(professionalId)
-                      const secondLineText = formatShiftCalendarSecondLine(periodLetter, professionalId)
+                      const secondLineText = formatShiftCalendarSecondLine(
+                        periodLetter,
+                        professionalId,
+                      )
                       return (
                         <div
                           key={s.id}
@@ -747,7 +750,13 @@ export function ShiftCalendar({
                               {periodLetter}
                             </span>
                             <span className="text-slate-400 select-none">•</span>
-                            <span className={cn('break-words', !professionalId ? 'text-slate-400 italic' : 'text-slate-700')}>
+                            <span
+                              data-testid={`shift-coren-${s.id}`}
+                              className={cn(
+                                'break-words',
+                                !professionalId ? 'text-slate-400 italic' : 'text-slate-700',
+                              )}
+                            >
                               {corenText}
                             </span>
                           </div>
@@ -787,7 +796,10 @@ export function ShiftCalendar({
                           title="Fim de semana de folga mensal"
                           className="bg-orange-100 border border-orange-300 rounded px-1.5 py-1 text-xs shadow-sm flex flex-col gap-0.5 transition-colors select-none min-h-max"
                         >
-                          <div className="font-semibold text-slate-900 break-words whitespace-normal leading-snug" title={staff.name}>
+                          <div
+                            className="font-semibold text-slate-900 break-words whitespace-normal leading-snug"
+                            title={staff.name}
+                          >
                             {staff.name}
                           </div>
                           <div className="text-orange-800 text-[10px] leading-tight">
