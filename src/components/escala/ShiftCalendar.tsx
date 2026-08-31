@@ -82,6 +82,7 @@ export function ShiftCalendar({
   contracts,
   staffProfiles = [],
   draft,
+  dayFilter = 'all',
   onShiftUpdate,
 }: {
   shifts: any[]
@@ -90,6 +91,7 @@ export function ShiftCalendar({
   contracts: any[]
   staffProfiles?: Array<{ id: string; name: string; default_sector?: string; [key: string]: any }>
   draft?: any
+  dayFilter?: 'all' | 'even' | 'odd'
   onShiftUpdate?: (updatedShift: any) => void
 }) {
   const [view, setView] = useState<ViewMode>('cycle')
@@ -205,10 +207,10 @@ export function ShiftCalendar({
 
   const days = useMemo<CalendarDayItem[]>(() => {
     let rawDates: Date[] = []
+    let items: CalendarDayItem[] = []
     if (view === 'cycle') {
       if (cycleStartDateStr && cycleEndDateStr && cycleStartDateStr <= cycleEndDateStr) {
         let curStr = cycleStartDateStr
-        const items: CalendarDayItem[] = []
         while (curStr <= cycleEndDateStr) {
           const { y, m, d } = parseDateOnly(curStr)
           const localDate = new Date(y, m - 1, d)
@@ -219,30 +221,61 @@ export function ShiftCalendar({
           })
           curStr = addDaysDateOnly(curStr, 1)
         }
-        return items
+      } else {
+        rawDates = eachDayOfInterval(cycleInterval)
+        items = rawDates.map((d) => {
+          const key = formatLocalDateKeySafe(d)
+          return {
+            date: d,
+            key,
+            dayOfWeek: dayOfWeekDateOnly(key),
+          }
+        })
       }
-      rawDates = eachDayOfInterval(cycleInterval)
     } else if (view === 'day') {
       rawDates = [currentDate]
+      items = rawDates.map((d) => {
+        const key = formatLocalDateKeySafe(d)
+        return {
+          date: d,
+          key,
+          dayOfWeek: dayOfWeekDateOnly(key),
+        }
+      })
     } else if (view === 'week') {
       const start = startOfWeek(currentDate, { weekStartsOn: 0 }) // Sunday
       const end = endOfWeek(currentDate, { weekStartsOn: 0 })
       rawDates = eachDayOfInterval({ start, end })
+      items = rawDates.map((d) => {
+        const key = formatLocalDateKeySafe(d)
+        return {
+          date: d,
+          key,
+          dayOfWeek: dayOfWeekDateOnly(key),
+        }
+      })
     } else {
       const start = startOfMonth(currentDate)
       const end = endOfMonth(currentDate)
       rawDates = eachDayOfInterval({ start, end })
+      items = rawDates.map((d) => {
+        const key = formatLocalDateKeySafe(d)
+        return {
+          date: d,
+          key,
+          dayOfWeek: dayOfWeekDateOnly(key),
+        }
+      })
     }
 
-    return rawDates.map((d) => {
-      const key = formatLocalDateKeySafe(d)
-      return {
-        date: d,
-        key,
-        dayOfWeek: dayOfWeekDateOnly(key),
-      }
-    })
-  }, [currentDate, view, cycleStartDateStr, cycleEndDateStr, cycleInterval])
+    if (dayFilter === 'even') {
+      return items.filter((item) => item.date.getDate() % 2 === 0)
+    }
+    if (dayFilter === 'odd') {
+      return items.filter((item) => item.date.getDate() % 2 !== 0)
+    }
+    return items
+  }, [currentDate, view, cycleStartDateStr, cycleEndDateStr, cycleInterval, dayFilter])
 
   const alerts = useMemo(() => {
     const newAlerts: { type: 'error' | 'warning' | 'info'; message: string; date?: Date }[] = []
@@ -601,33 +634,46 @@ export function ShiftCalendar({
 
         <ScrollArea className="flex-1 bg-slate-50/30">
           {(view === 'month' || view === 'cycle') && (
-            <div className="grid grid-cols-7 border-b sticky top-0 bg-slate-100 z-10">
-              {(() => {
-                const baseWeekLabels = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
-                const firstDayDow = days.length > 0 ? days[0].dayOfWeek : 0
-                const rotatedLabels = [
-                  ...baseWeekLabels.slice(firstDayDow),
-                  ...baseWeekLabels.slice(0, firstDayDow),
-                ]
-                return rotatedLabels.map((d, idx) => (
-                  <div
-                    key={`${d}-${idx}`}
-                    className="p-2 text-center text-xs font-semibold text-slate-500 border-r last:border-r-0"
-                  >
-                    {d}
-                  </div>
-                ))
-              })()}
+            <div
+              className={cn(
+                'border-b sticky top-0 bg-slate-100 z-10',
+                dayFilter === 'all'
+                  ? 'grid grid-cols-7'
+                  : 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-7',
+              )}
+            >
+              {dayFilter === 'all'
+                ? (() => {
+                    const baseWeekLabels = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+                    const firstDayDow = days.length > 0 ? days[0].dayOfWeek : 0
+                    const rotatedLabels = [
+                      ...baseWeekLabels.slice(firstDayDow),
+                      ...baseWeekLabels.slice(0, firstDayDow),
+                    ]
+                    return rotatedLabels.map((d, idx) => (
+                      <div
+                        key={`${d}-${idx}`}
+                        className="p-2 text-center text-xs font-semibold text-slate-500 border-r last:border-r-0"
+                      >
+                        {d}
+                      </div>
+                    ))
+                  })()
+                : null}
             </div>
           )}
 
           <div
             className={cn(
               'grid',
-              view === 'month' && 'grid-cols-7 auto-rows-[240px]',
-              view === 'cycle' && 'grid-cols-7 auto-rows-[minmax(240px,auto)]',
-              view === 'week' && 'grid-cols-7 min-h-full',
-              view === 'day' && 'grid-cols-1 min-h-full',
+              dayFilter === 'all'
+                ? [
+                    view === 'month' && 'grid-cols-7 auto-rows-[240px]',
+                    view === 'cycle' && 'grid-cols-7 auto-rows-[minmax(240px,auto)]',
+                    view === 'week' && 'grid-cols-7 min-h-full',
+                    view === 'day' && 'grid-cols-1 min-h-full',
+                  ]
+                : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-7 auto-rows-[minmax(240px,auto)]',
             )}
           >
             {days.map((dayItem, i) => {
@@ -659,7 +705,9 @@ export function ShiftCalendar({
                       <span>
                         {format(
                           day,
-                          view === 'month' || view === 'cycle' ? 'dd/MM' : 'dd/MM (EEEE)',
+                          (view === 'month' || view === 'cycle') && dayFilter === 'all'
+                            ? 'dd/MM'
+                            : 'dd/MM (EEEE)',
                           { locale: ptBR },
                         )}
                       </span>

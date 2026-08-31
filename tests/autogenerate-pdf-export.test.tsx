@@ -6,6 +6,7 @@ import { AutoGenerate } from '@/components/escala/AutoGenerate'
 // Mock de jsPDF e jspdf-autotable
 const mockSave = vi.fn()
 const mockText = vi.fn()
+const mockAddImage = vi.fn()
 const mockSetFont = vi.fn()
 const mockSetFontSize = vi.fn()
 const mockSetTextColor = vi.fn()
@@ -19,6 +20,7 @@ vi.mock('jspdf', () => {
     jsPDF: vi.fn().mockImplementation(() => ({
       save: mockSave,
       text: mockText,
+      addImage: mockAddImage,
       setFont: mockSetFont,
       setFontSize: mockSetFontSize,
       setTextColor: mockSetTextColor,
@@ -177,6 +179,7 @@ describe('AutoGenerate IA — Exportação PDF (Dois Formatos: Lista por Dia e C
   beforeEach(() => {
     mockSave.mockClear()
     mockText.mockClear()
+    mockAddImage.mockClear()
     lastAutoTableCall = null
   })
 
@@ -300,5 +303,22 @@ describe('AutoGenerate IA — Exportação PDF (Dois Formatos: Lista por Dia e C
     expect(dummyGeneratedShifts[0].end_time).toBe('2026-10-01 19:00:00.000Z')
     expect(dummyGeneratedShifts[1].start_time).toBe('2026-10-01 19:00:00.000Z')
     expect(dummyGeneratedShifts[1].end_time).toBe('2026-10-02 07:00:00.000Z')
+  })
+
+  it('6. PDF exportado inclui o logotipo institucional no cabeçalho em ambos os formatos', async () => {
+    render(<AutoGenerate />)
+
+    fireEvent.click(screen.getByText('Gerar com IA'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Exportar PDF')).toBeDefined()
+    })
+
+    fireEvent.click(screen.getByText('Exportar PDF'))
+    fireEvent.click(screen.getByTestId('btn-pdf-format-daily-list'))
+
+    await waitFor(() => {
+      expect(mockAddImage).toHaveBeenCalled()
+    })
   })
 })

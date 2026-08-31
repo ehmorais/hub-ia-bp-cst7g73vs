@@ -421,6 +421,7 @@ function AutoGenerateInner({
   const [isDraftMode, setIsDraftMode] = useState(false)
   const [draftIteration, setDraftIteration] = useState(1)
   const [selectedShiftType, setSelectedShiftType] = useState('all')
+  const [dayFilter, setDayFilter] = useState<'all' | 'even' | 'odd'>('all')
   const [isExporting, setIsExporting] = useState(false)
   const [isExportingPdf, setIsExportingPdf] = useState(false)
   const [isPdfExportModalOpen, setIsPdfExportModalOpen] = useState(false)
@@ -448,6 +449,7 @@ function AutoGenerateInner({
     setIsDraftMode(false)
     setDraftIteration(1)
     setSelectedShiftType('all')
+    setDayFilter('all')
     setRunId('')
     setDraftId('')
     setCurrentDraftRecord(null)
@@ -1105,7 +1107,7 @@ function AutoGenerateInner({
           cycleName: cycleObj?.name,
           cycleStart: cycleStart || undefined,
           cycleEnd: cycleEnd || undefined,
-          draftShifts: filteredDraftShifts,
+          draftShifts,
           contracts,
           staffProfiles,
         })
@@ -1139,7 +1141,7 @@ function AutoGenerateInner({
           cycleStart: cycleStart || undefined,
           cycleEnd: cycleEnd || undefined,
           days: daysList,
-          shifts: filteredDraftShifts,
+          shifts: draftShifts,
           contracts,
           staffProfiles,
           draft: currentDraftRecord,
@@ -1427,6 +1429,22 @@ function AutoGenerateInner({
                     </SelectContent>
                   </Select>
                 </div>
+                <div className="space-y-1 min-w-[160px]">
+                  <label className="text-xs font-medium text-slate-600">Filtrar dias</label>
+                  <Select
+                    value={dayFilter}
+                    onValueChange={(val: 'all' | 'even' | 'odd') => setDayFilter(val)}
+                  >
+                    <SelectTrigger data-testid="select-day-filter" className="h-9 bg-white">
+                      <SelectValue placeholder="Todos os dias" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos</SelectItem>
+                      <SelectItem value="even">Dias Pares</SelectItem>
+                      <SelectItem value="odd">Dias Ímpares</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
                 <Button
                   size="sm"
                   variant="outline"
@@ -1480,6 +1498,7 @@ function AutoGenerateInner({
               contracts={contracts}
               staffProfiles={staffProfiles}
               draft={currentDraftRecord}
+              dayFilter={dayFilter}
               onShiftUpdate={handleDraftShiftUpdate}
             />
 
