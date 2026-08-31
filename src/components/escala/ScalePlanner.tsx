@@ -64,6 +64,7 @@ import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { StaffFilter } from './StaffFilter'
+import { formatCorenLabel, formatShiftCalendarSecondLine } from '@/lib/escala-calendar-formatter'
 
 type DraftCell = 'D' | 'N' | 'M' | 'T' | 'F' | ''
 
@@ -1219,18 +1220,24 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
                         onDoubleClick={() => handleDoubleClickStaff(user.id)}
                         title="Duplo clique para preencher a escala automaticamente"
                       >
-                        <div className="flex items-center justify-between">
-                          <div className="flex flex-col">
-                            <span className="font-medium text-xs truncate max-w-[120px] flex items-center gap-2">
-                              {user.name}
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex flex-col min-w-0 flex-1">
+                            <span
+                              className="font-semibold text-slate-800 text-xs break-words whitespace-normal leading-snug flex items-center gap-2"
+                              title={user.name}
+                            >
+                              <span className="break-words whitespace-normal">{user.name}</span>
                               {generatingUserId === user.id && (
-                                <Loader2 className="h-3 w-3 animate-spin text-primary" />
+                                <Loader2 className="h-3 w-3 animate-spin text-primary shrink-0" />
                               )}
                             </span>
-                            <span className="text-[9px] text-slate-400">
+                            <span className="text-[9px] text-slate-400 break-words whitespace-normal leading-tight">
                               {user.expand?.staff_role?.name || 'Sem cargo'}{' '}
                               {isCov && (
-                                <Badge variant="secondary" className="text-[8px] h-3 px-1 ml-1">
+                                <Badge
+                                  variant="secondary"
+                                  className="text-[8px] h-3 px-1 ml-1 inline-flex"
+                                >
                                   Cobertura
                                 </Badge>
                               )}
@@ -1241,7 +1248,8 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
                               e.stopPropagation()
                               setDraftUsers((p) => p.filter((u) => u.id !== user.id))
                             }}
-                            className="text-slate-300 hover:text-red-500"
+                            className="text-slate-300 hover:text-red-500 shrink-0 self-start mt-0.5"
+                            title="Remover colaborador da escala"
                           >
                             <Trash2 className="h-3 w-3" />
                           </button>
@@ -1369,11 +1377,14 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
                               >
                                 <div className="flex items-center gap-1 max-w-full">
                                   <Move className="h-2.5 w-2.5 text-orange-700 opacity-60 group-hover/box:opacity-100 shrink-0" />
-                                  <span className="font-semibold text-slate-900 text-[11px] truncate">
+                                  <span
+                                    className="font-semibold text-slate-900 text-[11px] break-words whitespace-normal leading-snug text-center"
+                                    title={user.name}
+                                  >
                                     {user.name}
                                   </span>
                                 </div>
-                                <span className="text-[10px] text-orange-800 leading-tight">
+                                <span className="text-[10px] text-orange-800 leading-tight text-center">
                                   Folga Fim de Semana
                                 </span>
                               </div>
@@ -1388,7 +1399,7 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
                                   }
                                 }}
                                 className={cn(
-                                  'w-full h-11 flex items-center justify-center text-center text-[11px] md:text-xs transition-colors',
+                                  'w-full min-h-[44px] p-1.5 flex flex-col items-center justify-center text-center text-[11px] md:text-xs transition-colors',
                                   {
                                     'font-bold text-black bg-white':
                                       val === 'D' || val === 'M' || val === 'T',
@@ -1404,14 +1415,95 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
                                   },
                                 )}
                               >
-                                {val === 'D' && '07:00 - 19:00'}
-                                {val === 'N' && '19:00 - 07:00'}
-                                {val === 'M' && '07:00 - 13:00'}
-                                {val === 'T' && '13:00 - 19:00'}
-                                {val === 'F' && 'Folga'}
+                                {val && val !== 'F'
+                                  ? (() => {
+                                      const periodLetter: 'D' | 'N' = val === 'N' ? 'N' : 'D'
+                                      const professionalId = user.professional_id || null
+                                      const corenText = formatCorenLabel(professionalId)
+                                      const secondLineText = formatShiftCalendarSecondLine(
+                                        periodLetter,
+                                        professionalId,
+                                      )
+                                      return (
+                                        <div
+                                          className="flex items-center justify-center gap-1.5 text-slate-600 text-[11px] min-w-0 break-words whitespace-normal leading-tight font-medium"
+                                          title={secondLineText}
+                                        >
+                                          <span
+                                            className={cn(
+                                              'font-bold shrink-0 text-xs',
+                                              periodLetter === 'N'
+                                                ? 'text-indigo-700'
+                                                : 'text-emerald-700',
+                                            )}
+                                          >
+                                            {periodLetter}
+                                          </span>
+                                          <span className="text-slate-400 select-none">•</span>
+                                          <span
+                                            data-testid={`shift-coren-${user.id}-${ds}`}
+                                            className={cn(
+                                              'break-words',
+                                              !professionalId
+                                                ? 'text-slate-400 italic'
+                                                : 'text-slate-700',
+                                            )}
+                                          >
+                                            {corenText}
+                                          </span>
+                                        </div>
+                                      )
+                                    })()
+                                  : val === 'F'
+                                    ? 'Folga'
+                                    : null}
                               </div>
                             ) : (
-                              <div className="relative w-full h-11 flex items-center justify-center">
+                              <div className="relative w-full min-h-[44px] flex flex-col items-center justify-center p-1">
+                                {val && val !== 'F' ? (
+                                  (() => {
+                                    const periodLetter: 'D' | 'N' = val === 'N' ? 'N' : 'D'
+                                    const professionalId = user.professional_id || null
+                                    const corenText = formatCorenLabel(professionalId)
+                                    const secondLineText = formatShiftCalendarSecondLine(
+                                      periodLetter,
+                                      professionalId,
+                                    )
+                                    return (
+                                      <div
+                                        className="pointer-events-none flex items-center justify-center gap-1.5 text-slate-600 text-[11px] min-w-0 break-words whitespace-normal leading-tight font-medium z-10"
+                                        title={secondLineText}
+                                      >
+                                        <span
+                                          className={cn(
+                                            'font-bold shrink-0 text-xs',
+                                            periodLetter === 'N'
+                                              ? 'text-indigo-700'
+                                              : 'text-emerald-700',
+                                          )}
+                                        >
+                                          {periodLetter}
+                                        </span>
+                                        <span className="text-slate-400 select-none">•</span>
+                                        <span
+                                          data-testid={`shift-coren-${user.id}-${ds}`}
+                                          className={cn(
+                                            'break-words',
+                                            !professionalId
+                                              ? 'text-slate-400 italic'
+                                              : 'text-slate-700',
+                                          )}
+                                        >
+                                          {corenText}
+                                        </span>
+                                      </div>
+                                    )
+                                  })()
+                                ) : val === 'F' ? (
+                                  <span className="pointer-events-none text-xs text-slate-700 z-10">
+                                    Folga
+                                  </span>
+                                ) : null}
                                 <select
                                   value={val}
                                   onChange={(e) =>
@@ -1424,13 +1516,12 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
                                     }))
                                   }
                                   disabled={isTO || selectedCycle?.status !== 'draft'}
+                                  aria-label={`Plantão de ${user.name} em ${ds}`}
                                   className={cn(
-                                    'w-full h-11 appearance-none bg-transparent text-center text-[11px] md:text-xs outline-none cursor-pointer hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 transition-colors',
+                                    'absolute inset-0 w-full h-full appearance-none bg-transparent text-center text-transparent outline-none cursor-pointer hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 transition-colors',
                                     {
-                                      'font-bold text-black bg-white':
-                                        val === 'D' || val === 'M' || val === 'T',
-                                      'font-bold text-black bg-slate-200 hover:bg-slate-300':
-                                        val === 'N',
+                                      'bg-white': val === 'D' || val === 'M' || val === 'T',
+                                      'bg-slate-200 hover:bg-slate-300': val === 'N',
                                       'text-red-400 font-bold bg-red-50/80 hover:bg-red-100':
                                         isTO && !isPendingTO,
                                       'text-amber-500 font-bold bg-amber-50/80 hover:bg-amber-100':
@@ -1438,12 +1529,26 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
                                     },
                                   )}
                                 >
-                                  <option value="">{''}</option>
-                                  <option value="D">07:00 - 19:00</option>
-                                  <option value="N">19:00 - 07:00</option>
-                                  <option value="M">07:00 - 13:00</option>
-                                  <option value="T">13:00 - 19:00</option>
-                                  <option value="F">Folga</option>
+                                  <option value="" className="text-slate-900">
+                                    {'(Vazio)'}
+                                  </option>
+                                  <option value="D" className="text-slate-900">
+                                    {formatShiftCalendarSecondLine('D', user.professional_id)}
+                                  </option>
+                                  <option value="N" className="text-slate-900">
+                                    {formatShiftCalendarSecondLine('N', user.professional_id)}
+                                  </option>
+                                  <option value="M" className="text-slate-900">
+                                    {formatShiftCalendarSecondLine('D', user.professional_id)}{' '}
+                                    (Manhã)
+                                  </option>
+                                  <option value="T" className="text-slate-900">
+                                    {formatShiftCalendarSecondLine('D', user.professional_id)}{' '}
+                                    (Tarde)
+                                  </option>
+                                  <option value="F" className="text-slate-900">
+                                    Folga
+                                  </option>
                                 </select>
                               </div>
                             )}
