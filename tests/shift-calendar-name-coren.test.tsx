@@ -94,10 +94,12 @@ describe('ShiftCalendar - Nome Completo e COREN (Etapa 1 de 2)', () => {
 
     const nameElem1 = screen.getByText('Maria Helena de Medeiros Albuquerque de Oliveira')
     const nameElem2 = screen.getByText('João Pedro de Vasconcelos Albuquerque Maranhão Filho')
-    expect(nameElem1).toBeInTheDocument()
-    expect(nameElem2).toBeInTheDocument()
+    expect(nameElem1).toBeDefined()
+    expect(nameElem2).toBeDefined()
     expect(nameElem1.className).not.toContain('truncate')
     expect(nameElem2.className).not.toContain('truncate')
+    expect(nameElem1.className).toContain('break-words')
+    expect(nameElem1.className).toContain('whitespace-normal')
   })
 
   it('2. nome longo quebra linha sem sobreposição (break-words e whitespace-normal)', () => {
@@ -129,11 +131,11 @@ describe('ShiftCalendar - Nome Completo e COREN (Etapa 1 de 2)', () => {
     )
 
     const periodD = screen.getByText('D')
-    expect(periodD).toBeInTheDocument()
+    expect(periodD).toBeDefined()
     expect(periodD.className).toContain('text-emerald-700')
 
     const corenElem = screen.getByTestId('shift-coren-shift-dummy-01')
-    expect(corenElem).toHaveTextContent('COREN 987654')
+    expect(corenElem.textContent).toContain('COREN 987654')
   })
 
   it('4. plantão noturno mostra "N" + COREN (ou fallback se vazio)', () => {
@@ -147,7 +149,7 @@ describe('ShiftCalendar - Nome Completo e COREN (Etapa 1 de 2)', () => {
     )
 
     const periodN = screen.getByText('N')
-    expect(periodN).toBeInTheDocument()
+    expect(periodN).toBeDefined()
     expect(periodN.className).toContain('text-indigo-700')
   })
 
@@ -162,7 +164,7 @@ describe('ShiftCalendar - Nome Completo e COREN (Etapa 1 de 2)', () => {
     )
 
     const corenElem = screen.getByTestId('shift-coren-shift-dummy-02')
-    expect(corenElem).toHaveTextContent('COREN não informado')
+    expect(corenElem.textContent).toContain('COREN não informado')
   })
 
   it('6. horário não aparece na segunda linha, mas start_time/end_time permanecem no objeto de dados', () => {
@@ -210,8 +212,8 @@ describe('ShiftCalendar - Nome Completo e COREN (Etapa 1 de 2)', () => {
 
     // Sábado 2025-11-01 é fim de semana, deve ter placeholder se não houver shift
     const weekendOffElem = screen.queryByTestId('weekend-off-dummy-prof-01-2025-11-01')
-    expect(weekendOffElem).toBeInTheDocument()
-    expect(weekendOffElem).toHaveTextContent('Maria Helena de Medeiros Albuquerque de Oliveira')
-    expect(weekendOffElem).toHaveTextContent('Folga Fim de Semana')
+    expect(weekendOffElem).not.toBeNull()
+    expect(weekendOffElem?.textContent).toContain('Maria Helena de Medeiros Albuquerque de Oliveira')
+    expect(weekendOffElem?.textContent).toContain('Folga Fim de Semana')
   })
 })
