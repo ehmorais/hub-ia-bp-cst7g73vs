@@ -1374,7 +1374,7 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
                                   </span>
                                 </div>
                                 <span className="text-[10px] text-orange-800 leading-tight">
-                                  Folga fim de semana
+                                  Folga Fim de Semana
                                 </span>
                               </div>
                             ) : isEditMode ? (

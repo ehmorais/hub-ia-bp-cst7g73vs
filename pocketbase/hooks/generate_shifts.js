@@ -598,26 +598,12 @@ routerAdd(
         return true
       }
 
-      // enforceWeekendOff per-cycle for generate_shifts.js
-      var enforceWeekendOffGen = function (currentShifts, staffList, cStart, cEnd, sectorsList) {
+      // --- REGRAS DE FOLGA DO CICLO: 1 Fim de Semana (Sáb OU Dom) + 1 Dia de Semana (Seg-Sex) ---
+      // Converte plantões elegíveis na paridade em folga de fim de semana (exatamente 1 data) e folga de dia de semana (exatamente 1 data ou substituída por solicitação fulfilled)
+      var enforceCycleOffDaysGen = function (currentShifts, staffList, cStart, cEnd, sectorsList) {
         var normStart = cStart.split(' ')[0].split('T')[0]
         var normEnd = cEnd.split(' ')[0].split('T')[0]
 
-        // Todos os fins de semana candidatos no ciclo inteiro
-        var cycleWeekends = []
-        var dCur = normStart
-        while (dCur <= normEnd) {
-          if (dayOfWeekDateOnly(dCur) === 6) {
-            var satStr = dCur
-            var sunStr = addDaysDateOnly(dCur, 1)
-            if (sunStr <= normEnd && assertWeekendPair(satStr, sunStr)) {
-              cycleWeekends.push({ sat: satStr, sun: sunStr })
-            }
-          }
-          dCur = addDaysDateOnly(dCur, 1)
-        }
-
-        // Helper map for sector min staffing
         var sectorMinStaffMap = {}
         if (Array.isArray(sectorsList)) {
           sectorsList.forEach(function (sec) {
@@ -643,7 +629,6 @@ routerAdd(
           }
         })
 
-        // Shift sets per staff
         var shiftsByStaff = {}
         staffList.forEach(function (u) {
           shiftsByStaff[u.id] = {}
@@ -653,275 +638,129 @@ routerAdd(
           shiftsByStaff[s.user_id][s.date] = true
         })
 
-        // Clone helper for transactional candidate evaluation
-        var cloneState = function (shiftsArr, staffMap) {
-          var clonedShifts = shiftsArr.map(function (s) {
-            return {
-              user_id: s.user_id,
-              sector_id: s.sector_id,
-              start_time: s.start_time,
-              end_time: s.end_time,
-              date: s.date,
-            }
-          })
-          var clonedStaffMap = {}
-          Object.keys(staffMap).forEach(function (k) {
-            clonedStaffMap[k] = {}
-            Object.keys(staffMap[k]).forEach(function (d) {
-              if (staffMap[k][d]) {
-                clonedStaffMap[k][d] = true
-              }
-            })
-          })
-          return { shifts: clonedShifts, staffMap: clonedStaffMap }
-        }
-
-        // Check coverage on all days in [cStart, cEnd] for all sectors
-        var checkCoverageOk = function (shiftsArr) {
-          var dCountsBySector = {}
-          for (var si = 0; si < shiftsArr.length; si++) {
-            var sItem = shiftsArr[si]
-            var secKey = sItem.sector_id || 'default'
-            var d = sItem.date
-            if (!dCountsBySector[secKey]) dCountsBySector[secKey] = {}
-            dCountsBySector[secKey][d] = (dCountsBySector[secKey][d] || 0) + 1
-          }
-
-          var secKeys = Object.keys(sectorMinStaffMap)
-          if (secKeys.length === 0) return true
-
-          for (var ski = 0; ski < secKeys.length; ski++) {
-            var sId = secKeys[ski]
-            var reqMin = sectorMinStaffMap[sId] || 0
-            if (reqMin <= 0) continue
-
-            var curDate = normStart
-            while (curDate <= normEnd) {
-              var count = (dCountsBySector[sId] && dCountsBySector[sId][curDate]) || 0
-              if (count < reqMin) {
-                return false
-              }
-              curDate = addDaysDateOnly(curDate, 1)
-            }
-          }
-          return true
-        }
-
-        var assignments = {}
-        var protectedDatesGen = {}
+        var weekendOffAssignments = {}
+        var additionalOffAssignments = {}
         var issues = []
 
-        // --- FASE 1: Planejamento per-cycle (round-robin) ---
-        var plannedByStaff = {}
-        if (cycleWeekends.length > 0) {
-          staffList.forEach(function (u, staffIndex) {
-            var workH = u.shift_work_hours || 12
-            var restH = u.shift_rest_hours || 36
-            var is12x36 = workH === 12 && restH >= 36
-            var uNatSet = naturalWorkedMapGen[u.id] || {}
+        // Identificar todas as solicitações de folga aprovadas
+        var fulfilledTimeoffsByStaff = {}
+        var allTimeoffRecords = []
+        try {
+          allTimeoffRecords = $app.findRecordsByFilter(
+            'timeoff_requests',
+            "cycle={:cyc} && status='fulfilled'",
+            'date',
+            10000,
+            0,
+            { cyc: cycleId },
+          )
+        } catch (_) {}
 
-            var userCandidates = cycleWeekends.map(function (w) {
-              return {
-                sat: w.sat,
-                sun: w.sun,
-                sunIsNat: is12x36 ? !!uNatSet[w.sun] : true,
+        allTimeoffRecords.forEach(function (req) {
+          var pId = req.getString('staff_profile') || req.getString('user')
+          if (!pId) return
+          if (!fulfilledTimeoffsByStaff[pId]) fulfilledTimeoffsByStaff[pId] = []
+          var reqStart = (req.getString('date') || '').split(' ')[0]
+          var reqEnd = (req.getString('end_date') || req.getString('date') || '').split(' ')[0]
+          var dCur = reqStart
+          while (dCur <= reqEnd) {
+            if (dCur >= normStart && dCur <= normEnd) {
+              fulfilledTimeoffsByStaff[pId].push(dCur)
+            }
+            dCur = addDaysDateOnly(dCur, 1)
+          }
+        })
+
+        staffList.forEach(function (u, staffIndex) {
+          var uNatMap = naturalWorkedMapGen[u.id] || {}
+
+          // 1. FOLGA DE FIM DE SEMANA (Sábado OU Domingo na paridade trabalhada)
+          var weekendWorkedDays = []
+          var weekdayWorkedDays = []
+          var curD = normStart
+          while (curD <= normEnd) {
+            if (uNatMap[curD]) {
+              var dow = dayOfWeekDateOnly(curD)
+              if (dow === 6 || dow === 0) {
+                weekendWorkedDays.push(curD)
+              } else if (dow >= 1 && dow <= 5) {
+                weekdayWorkedDays.push(curD)
               }
-            })
-
-            var natCandidates = userCandidates.filter(function (w) {
-              return w.sunIsNat
-            })
-            if (natCandidates.length === 0) {
-              natCandidates = userCandidates.slice()
             }
-
-            // Round-robin distribution entre os fins de semana candidatos
-            var assignedIdx = staffIndex % natCandidates.length
-            var orderedCandidates = []
-            for (var oi = 0; oi < natCandidates.length; oi++) {
-              orderedCandidates.push(natCandidates[(assignedIdx + oi) % natCandidates.length])
-            }
-
-            var initialChoice = orderedCandidates[0]
-            plannedByStaff[u.id] = {
-              orderedCandidates: orderedCandidates,
-              currentChoice: initialChoice,
-            }
-
-            // Pré-preenche protectedDates imediatamente para TODOS os assignments
-            protectedDatesGen[u.id + ':' + initialChoice.sat] = true
-            protectedDatesGen[u.id + ':' + initialChoice.sun] = true
-          })
-        }
-
-        // --- FASE 2: Execução (swaps) ---
-        staffList.forEach(function (u) {
-          var plan = plannedByStaff[u.id]
-          if (!plan) {
-            issues.push(
-              'Fim de semana obrigatório não atendido: ' +
-                u.name +
-                ' sem fins de semana candidatos no ciclo.',
-            )
-            return
+            curD = addDaysDateOnly(curD, 1)
           }
 
-          var orderedCandidates = plan.orderedCandidates
-          var initialChoice = plan.currentChoice
-          var committedWeekend = null
-
-          for (var ci = 0; ci < orderedCandidates.length; ci++) {
-            var candidate = orderedCandidates[ci]
-            var satStr = candidate.sat
-            var sunStr = candidate.sun
-
-            if (!assertWeekendPair(satStr, sunStr)) {
-              continue
-            }
-
-            // Se mudamos de candidato, atualiza protectedDates
-            if (candidate !== initialChoice) {
-              delete protectedDatesGen[u.id + ':' + initialChoice.sat]
-              delete protectedDatesGen[u.id + ':' + initialChoice.sun]
-              protectedDatesGen[u.id + ':' + satStr] = true
-              protectedDatesGen[u.id + ':' + sunStr] = true
-              initialChoice = candidate
-            }
-
-            // Snapshot state for rollback
-            var snapshot = cloneState(workingShifts, shiftsByStaff)
-            var candidateShifts = snapshot.shifts
-            var candidateStaffMap = snapshot.staffMap
-
-            var datesToFree = []
-            if (candidateStaffMap[u.id][satStr]) datesToFree.push(satStr)
-            if (candidateStaffMap[u.id][sunStr]) datesToFree.push(sunStr)
-
-            var candidatePossible = true
-
-            for (var di = 0; di < datesToFree.length; di++) {
-              var dt = datesToFree[di]
-
-              // Find substitute in the same sector (skipping protected dates)
-              var candList = staffList.filter(function (cand) {
-                return (
-                  cand.id !== u.id &&
-                  (!u.sector_id || !cand.sector_id || cand.sector_id === u.sector_id) &&
-                  !candidateStaffMap[cand.id][dt] &&
-                  !protectedDatesGen[cand.id + ':' + dt] &&
-                  (timeoffMap[cand.id] || []).indexOf(dt) === -1
-                )
-              })
-
-              var subFound = null
-              for (var sli = 0; sli < candList.length; sli++) {
-                var c = candList[sli]
-                var cRestH = c.shift_rest_hours || 36
-                var cNeedGap = Math.max(1, Math.ceil((cRestH + 0.001) / 24))
-                var gapOk = true
-                var cDates = Object.keys(candidateStaffMap[c.id]).filter(function (d) {
-                  return candidateStaffMap[c.id][d]
-                })
-                for (var cdi = 0; cdi < cDates.length; cdi++) {
-                  var pDt = parseDateOnly(dt)
-                  var pCD = parseDateOnly(cDates[cdi])
-                  var diffDays = Math.abs(
-                    (Date.UTC(pDt.y, pDt.m - 1, pDt.d) - Date.UTC(pCD.y, pCD.m - 1, pCD.d)) /
-                      86400000,
-                  )
-                  if (diffDays < cNeedGap) {
-                    gapOk = false
-                    break
-                  }
-                }
-                if (gapOk) {
-                  subFound = c
-                  break
-                }
-              }
-
-              if (subFound) {
-                // Reassign shift from u to subFound
-                for (var si = 0; si < candidateShifts.length; si++) {
-                  if (candidateShifts[si].user_id === u.id && candidateShifts[si].date === dt) {
-                    candidateShifts[si].user_id = subFound.id
-                    if (subFound.sector_id) {
-                      candidateShifts[si].sector_id = subFound.sector_id
-                    }
-                    var startTime = subFound.shift_start_time || '07:00'
-                    if (startTime.length === 5) startTime += ':00'
-                    var start = new Date(dt + 'T' + startTime + '.000Z')
-                    var end = new Date(
-                      start.getTime() + (subFound.shift_work_hours || 12) * 3600000,
-                    )
-                    candidateShifts[si].start_time =
-                      start.toISOString().replace('T', ' ').substring(0, 23) + 'Z'
-                    candidateShifts[si].end_time =
-                      end.toISOString().replace('T', ' ').substring(0, 23) + 'Z'
-                    candidateStaffMap[u.id][dt] = false
-                    candidateStaffMap[subFound.id][dt] = true
-                    break
-                  }
-                }
-              } else {
-                // Removal as last resort: splice if post-removal coverage on dt >= minStaff of the sector
-                var shiftSectorId = u.sector_id || ''
-                for (var fsi = 0; fsi < candidateShifts.length; fsi++) {
-                  if (candidateShifts[fsi].user_id === u.id && candidateShifts[fsi].date === dt) {
-                    shiftSectorId = candidateShifts[fsi].sector_id || shiftSectorId
-                    break
-                  }
-                }
-                var sectorMin = sectorMinStaffMap[shiftSectorId] || 0
-                var currentDayCount = 0
-                for (var csi = 0; csi < candidateShifts.length; csi++) {
-                  if (
-                    candidateShifts[csi].date === dt &&
-                    (!shiftSectorId || candidateShifts[csi].sector_id === shiftSectorId)
-                  ) {
-                    currentDayCount++
-                  }
-                }
-                if (sectorMin > 0 && currentDayCount - 1 < sectorMin) {
-                  candidatePossible = false
-                  break
-                }
-                for (var si2 = 0; si2 < candidateShifts.length; si2++) {
-                  if (candidateShifts[si2].user_id === u.id && candidateShifts[si2].date === dt) {
-                    candidateShifts.splice(si2, 1)
-                    candidateStaffMap[u.id][dt] = false
-                    break
-                  }
-                }
-              }
-            }
-
-            // Verify both days are free and cycle coverage is maintained
-            if (
-              candidatePossible &&
-              !candidateStaffMap[u.id][satStr] &&
-              !candidateStaffMap[u.id][sunStr] &&
-              checkCoverageOk(candidateShifts)
-            ) {
-              // COMMIT state
-              workingShifts = candidateShifts
-              shiftsByStaff = candidateStaffMap
-              committedWeekend = candidate
-              break
-            }
-            // Otherwise ROLLBACK
-          }
-
-          if (committedWeekend && assertWeekendPair(committedWeekend.sat, committedWeekend.sun)) {
-            assignments[u.id] = [committedWeekend.sat, committedWeekend.sun]
-            protectedDatesGen[u.id + ':' + committedWeekend.sat] = true
-            protectedDatesGen[u.id + ':' + committedWeekend.sun] = true
+          var targetWeekendOff = null
+          if (weekendWorkedDays.length > 0) {
+            targetWeekendOff = weekendWorkedDays[staffIndex % weekendWorkedDays.length]
+            weekendOffAssignments[u.id] = [targetWeekendOff]
           } else {
             issues.push(
               'Fim de semana obrigatório não atendido: ' +
                 u.name +
-                ' não tem sábado+domingo livres no ciclo.',
+                ' sem dias de fim de semana na paridade.',
             )
+          }
+
+          // Remove plantão na data de folga de fim de semana escolhida
+          if (targetWeekendOff) {
+            for (var si = 0; si < workingShifts.length; si++) {
+              if (
+                workingShifts[si].user_id === u.id &&
+                workingShifts[si].date === targetWeekendOff
+              ) {
+                workingShifts.splice(si, 1)
+                shiftsByStaff[u.id][targetWeekendOff] = false
+                break
+              }
+            }
+          }
+
+          // 2. FOLGA ADICIONAL DE DIA DE SEMANA (Seg-Sex na paridade ou substituída por solicitação fulfilled)
+          var approvedTimeoffs = fulfilledTimeoffsByStaff[u.id] || []
+          var validApprovedInCycle = []
+          approvedTimeoffs.forEach(function (tDate) {
+            var tDow = dayOfWeekDateOnly(tDate)
+            if (tDow >= 1 && tDow <= 5) {
+              if (uNatMap[tDate]) {
+                if (validApprovedInCycle.indexOf(tDate) === -1) {
+                  validApprovedInCycle.push(tDate)
+                }
+              }
+            }
+          })
+
+          var targetWeekdayOff = null
+          if (validApprovedInCycle.length > 0) {
+            // Substitui folga automática
+            targetWeekdayOff = validApprovedInCycle[0]
+            additionalOffAssignments[u.id] = validApprovedInCycle
+            // Remove plantão de todas as aprovadas
+            validApprovedInCycle.forEach(function (apprD) {
+              for (var wsi = 0; wsi < workingShifts.length; wsi++) {
+                if (workingShifts[wsi].user_id === u.id && workingShifts[wsi].date === apprD) {
+                  workingShifts.splice(wsi, 1)
+                  shiftsByStaff[u.id][apprD] = false
+                  break
+                }
+              }
+            })
+          } else if (weekdayWorkedDays.length > 0) {
+            var wIdx = (staffIndex * 3 + 1) % weekdayWorkedDays.length
+            targetWeekdayOff = weekdayWorkedDays[wIdx]
+            additionalOffAssignments[u.id] = [targetWeekdayOff]
+
+            // Remove plantão na folga adicional automática
+            for (var wsi2 = 0; wsi2 < workingShifts.length; wsi2++) {
+              if (
+                workingShifts[wsi2].user_id === u.id &&
+                workingShifts[wsi2].date === targetWeekdayOff
+              ) {
+                workingShifts.splice(wsi2, 1)
+                shiftsByStaff[u.id][targetWeekdayOff] = false
+                break
+              }
+            }
           }
         })
 
@@ -977,12 +816,13 @@ routerAdd(
 
         return {
           shifts: workingShifts,
-          assignments: assignments,
+          weekend_off_assignments: weekendOffAssignments,
+          additional_off_assignments: additionalOffAssignments,
           issues: issues,
         }
       }
 
-      var enforcedGenResult = enforceWeekendOffGen(
+      var enforcedGenResult = enforceCycleOffDaysGen(
         completedShifts,
         usersWithContracts,
         generationStart,
@@ -991,6 +831,8 @@ routerAdd(
       )
       completedShifts = enforcedGenResult.shifts
       var weekendOffEnforcementIssuesGen = enforcedGenResult.issues
+      var genWeekendOffMap = enforcedGenResult.weekend_off_assignments || {}
+      var genAdditionalOffMap = enforcedGenResult.additional_off_assignments || {}
 
       generatedShifts = completedShifts
 
@@ -1162,10 +1004,7 @@ routerAdd(
         }
       })
 
-      // Validação per-cycle de folga de fim de semana (exatamente 1 par sat+sun por colaborador por ciclo)
-      var expectedCountGen = 1
-      var genAssignmentsMap = enforcedGenResult.assignments || {}
-
+      // Validação per-cycle de folgas (1 Fim de Semana Sáb OU Dom + 1 Dia de Semana Seg-Sex)
       usersWithContracts.forEach(function (u) {
         var uShifts = generatedShifts
           .filter(function (s) {
@@ -1179,44 +1018,60 @@ routerAdd(
           uShiftSet[d] = true
         })
 
-        var userPair = genAssignmentsMap[u.id]
+        var uNatMap = naturalWorkedMapGen[u.id] || {}
 
-        if (!userPair || !Array.isArray(userPair) || userPair.length !== 2) {
+        // Validação Fim de Semana
+        var wOffs = genWeekendOffMap[u.id]
+        if (!wOffs || !Array.isArray(wOffs) || wOffs.length === 0) {
           violations.push(
             'Fim de semana obrigatório não atendido: ' +
               u.name +
-              ' não tem sábado+domingo livres no ciclo.',
+              ' não tem folga de fim de semana no ciclo.',
           )
         } else {
-          var satStr = userPair[0]
-          var sunStr = userPair[1]
-          if (
-            !satStr ||
-            !sunStr ||
-            !assertWeekendPair(satStr, sunStr) ||
-            satStr < cycleStart ||
-            sunStr > cycleEnd
-          ) {
-            violations.push(
-              'Fim de semana obrigatório inválido: ' +
-                u.name +
-                ' possui designação (' +
-                satStr +
-                ' / ' +
-                sunStr +
-                ') que não é Sábado + Domingo no ciclo.',
-            )
-          } else if (uShiftSet[satStr] || uShiftSet[sunStr]) {
+          var wOffDate = wOffs[0]
+          var dow = dayOfWeekDateOnly(wOffDate)
+          if (dow !== 6 && dow !== 0) {
+            violations.push('Folga de fim de semana inválida para ' + u.name + ': ' + wOffDate)
+          } else if (!uNatMap[wOffDate]) {
+            violations.push('Folga de fim de semana para ' + u.name + ' está em paridade oposta.')
+          } else if (uShiftSet[wOffDate]) {
             violations.push(
               'Fim de semana obrigatório não atendido: ' +
                 u.name +
-                ' possui plantão no fim de semana de folga designado (' +
-                satStr +
-                ' / ' +
-                sunStr +
-                ').',
+                ' possui plantão em ' +
+                wOffDate,
             )
           }
+        }
+
+        // Validação Dia de Semana
+        var addOffs = genAdditionalOffMap[u.id]
+        if (addOffs && Array.isArray(addOffs)) {
+          addOffs.forEach(function (addDate) {
+            var addDow = dayOfWeekDateOnly(addDate)
+            if (addDow < 1 || addDow > 5) {
+              violations.push(
+                'Folga adicional inválida para ' +
+                  u.name +
+                  ': ' +
+                  addDate +
+                  ' não é dia de semana.',
+              )
+            } else if (!uNatMap[addDate]) {
+              violations.push(
+                'Folga adicional inválida para ' +
+                  u.name +
+                  ': ' +
+                  addDate +
+                  ' está em paridade oposta.',
+              )
+            } else if (uShiftSet[addDate]) {
+              violations.push(
+                'Folga adicional não atendida: ' + u.name + ' possui plantão em ' + addDate,
+              )
+            }
+          })
         }
       })
 
@@ -1310,7 +1165,8 @@ routerAdd(
             warnings_count: overrideWarnings.length,
             hard_violations: [],
             warnings: overrideWarnings.slice(0, 20),
-            weekend_off_assignments: genAssignmentsMap,
+            weekend_off_assignments: genWeekendOffMap,
+            additional_off_assignments: genAdditionalOffMap,
             cycle_start: cycleStart,
             cycle_end: cycleEnd,
           })

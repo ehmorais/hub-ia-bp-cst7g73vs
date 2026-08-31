@@ -773,7 +773,7 @@ export function ShiftCalendar({
                             {staff.name}
                           </div>
                           <div className="text-orange-800 text-[10px] truncate">
-                            Folga fim de semana
+                            Folga Fim de Semana
                           </div>
                         </div>
                       ))

@@ -1,5 +1,7 @@
 /**
- * Utilitário compartilhado para cálculo e identificação de Fim de Semana de Folga por Ciclo (WEEKEND_OFF).
+ * Utilitário compartilhado para cálculo e identificação de Folgas por Ciclo:
+ * 1. Folga de Fim de Semana (1 data por colaborador: Sábado OU Domingo na paridade trabalhada).
+ * 2. Folga Adicional de Dia de Semana (1 data por colaborador: Seg-Sex na paridade trabalhada, ou substituída por timeoff fulfilled).
  *
  * Reproduz exatamente a mesma regra e algoritmo dos hooks de backend
  * (commit_schedule.js, generate_shifts.js, generate_shifts_draft.js).
@@ -30,6 +32,7 @@ export interface WeekendOffOverrideDetail {
 export interface StaffWeekendOffOverrides {
   saturday?: WeekendOffOverrideDetail
   sunday?: WeekendOffOverrideDetail
+  [key: string]: any
 }
 
 export type WeekendOffOverridesMap = Record<string, StaffWeekendOffOverrides>
@@ -41,6 +44,8 @@ export interface WeekendOffContract {
   work_hours?: number
   rest_hours?: number
   shift_type?: string
+  shift_parity?: 'even' | 'odd' | string
+  cycle_start_date?: string
   expand?: {
     shift_type?: {
       work_hours?: number
@@ -50,6 +55,28 @@ export interface WeekendOffContract {
     [key: string]: any
   }
   [key: string]: any
+}
+
+export interface TimeoffRequestItem {
+  id?: string
+  staff_profile?: string
+  user?: string
+  date: string
+  end_date?: string
+  status: 'pending' | 'fulfilled' | 'rejected' | string
+  [key: string]: any
+}
+
+export interface CycleTimeoffAssignmentResult {
+  weekend_off_assignments: Record<string, string[]> // staffId -> [dateStr] (exatamente 1 data no fim de semana)
+  additional_off_assignments: Record<string, string[]> // staffId -> [dateStr] (1 data dia de semana)
+  approved_timeoffs_applied: Record<string, string[]> // staffId -> [dateStr...]
+  timeoff_parity_conflicts: Array<{
+    staffId: string
+    staffName: string
+    date: string
+    message: string
+  }>
 }
 
 /**
@@ -147,6 +174,18 @@ export function assertWeekendPair(saturday: string, sunday: string): boolean {
   return true
 }
 
+// Retorna true se a data é fim de semana (sábado ou domingo)
+export function isWeekendDay(dateStr: string): boolean {
+  const dow = dayOfWeekDateOnly(dateStr)
+  return dow === 6 || dow === 0
+}
+
+// Retorna true se a data é dia de semana (segunda a sexta)
+export function isWeekdayDate(dateStr: string): boolean {
+  const dow = dayOfWeekDateOnly(dateStr)
+  return dow >= 1 && dow <= 5
+}
+
 // Retorna todos os sábados dentro de [rangeStart, rangeEnd]
 export function getSaturdaysInRange(rangeStart: string, rangeEnd: string): string[] {
   const result: string[] = []
@@ -190,8 +229,10 @@ export function getCycleWeekendCandidates(
 
 /**
  * Constrói o Map<staffId, Set<dateStr>> a partir da estrutura validation_summary
- * Formato suportado: `{ staffId: [sat, sun] }` ou array legado de objetos.
- * Valida estritamente cada par com assertWeekendPair.
+ * Formato suportado:
+ * - `{ weekend_off_assignments: { staffId: [dateStr] } }` (1 data no sábado ou domingo)
+ * - Compatibilidade retroativa com arrays de strings `[sat, sun]`.
+ * Valida que as datas pertencem a sábado (6) ou domingo (0).
  */
 export function buildWeekendOffMap(validationSummary: any): Map<string, Set<string>> {
   const map = new Map<string, Set<string>>()
@@ -203,33 +244,60 @@ export function buildWeekendOffMap(validationSummary: any): Map<string, Set<stri
       const staffId = item?.staff_profile || item?.user_id || item?.user
       const sat = item?.saturday || item?.sat
       const sun = item?.sunday || item?.sun
-      if (staffId && sat && sun && assertWeekendPair(sat, sun)) {
+      const singleDate = item?.date || item?.weekend_off
+      if (staffId) {
         let set = map.get(staffId)
         if (!set) {
           set = new Set<string>()
           map.set(staffId, set)
         }
-        set.add(sat)
-        set.add(sun)
+        if (singleDate && isWeekendDay(singleDate)) {
+          set.add(singleDate)
+        } else if (sat && sun && assertWeekendPair(sat, sun)) {
+          set.add(sat)
+          set.add(sun)
+        }
       }
     })
   } else if (typeof persistedAssignments === 'object') {
     Object.entries(persistedAssignments).forEach(([staffId, dates]) => {
-      if (Array.isArray(dates) && dates.length >= 2) {
+      if (Array.isArray(dates)) {
         const validDates: string[] = []
-        for (let i = 0; i < dates.length; i += 2) {
-          const sat = dates[i]
-          const sun = dates[i + 1]
-          if (sat && sun && assertWeekendPair(sat, sun)) {
-            validDates.push(sat, sun)
+        dates.forEach((d) => {
+          if (typeof d === 'string' && isWeekendDay(d)) {
+            validDates.push(d)
           }
-        }
+        })
         if (validDates.length > 0) {
           map.set(staffId, new Set(validDates))
         }
+      } else if (typeof dates === 'string' && isWeekendDay(dates)) {
+        map.set(staffId, new Set([dates]))
       }
     })
   }
+
+  return map
+}
+
+/**
+ * Constrói o Map<staffId, Set<dateStr>> para folgas adicionais de dia de semana (segunda a sexta).
+ */
+export function buildWeekdayOffMap(validationSummary: any): Map<string, Set<string>> {
+  const map = new Map<string, Set<string>>()
+  const persistedAdditional = validationSummary?.additional_off_assignments
+  if (!persistedAdditional || typeof persistedAdditional !== 'object') return map
+
+  Object.entries(persistedAdditional).forEach(([staffId, dates]) => {
+    if (Array.isArray(dates)) {
+      const validDates = dates.filter((d) => typeof d === 'string' && isWeekdayDate(d))
+      if (validDates.length > 0) {
+        map.set(staffId, new Set(validDates))
+      }
+    } else if (typeof dates === 'string' && isWeekdayDate(dates)) {
+      map.set(staffId, new Set([dates]))
+    }
+  })
 
   return map
 }
@@ -316,7 +384,7 @@ export function validateWeekendOffOverride({
 
 /**
  * Atualiza o array de assignments do colaborador com o novo destino,
- * preservando exatamente 1 sábado e 1 domingo.
+ * preservando exatamente 1 data ou atualizando a lista.
  */
 export function moveWeekendOffAssignment(
   currentAssignments: string[],
@@ -325,13 +393,11 @@ export function moveWeekendOffAssignment(
 ): string[] {
   const normSrc = (sourceDate || '').split(' ')[0].split('T')[0]
   const normTgt = (targetDate || '').split(' ')[0].split('T')[0]
-  const srcDow = dayOfWeekDateOnly(normSrc)
 
   const remaining = currentAssignments.filter(
     (d) => (d || '').split(' ')[0].split('T')[0] !== normSrc,
   )
 
-  // Adiciona o novo destino e ordena: primeiro sábado (6), depois domingo (0) ou cronológico
   const updated = [...remaining, normTgt]
   return updated.sort((a, b) => {
     const dowA = dayOfWeekDateOnly(a)
@@ -344,7 +410,9 @@ export function moveWeekendOffAssignment(
 
 /**
  * Computa o padrão natural de plantões para colaboradores 12x36
- * usando âncora determinística por ID de colaborador.
+ * usando âncora determinística por ID de colaborador e paridade.
+ * - odd (dias ímpares): posições 1, 3, 5... (offset 0)
+ * - even (dias pares): posições 2, 4, 6... (offset 1)
  */
 export function computeNaturalPatternByStaff(
   staffId: string,
@@ -428,4 +496,143 @@ export function computeNaturalPattern(
   }
 
   return natDays
+}
+
+/**
+ * Função centralizada para cálculo de folgas do ciclo:
+ * 1. Folga de fim de semana (exatamente 1 data: sábado ou domingo na paridade trabalhada).
+ * 2. Folga adicional de dia de semana (segunda a sexta na paridade trabalhada, ou substituída por solicitação fulfilled).
+ */
+export function calculateCycleOffDaysForStaff({
+  staffId,
+  staffName,
+  allStaffIds,
+  cycleStart,
+  cycleEnd,
+  profile,
+  timeoffRequests = [],
+  staffIndex = 0,
+}: {
+  staffId: string
+  staffName: string
+  allStaffIds: string[]
+  cycleStart: string
+  cycleEnd: string
+  profile?: {
+    shift_parity?: string
+    cycle_start_date?: string
+    work_hours?: number
+    rest_hours?: number
+  }
+  timeoffRequests?: TimeoffRequestItem[]
+  staffIndex?: number
+}): {
+  weekendOffDate: string | null
+  additionalOffDate: string | null
+  approvedTimeoffDates: string[]
+  timeoffConflicts: Array<{ staffId: string; staffName: string; date: string; message: string }>
+} {
+  const normStart = cycleStart.split(' ')[0].split('T')[0]
+  const normEnd = cycleEnd.split(' ')[0].split('T')[0]
+  const wH = profile?.work_hours || 12
+  const rH = profile?.rest_hours || 36
+
+  const naturalDays = computeNaturalPatternByStaff(
+    staffId,
+    allStaffIds,
+    normStart,
+    normEnd,
+    wH,
+    rH,
+    profile,
+  )
+
+  // 1. Candidatos de fim de semana: dias de sábado ou domingo em que o colaborador trabalharia pela paridade
+  const weekendWorkedCandidates: string[] = []
+  // 2. Candidatos de dia de semana: dias de segunda a sexta em que o colaborador trabalharia pela paridade
+  const weekdayWorkedCandidates: string[] = []
+
+  let cur = normStart
+  while (cur <= normEnd) {
+    if (naturalDays[cur]) {
+      const dow = dayOfWeekDateOnly(cur)
+      if (dow === 6 || dow === 0) {
+        weekendWorkedCandidates.push(cur)
+      } else if (dow >= 1 && dow <= 5) {
+        weekdayWorkedCandidates.push(cur)
+      }
+    }
+    cur = addDaysDateOnly(cur, 1)
+  }
+
+  // Escolha determinística de fim de semana (round-robin estável)
+  let weekendOffDate: string | null = null
+  if (weekendWorkedCandidates.length > 0) {
+    const idx = staffIndex % weekendWorkedCandidates.length
+    weekendOffDate = weekendWorkedCandidates[idx]
+  }
+
+  // 3. Processar solicitações de timeoff (apenas status fulfilled e dentro do ciclo)
+  const approvedWeekdayWorked: string[] = []
+  const timeoffConflicts: Array<{
+    staffId: string
+    staffName: string
+    date: string
+    message: string
+  }> = []
+
+  const staffTimeoffs = timeoffRequests.filter((t) => {
+    const tStaff = t.staff_profile || t.user
+    return tStaff === staffId
+  })
+
+  staffTimeoffs.forEach((t) => {
+    if (t.status === 'fulfilled') {
+      const tStart = (t.date || '').split(' ')[0].split('T')[0]
+      const tEnd = (t.end_date || t.date || '').split(' ')[0].split('T')[0]
+      let d = tStart
+      while (d <= tEnd) {
+        if (d >= normStart && d <= normEnd) {
+          if (isWeekdayDate(d)) {
+            if (naturalDays[d]) {
+              if (!approvedWeekdayWorked.includes(d)) {
+                approvedWeekdayWorked.push(d)
+              }
+            } else {
+              // Folga aprovada em dia de paridade oposta (já estaria de folga)
+              timeoffConflicts.push({
+                staffId,
+                staffName,
+                date: d,
+                message: `Solicitação aprovada em dia em que ${staffName} já estaria de folga pela paridade (${d}). Nenhuma folga adicional indevida gerada.`,
+              })
+            }
+          }
+        }
+        d = addDaysDateOnly(d, 1)
+      }
+    }
+  })
+
+  // Escolha de dia de semana:
+  // Se houver solicitação aprovada válida (em dia trabalhado), consome a folga adicional automática.
+  // Se não houver, escolhe deterministicamente 1 dia entre segunda e sexta na paridade trabalhada.
+  let additionalOffDate: string | null = null
+
+  if (approvedWeekdayWorked.length > 0) {
+    // Aprovadas substituem a folga automática. Não gera folga automática extra.
+    additionalOffDate = approvedWeekdayWorked[0]
+  } else if (weekdayWorkedCandidates.length > 0) {
+    // Escolha determinística estável
+    // Semente: (staffIndex * 3 + 1) % len para espalhar uniformemente
+    const idx = (staffIndex * 3 + 1) % weekdayWorkedCandidates.length
+    additionalOffDate = weekdayWorkedCandidates[idx]
+  }
+
+  return {
+    weekendOffDate,
+    additionalOffDate,
+    approvedTimeoffDates: approvedWeekdayWorked,
+    timeoffConflicts,
+  }
 }

@@ -321,11 +321,10 @@ routerAdd(
       return true
     }
 
-    // --- WEEKEND_OFF validation per-cycle BEFORE allowing commit/publish ---
-    // 1. Check if there is an existing schedule_draft with validation_summary.weekend_off_assignments
+    // --- FOLGAS DO CICLO: 1 Fim de Semana (Sáb OU Dom na paridade) + 1 Dia de Semana (Seg-Sex na paridade) ---
     var draftRecord = null
     var weekendOffAssignments = null
-    var weekendOffOverrides = {}
+    var additionalOffAssignments = null
     var bodyDraftId = body.draft_id || body.draft || ''
 
     if (bodyDraftId) {
@@ -335,7 +334,6 @@ routerAdd(
     }
 
     if (!draftRecord) {
-      // Look for the most recent draft for this cycle and sector
       try {
         var existingDrafts = $app.findRecordsByFilter(
           'schedule_drafts',
@@ -364,22 +362,77 @@ routerAdd(
           valSummary.weekend_off_assignments &&
           typeof valSummary.weekend_off_assignments === 'object'
         ) {
-          if (Object.keys(valSummary.weekend_off_assignments).length > 0) {
-            weekendOffAssignments = valSummary.weekend_off_assignments
-          }
+          weekendOffAssignments = valSummary.weekend_off_assignments
         }
         if (
           valSummary &&
-          valSummary.weekend_off_overrides &&
-          typeof valSummary.weekend_off_overrides === 'object'
+          valSummary.additional_off_assignments &&
+          typeof valSummary.additional_off_assignments === 'object'
         ) {
-          weekendOffOverrides = valSummary.weekend_off_overrides
+          additionalOffAssignments = valSummary.additional_off_assignments
         }
       } catch (_) {}
     }
 
     var sortedProfileIds = Object.keys(profileMap).slice().sort()
-    var expectedCountCommit = 1 // Exatamente 1 par sábado+domingo por staff por ciclo inteiro
+
+    // Helper determinístico de paridade
+    var computeNaturalPatternByStaffCommit = function (staffId, contractObj, cStart, cEnd) {
+      var workHours = 12
+      var restHours = 36
+      if (contractObj) {
+        try {
+          var stId = contractObj.getString('shift_type')
+          if (stId) {
+            var stRecord = $app.findRecordById('shift_types', stId)
+            workHours = stRecord.getInt('work_hours') || 12
+            restHours = stRecord.getInt('rest_hours') || 36
+          }
+        } catch (_) {}
+      }
+      var is12x36 = workHours === 12 && restHours >= 36
+      var stepDays = Math.max(2, Math.round((workHours + restHours) / 24))
+      var normStart = cStart.split(' ')[0].split('T')[0]
+      var normEnd = cEnd.split(' ')[0].split('T')[0]
+
+      var offset = 0
+      var parity = ''
+      var anchorDate = ''
+      if (contractObj) {
+        try {
+          var staffRec = $app.findRecordById('staff_profiles', staffId)
+          parity = staffRec.getString('shift_parity') || ''
+          anchorDate = (staffRec.getString('cycle_start_date') || '').split(' ')[0].split('T')[0]
+        } catch (_) {}
+      }
+
+      if (is12x36) {
+        if (parity === 'even') {
+          offset = 1
+        } else if (parity === 'odd') {
+          offset = 0
+        } else if (anchorDate && anchorDate >= normStart && anchorDate <= normEnd) {
+          var diffAnchor = Math.round(
+            (new Date(anchorDate + 'T00:00:00Z').getTime() -
+              new Date(normStart + 'T00:00:00Z').getTime()) /
+              86400000,
+          )
+          offset = ((diffAnchor % stepDays) + stepDays) % stepDays
+        } else {
+          var pos = sortedProfileIds.indexOf(staffId)
+          var stableIdx = pos !== -1 ? pos : 0
+          offset = stableIdx % stepDays
+        }
+      }
+
+      var natDays = {}
+      var cur = addDaysDateOnly(normStart, offset)
+      while (cur <= normEnd) {
+        natDays[cur] = true
+        cur = addDaysDateOnly(cur, stepDays)
+      }
+      return natDays
+    }
 
     sortedProfileIds.forEach(function (profileId) {
       var profile = profileMap[profileId]
@@ -398,99 +451,130 @@ routerAdd(
         uShiftSet[d] = true
       })
 
-      var staffAssignments = weekendOffAssignments ? weekendOffAssignments[profileId] : null
-      var staffOverrides = weekendOffOverrides ? weekendOffOverrides[profileId] : null
+      var naturalDays = computeNaturalPatternByStaffCommit(
+        profileId,
+        contract,
+        cycleStart,
+        cycleEnd,
+      )
 
-      if (staffAssignments && Array.isArray(staffAssignments) && staffAssignments.length >= 2) {
-        if (staffAssignments.length > 2) {
-          violations.push(
-            'Fim de semana obrigatório inválido: payload legado com mais de um par por staff.',
-          )
-        } else {
-          // Identifica se temos exatamente 1 sábado (6) e 1 domingo (0)
-          var date1 = staffAssignments[0]
-          var date2 = staffAssignments[1]
-          var dow1 = date1 ? dayOfWeekDateOnly(date1) : -1
-          var dow2 = date2 ? dayOfWeekDateOnly(date2) : -1
+      // 1. Validar Folga de Fim de Semana (exatamente 1 data no ciclo em sábado OU domingo na paridade trabalhada)
+      var staffWeekendOffs = weekendOffAssignments ? weekendOffAssignments[profileId] : null
+      var weekendOffDate = null
+      if (Array.isArray(staffWeekendOffs) && staffWeekendOffs.length > 0) {
+        weekendOffDate = staffWeekendOffs[0]
+      } else if (typeof staffWeekendOffs === 'string' && staffWeekendOffs) {
+        weekendOffDate = staffWeekendOffs
+      }
 
-          var hasOneSat = (dow1 === 6 && dow2 !== 6) || (dow2 === 6 && dow1 !== 6)
-          var hasOneSun = (dow1 === 0 && dow2 !== 0) || (dow2 === 0 && dow1 !== 0)
-          var satDate = dow1 === 6 ? date1 : dow2 === 6 ? date2 : null
-          var sunDate = dow1 === 0 ? date1 : dow2 === 0 ? date2 : null
-
-          var isConsecutivePair = satDate && sunDate && assertWeekendPair(satDate, sunDate)
-          var hasValidOverrideAudit = false
-
-          if (staffOverrides && typeof staffOverrides === 'object') {
-            // Verifica se há override válido para sábado ou domingo com manual_override=true
-            var satOverride = staffOverrides.saturday
-            var sunOverride = staffOverrides.sunday
-            if (
-              (satOverride &&
-                satOverride.manual_override === true &&
-                satOverride.target_date === satDate &&
-                satOverride.weekday === 6) ||
-              (sunOverride &&
-                sunOverride.manual_override === true &&
-                sunOverride.target_date === sunDate &&
-                sunOverride.weekday === 0)
-            ) {
-              hasValidOverrideAudit = true
+      // Se não veio do draft, calcula a data esperada
+      if (!weekendOffDate) {
+        var wCandidates = []
+        var cCur = cycleStart
+        while (cCur <= cycleEnd) {
+          if (naturalDays[cCur]) {
+            var dow = dayOfWeekDateOnly(cCur)
+            if (dow === 6 || dow === 0) {
+              wCandidates.push(cCur)
             }
           }
-
-          if (!satDate || !sunDate || !hasOneSat || !hasOneSun) {
-            violations.push(
-              'Fim de semana obrigatório inválido: ' +
-                profile.name +
-                ' deve ter exatamente 1 sábado e 1 domingo marcados como folga.',
-            )
-          } else if (
-            satDate < cycleStart ||
-            satDate > cycleEnd ||
-            sunDate < cycleStart ||
-            sunDate > cycleEnd
-          ) {
-            violations.push(
-              'Fim de semana obrigatório inválido: ' +
-                profile.name +
-                ' possui designação (' +
-                satDate +
-                ' / ' +
-                sunDate +
-                ') fora dos limites do ciclo.',
-            )
-          } else if (!isConsecutivePair && !hasValidOverrideAudit) {
-            // Se não é consecutivo e NÃO possui override auditado válido, rejeita!
-            violations.push(
-              'Fim de semana obrigatório inválido: ' +
-                profile.name +
-                ' possui sábado (' +
-                satDate +
-                ') e domingo (' +
-                sunDate +
-                ') não consecutivos sem trilha de auditoria de override manual válida.',
-            )
-          } else if (uShiftSet[satDate] || uShiftSet[sunDate]) {
-            violations.push(
-              'Fim de semana obrigatório não atendido: ' +
-                profile.name +
-                ' possui plantão na folga de fim de semana designada (' +
-                satDate +
-                ' / ' +
-                sunDate +
-                ').',
-            )
-          }
+          cCur = addDaysDateOnly(cCur, 1)
         }
-      } else {
+        if (wCandidates.length > 0) {
+          var pIdx = sortedProfileIds.indexOf(profileId)
+          weekendOffDate = wCandidates[(pIdx !== -1 ? pIdx : 0) % wCandidates.length]
+        }
+      }
+
+      if (!weekendOffDate) {
         violations.push(
           'Fim de semana obrigatório não atendido: ' +
             profile.name +
-            '. Faltam ' +
-            expectedCountCommit +
-            ' fins de semana de folga.',
+            '. Nenhuma folga de fim de semana elegível no ciclo.',
         )
+      } else {
+        var wDow = dayOfWeekDateOnly(weekendOffDate)
+        if (wDow !== 6 && wDow !== 0) {
+          violations.push(
+            'Folga de fim de semana inválida para ' +
+              profile.name +
+              ': ' +
+              weekendOffDate +
+              ' não é sábado nem domingo.',
+          )
+        } else if (weekendOffDate < cycleStart || weekendOffDate > cycleEnd) {
+          violations.push(
+            'Folga de fim de semana inválida para ' +
+              profile.name +
+              ': ' +
+              weekendOffDate +
+              ' está fora dos limites do ciclo.',
+          )
+        } else if (!naturalDays[weekendOffDate]) {
+          violations.push(
+            'Folga de fim de semana inválida para ' +
+              profile.name +
+              ': ' +
+              weekendOffDate +
+              ' não coincide com a paridade de plantão do colaborador.',
+          )
+        } else if (uShiftSet[weekendOffDate]) {
+          violations.push(
+            'Fim de semana obrigatório não atendido: ' +
+              profile.name +
+              ' possui plantão na folga de fim de semana designada (' +
+              weekendOffDate +
+              ').',
+          )
+        }
+      }
+
+      // 2. Validar Folga Adicional de Dia de Semana (segunda a sexta na paridade trabalhada, ou substituída por solicitação fulfilled)
+      var staffAdditionalOffs = additionalOffAssignments
+        ? additionalOffAssignments[profileId]
+        : null
+      var additionalOffDate = null
+      if (Array.isArray(staffAdditionalOffs) && staffAdditionalOffs.length > 0) {
+        additionalOffDate = staffAdditionalOffs[0]
+      } else if (typeof staffAdditionalOffs === 'string' && staffAdditionalOffs) {
+        additionalOffDate = staffAdditionalOffs
+      }
+
+      if (additionalOffDate) {
+        var addDow = dayOfWeekDateOnly(additionalOffDate)
+        if (addDow < 1 || addDow > 5) {
+          violations.push(
+            'Folga adicional de dia de semana inválida para ' +
+              profile.name +
+              ': ' +
+              additionalOffDate +
+              ' é sábado/domingo (deve ser seg-sex).',
+          )
+        } else if (additionalOffDate < cycleStart || additionalOffDate > cycleEnd) {
+          violations.push(
+            'Folga adicional de dia de semana para ' +
+              profile.name +
+              ' (' +
+              additionalOffDate +
+              ') está fora do ciclo.',
+          )
+        } else if (!naturalDays[additionalOffDate]) {
+          violations.push(
+            'Folga adicional inválida para ' +
+              profile.name +
+              ': ' +
+              additionalOffDate +
+              ' está em dia de folga natural por paridade oposta.',
+          )
+        } else if (uShiftSet[additionalOffDate]) {
+          violations.push(
+            'Folga adicional de dia de semana não respeitada: ' +
+              profile.name +
+              ' possui plantão no dia ' +
+              additionalOffDate +
+              '.',
+          )
+        }
       }
     })
 
