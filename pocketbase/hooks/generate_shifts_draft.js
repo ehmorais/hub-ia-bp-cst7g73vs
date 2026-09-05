@@ -1498,8 +1498,68 @@ routerAdd(
           curD = addDaysDateOnly(curD, 1)
         }
 
-        // Tentar alocar folga de fim de semana verificando se a remoção mantém o efetivo >= minStaffing
+        // Reservar uma folga completa de fim de semana (sábado + domingo).
+        // A cobertura mínima deve ser preservada nos dois dias.
         var chosenWeekendOff = null
+        var weekendPairs = []
+        var pairDate = normStart
+        while (pairDate <= normEnd) {
+          if (dayOfWeekDateOnly(pairDate) === 6) {
+            var pairSunday = addDaysDateOnly(pairDate, 1)
+            if (
+              pairSunday <= normEnd &&
+              !isDateInStaffVacation(pairDate) &&
+              !isDateInStaffVacation(pairSunday)
+            ) {
+              weekendPairs.push([pairDate, pairSunday])
+            }
+          }
+          pairDate = addDaysDateOnly(pairDate, 1)
+        }
+        if (weekendPairs.length > 0) {
+          for (var pwi = 0; pwi < weekendPairs.length; pwi++) {
+            var candidatePair = weekendPairs[(staffIndex + pwi) % weekendPairs.length]
+            var pairSafe = true
+            var pairCounts = computeDailyStaffCount()
+            for (var pdi = 0; pdi < candidatePair.length; pdi++) {
+              var pairDay = candidatePair[pdi]
+              var pairHasShift = workingShifts.some(function (shift) {
+                return shift.user_id === u.id && shift.date === pairDay
+              })
+              if (pairHasShift && minStaff > 0 && (pairCounts[pairDay] || 0) - 1 < minStaff) {
+                pairSafe = false
+              }
+            }
+            if (pairSafe) {
+              chosenWeekendOff = candidatePair
+              break
+            }
+          }
+        }
+        if (chosenWeekendOff) {
+          for (var rsi = workingShifts.length - 1; rsi >= 0; rsi--) {
+            if (
+              workingShifts[rsi].user_id === u.id &&
+              chosenWeekendOff.indexOf(workingShifts[rsi].date) !== -1
+            ) {
+              shiftsByStaff[u.id][workingShifts[rsi].date] = false
+              workingShifts.splice(rsi, 1)
+            }
+          }
+          weekendOffAssignments[u.id] = chosenWeekendOff
+        } else if (weekendPairs.length === 0) {
+          weekendOffAssignments[u.id] = []
+        } else {
+          weekendOffAssignments[u.id] = []
+          issues.push(
+            'Folga de fim de semana não pôde ser alocada com segurança para ' +
+              u.name +
+              ': o par sábado+domingo violaria o efetivo mínimo (' +
+              minStaff +
+              ').',
+          )
+        }
+        /* legacy single-day selection retained below only as unreachable reference
         if (weekendWorkedDays.length > 0) {
           var wPreferredIdx = staffIndex % weekendWorkedDays.length
           // Tenta a partir do índice preferido e remaneja para outros fins de semana se necessário
@@ -1605,6 +1665,7 @@ routerAdd(
             )
           }
         }
+        */
 
         // 2. FOLGA ADICIONAL DE DIA DE SEMANA (Seg-Sex na paridade ou substituída por solicitação fulfilled)
         var approvedTimeoffs = fulfilledTimeoffsByStaff[u.id] || []
