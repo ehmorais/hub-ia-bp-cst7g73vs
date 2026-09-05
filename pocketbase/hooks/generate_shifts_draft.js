@@ -1521,16 +1521,59 @@ routerAdd(
             var candidatePair = weekendPairs[(staffIndex + pwi) % weekendPairs.length]
             var pairSafe = true
             var pairCounts = computeDailyStaffCount()
+            var replacementShifts = []
             for (var pdi = 0; pdi < candidatePair.length; pdi++) {
               var pairDay = candidatePair[pdi]
               var pairHasShift = workingShifts.some(function (shift) {
                 return shift.user_id === u.id && shift.date === pairDay
               })
               if (pairHasShift && minStaff > 0 && (pairCounts[pairDay] || 0) - 1 < minStaff) {
-                pairSafe = false
+                // Try to replace the removed shift with another eligible,
+                // available professional before rejecting the weekend pair.
+                var replacement = null
+                for (var rci = 0; rci < staffList.length; rci++) {
+                  var candidate = staffList[rci]
+                  if (candidate.id === u.id) continue
+                  if ((unavailableMap[candidate.id] || []).indexOf(pairDay) !== -1) continue
+                  if (
+                    workingShifts.some(function (shift) {
+                      return shift.user_id === candidate.id && shift.date === pairDay
+                    })
+                  )
+                    continue
+                  if (
+                    replacementShifts.some(function (shift) {
+                      return shift.user_id === candidate.id && shift.date === pairDay
+                    })
+                  )
+                    continue
+
+                  var candidateGapDays = Math.max(1, Math.ceil((candidate.rest_hours || 11) / 24))
+                  var candidateHasRest = workingShifts.every(function (shift) {
+                    if (shift.user_id !== candidate.id) return true
+                    var diff =
+                      Math.abs(
+                        new Date(pairDay + 'T00:00:00Z').getTime() -
+                          new Date(shift.date + 'T00:00:00Z').getTime(),
+                      ) / 86400000
+                    return diff >= candidateGapDays
+                  })
+                  if (candidateHasRest) {
+                    replacement = candidate
+                    break
+                  }
+                }
+                if (replacement) {
+                  replacementShifts.push({ user_id: replacement.id, date: pairDay })
+                } else {
+                  pairSafe = false
+                }
               }
             }
             if (pairSafe) {
+              replacementShifts.forEach(function (replacement) {
+                workingShifts.push(replacement)
+              })
               chosenWeekendOff = candidatePair
               break
             }
