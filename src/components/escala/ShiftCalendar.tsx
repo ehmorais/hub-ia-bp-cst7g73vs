@@ -525,7 +525,7 @@ export function ShiftCalendar({
 
     // Check rest rules (Validation)
     const collaboratorId = shift.staff_profile || shift.user
-    const targetDateStr = format(targetDay, 'yyyy-MM-dd')
+    const targetDateStr = formatLocalDateKeySafe(targetDay)
     const targetProfile = staffProfiles.find((sp) => sp.id === collaboratorId)
 
     if (isVacationDateInclusive(targetProfile, targetDateStr)) {
