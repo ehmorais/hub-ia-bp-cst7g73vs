@@ -400,6 +400,9 @@ routerAdd(
       }
       var profileParity = p.getString('shift_parity') || ''
       var profileCycleStart = (p.getString('cycle_start_date') || '').split(' ')[0].split('T')[0]
+      var profileVacationEnabled = p.getBool('vacation_enabled')
+      var profileVacationStart = (p.getString('vacation_start') || '').split(' ')[0].split('T')[0]
+      var profileVacationEnd = (p.getString('vacation_end') || '').split(' ')[0].split('T')[0]
       eligible.push({
         id: p.id,
         name: p.getString('name'),
@@ -417,6 +420,9 @@ routerAdd(
         shift_start_time: st.start_time,
         shift_parity: profileParity,
         cycle_start_date: profileCycleStart,
+        vacation_enabled: profileVacationEnabled,
+        vacation_start: profileVacationStart,
+        vacation_end: profileVacationEnd,
       })
     })
 
@@ -588,6 +594,25 @@ routerAdd(
       })
     } catch (_) {}
 
+    // --- Férias (staff_profiles: vacation_enabled + vacation_start..vacation_end inclusive) ---
+    var vacationMap = {}
+    eligible.forEach(function (u) {
+      vacationMap[u.id] = []
+      if (
+        u.vacation_enabled === true &&
+        u.vacation_start &&
+        u.vacation_end &&
+        u.vacation_start <= u.vacation_end
+      ) {
+        var vCur = new Date(u.vacation_start + 'T00:00:00Z')
+        var vLast = new Date(u.vacation_end + 'T00:00:00Z')
+        while (vCur <= vLast) {
+          vacationMap[u.id].push(vCur.toISOString().split('T')[0])
+          vCur = new Date(vCur.getTime() + 86400000)
+        }
+      }
+    })
+
     var unavailableMap = {}
     eligible.forEach(function (u) {
       unavailableMap[u.id] = []
@@ -595,6 +620,9 @@ routerAdd(
         if (unavailableMap[u.id].indexOf(date) === -1) unavailableMap[u.id].push(date)
       })
       ;(otherSectorShiftMap[u.id] || []).forEach(function (date) {
+        if (unavailableMap[u.id].indexOf(date) === -1) unavailableMap[u.id].push(date)
+      })
+      ;(vacationMap[u.id] || []).forEach(function (date) {
         if (unavailableMap[u.id].indexOf(date) === -1) unavailableMap[u.id].push(date)
       })
     })
@@ -638,6 +666,7 @@ routerAdd(
         shift_start_time: u.shift_start_time,
         weekend_off_sundays: weekendOffSundays,
         timeoffs: timeoffMap[u.id] || [],
+        vacations: vacationMap[u.id] || [],
         other_sector_shifts: otherSectorShiftMap[u.id] || [],
       }
     })
@@ -696,7 +725,7 @@ routerAdd(
       '1. Cada plantão deve respeitar o tipo de turno do contrato do colaborador ' +
         '(work_hours, rest_hours, shift_start_time). O backend aplicará os horários ' +
         'a partir do contrato — você deve informar apenas user_id e date.',
-      '2. Não aloque um colaborador em qualquer dia de folga (timeoffs) nem em ' +
+      '2. Não aloque um colaborador em qualquer dia de folga (timeoffs), férias (vacations) nem em ' +
         'datas já ocupadas em outro setor (other_sector_shifts).',
       '3. Respeite o descanso mínimo entre plantões do mesmo colaborador ' +
         '(' +
@@ -1646,6 +1675,13 @@ routerAdd(
       var tdays = timeoffMap[u.id] || []
       if (tdays.indexOf(entry.date) !== -1) {
         violations.push('Folga não respeitada: ' + u.name + ' em ' + entry.date + '.')
+      }
+      // Vacation check
+      var vdays = vacationMap[u.id] || []
+      if (vdays.indexOf(entry.date) !== -1) {
+        violations.push(
+          'Colaborador está de férias no período: ' + u.name + ' em ' + entry.date + '.',
+        )
       }
       var occupiedDays = otherSectorShiftMap[u.id] || []
       if (occupiedDays.indexOf(entry.date) !== -1) {

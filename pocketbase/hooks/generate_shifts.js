@@ -166,6 +166,9 @@ routerAdd(
 
         var profileParity = u.getString('shift_parity') || ''
         var profileCycleStart = (u.getString('cycle_start_date') || '').split(' ')[0].split('T')[0]
+        var profileVacationEnabled = u.getBool('vacation_enabled')
+        var profileVacationStart = (u.getString('vacation_start') || '').split(' ')[0].split('T')[0]
+        var profileVacationEnd = (u.getString('vacation_end') || '').split(' ')[0].split('T')[0]
         usersWithContracts.push({
           id: u.id,
           name: u.getString('name'),
@@ -182,6 +185,9 @@ routerAdd(
           shift_start_time: sTypeStart,
           shift_parity: profileParity,
           cycle_start_date: profileCycleStart,
+          vacation_enabled: profileVacationEnabled,
+          vacation_start: profileVacationStart,
+          vacation_end: profileVacationEnd,
           weekend_off_sundays: weekendOffSundays.length > 0 ? weekendOffSundays : undefined,
           assigned_rules: userRules.length > 0 ? userRules : undefined,
         })
@@ -260,7 +266,7 @@ routerAdd(
       '2. Safety Ratios: Non-critical floors must have at least 1 professional per "staffing_ratio" beds (default 10), and a minimum of 2 professionals.',
       '3. Predictive & Critical: Sectors marked is_critical should prioritize reaching their ideal_staff.',
       '4. Hierarchical Supervision: A professional requiring supervision cannot work alone. Pair with at least one higher hierarchy_rank professional.',
-      '5. Time-off Requests: You MUST NOT schedule a user on any day from date through end_date, inclusive.',
+      '5. Time-off Requests & Vacations: You MUST NOT schedule a user on any day from date through end_date, inclusive, or during their vacation period.',
       '6. Hours & Shifts: Respect shift_type work hours and rest hours. Total hours must not exceed hour_limit.',
       '7. Individual Rules: assigned_rules override general department rules for this specific professional.',
       '8. Custom AI Rules have MAXIMUM OVERRIDE PRIORITY. Follow their prompt precisely. When a custom rule conflicts with rest hours, 12x36, monthly hours or sequence rules, the custom rule wins; reorganize the remaining shifts to minimize the exception. Valid IDs, cycle dates, minimum staffing, supervision and formally registered timeoffs remain mandatory.',
@@ -339,6 +345,25 @@ routerAdd(
         while (cursor <= end) {
           timeoffMap[t.user].push(cursor.toISOString().split('T')[0])
           cursor = new Date(cursor.getTime() + 86400000)
+        }
+      })
+
+      // Vacation map
+      var vacationMap = {}
+      usersWithContracts.forEach(function (u) {
+        vacationMap[u.id] = []
+        if (
+          u.vacation_enabled === true &&
+          u.vacation_start &&
+          u.vacation_end &&
+          u.vacation_start <= u.vacation_end
+        ) {
+          var vCur = new Date(u.vacation_start + 'T00:00:00Z')
+          var vLast = new Date(u.vacation_end + 'T00:00:00Z')
+          while (vCur <= vLast) {
+            vacationMap[u.id].push(vCur.toISOString().split('T')[0])
+            vCur = new Date(vCur.getTime() + 86400000)
+          }
         }
       })
 
@@ -526,7 +551,10 @@ routerAdd(
           var dates = []
           var dateCursor = addDaysDateOnly(normGenStart, offset)
           while (dateCursor <= normGenEnd && dates.length < maxShifts) {
-            if ((timeoffMap[u.id] || []).indexOf(dateCursor) === -1) {
+            var isOffDay =
+              (timeoffMap[u.id] || []).indexOf(dateCursor) !== -1 ||
+              (vacationMap[u.id] || []).indexOf(dateCursor) !== -1
+            if (!isOffDay) {
               dates.push(dateCursor)
             }
             dateCursor = addDaysDateOnly(dateCursor, stepDays)
@@ -903,6 +931,17 @@ routerAdd(
               ' alocado em ' +
               dateStr +
               ' (possui folga solicitada neste dia)',
+          )
+        }
+
+        // Check vacation
+        var userVacations = vacationMap[gs.user_id] || []
+        if (userVacations.indexOf(dateStr) !== -1) {
+          var vacUserName = userContractMap[gs.user_id]
+            ? userContractMap[gs.user_id].name
+            : gs.user_id
+          violations.push(
+            'Colaborador está de férias no período: ' + vacUserName + ' em ' + dateStr,
           )
         }
 

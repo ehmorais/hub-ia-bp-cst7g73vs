@@ -58,11 +58,17 @@ routerAdd(
           requiresSupervision = role.getBool('requires_supervision')
         } catch (_) {}
       }
+      var vacEnabled = profile.getBool('vacation_enabled')
+      var vacStart = (profile.getString('vacation_start') || '').split(' ')[0].split('T')[0]
+      var vacEnd = (profile.getString('vacation_end') || '').split(' ')[0].split('T')[0]
       profileMap[profile.id] = {
         name: profile.getString('name') || profile.id,
         role_id: roleId,
         rank: roleRank,
         requires_supervision: requiresSupervision,
+        vacation_enabled: vacEnabled,
+        vacation_start: vacStart,
+        vacation_end: vacEnd,
       }
     })
 
@@ -170,6 +176,27 @@ routerAdd(
           )
         }
       })
+
+      // Validação de férias
+      if (
+        profile.vacation_enabled === true &&
+        profile.vacation_start &&
+        profile.vacation_end &&
+        day >= profile.vacation_start &&
+        day <= profile.vacation_end
+      ) {
+        violations.push(
+          'Colaborador está de férias no período: ' +
+            profile.name +
+            ' está de férias em ' +
+            day +
+            ' (período ' +
+            profile.vacation_start +
+            ' a ' +
+            profile.vacation_end +
+            ').',
+        )
+      }
 
       var duration = (endDate.getTime() - startDate.getTime()) / 3600000
       userHours[profileId] = (userHours[profileId] || 0) + duration

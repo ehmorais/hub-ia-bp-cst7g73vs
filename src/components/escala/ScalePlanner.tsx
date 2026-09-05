@@ -65,6 +65,8 @@ import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { StaffFilter } from './StaffFilter'
 import { formatCorenLabel, formatShiftCalendarSecondLine } from '@/lib/escala-calendar-formatter'
+import { isVacationDateInclusive } from '@/lib/escala-vacation'
+import { Palmtree } from 'lucide-react'
 
 type DraftCell = 'D' | 'N' | 'M' | 'T' | 'F' | ''
 
@@ -428,12 +430,19 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
           return dateStr >= start && dateStr <= end
         })
         const isTO = !!matchingTimeoff
+        const isVacation = isVacationDateInclusive(user, dateStr)
 
         if (cell && cell !== 'F') {
           if (isTO) {
             const reqStatus = matchingTimeoff?.status
             alerts.push(
               `${user.name} alocado em dia de folga ${reqStatus === 'pending' ? '(pendente)' : ''} (${format(dayItem.date, 'dd/MM')})`,
+            )
+          }
+
+          if (isVacation) {
+            alerts.push(
+              `Colaborador está de férias no período: ${user.name} em ${format(dayItem.date, 'dd/MM')}.`,
             )
           }
 
@@ -713,6 +722,17 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
       const shiftVal = data.shiftVal as DraftCell
 
       if (sourceUserId === targetUserId && sourceDateStr === targetDateStr) return
+
+      // Bloqueio de férias para o colaborador de destino
+      const targetUser = draftUsers.find((u) => u.id === targetUserId)
+      if (shiftVal && shiftVal !== 'F' && isVacationDateInclusive(targetUser, targetDateStr)) {
+        toast({
+          title: 'Bloqueio de Férias',
+          description: `Colaborador está de férias no período (${targetUser?.name || 'Colaborador'}).`,
+          variant: 'destructive',
+        })
+        return
+      }
 
       // Optimistic local update
       setDraft((prev) => {
@@ -1265,6 +1285,7 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
                         )
                         const isTO = !!toReq
                         const isPendingTO = toReq?.status === 'pending'
+                        const isVacation = isVacationDateInclusive(user, ds)
                         const isWeekendDay = dayItem.dayOfWeek === 6 || dayItem.dayOfWeek === 0
                         const isWeekendOff =
                           isWeekendDay &&
@@ -1305,28 +1326,32 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
                               'bg-orange-100':
                                 isWeekendOff && !isTO && !isDraggingCurrentWeekendOff,
                               'opacity-50 ring-2 ring-orange-400': isDraggingCurrentWeekendOff,
+                              'bg-emerald-50/90': isVacation,
                             })}
                             onDragOver={(e) =>
-                              (isEditMode || !!draggedWeekendOff) && !isTO
+                              (isEditMode || !!draggedWeekendOff) && !isTO && !isVacation
                                 ? handleDragOver(e, user.id, ds)
                                 : undefined
                             }
                             onDragLeave={
-                              (isEditMode || !!draggedWeekendOff) && !isTO
+                              (isEditMode || !!draggedWeekendOff) && !isTO && !isVacation
                                 ? handleDragLeave
                                 : undefined
                             }
                             onDrop={(e) =>
-                              (isEditMode || !!draggedWeekendOff) && !isTO
+                              (isEditMode || !!draggedWeekendOff) && !isTO && !isVacation
                                 ? handleDrop(e, user.id, ds)
                                 : undefined
                             }
                             title={
-                              isWeekendOff
-                                ? `Fim de semana de folga: ${user.name} em ${ds}`
-                                : undefined
+                              isVacation
+                                ? `Colaborador de férias (${format(new Date(ds + 'T12:00:00Z'), 'dd/MM')})`
+                                : isWeekendOff
+                                  ? `Fim de semana de folga: ${user.name} em ${ds}`
+                                  : undefined
                             }
                           >
+                            {' '}
                             {/* Box de Folga de Fim de Semana Arrastável (mesmo sem modo edição geral de plantão) */}
                             {isWeekendOff && !isTO && (!val || val === 'F') ? (
                               <div
@@ -1409,12 +1434,19 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
                                       isTO && !isPendingTO,
                                     'text-amber-500 font-bold bg-amber-50/80 hover:bg-amber-100':
                                       isPendingTO,
+                                    'text-emerald-700 font-semibold bg-emerald-50': isVacation,
                                     'cursor-move hover:opacity-80 border-2 border-dashed border-transparent hover:border-slate-400':
-                                      !!val && val !== 'F',
-                                    'bg-transparent': !val || val === 'F',
+                                      !!val && val !== 'F' && !isVacation,
+                                    'bg-transparent': (!val || val === 'F') && !isVacation,
                                   },
                                 )}
                               >
+                                {isVacation && (
+                                  <div className="flex flex-col items-center justify-center text-emerald-700">
+                                    <Palmtree className="h-3 w-3" />
+                                    <span className="text-[10px] font-bold">FÉRIAS</span>
+                                  </div>
+                                )}
                                 {val && val !== 'F'
                                   ? (() => {
                                       const periodLetter: 'D' | 'N' = val === 'N' ? 'N' : 'D'
@@ -1506,26 +1538,37 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
                                 ) : null}
                                 <select
                                   value={val}
-                                  onChange={(e) =>
+                                  onChange={(e) => {
+                                    const nextVal = e.target.value as DraftCell
+                                    if (nextVal && nextVal !== 'F' && isVacation) {
+                                      toast({
+                                        title: 'Bloqueio de Férias',
+                                        description: `Colaborador está de férias no período (${user.name}).`,
+                                        variant: 'destructive',
+                                      })
+                                      return
+                                    }
                                     setDraft((p) => ({
                                       ...p,
                                       [user.id]: {
                                         ...p[user.id],
-                                        [ds]: e.target.value as DraftCell,
+                                        [ds]: nextVal,
                                       },
                                     }))
-                                  }
-                                  disabled={isTO || selectedCycle?.status !== 'draft'}
+                                  }}
+                                  disabled={isTO || isVacation || selectedCycle?.status !== 'draft'}
                                   aria-label={`Plantão de ${user.name} em ${ds}`}
                                   className={cn(
                                     'absolute inset-0 w-full h-full appearance-none bg-transparent text-center text-transparent outline-none cursor-pointer hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 transition-colors',
                                     {
-                                      'bg-white': val === 'D' || val === 'M' || val === 'T',
-                                      'bg-slate-200 hover:bg-slate-300': val === 'N',
+                                      'bg-white':
+                                        (val === 'D' || val === 'M' || val === 'T') && !isVacation,
+                                      'bg-slate-200 hover:bg-slate-300': val === 'N' && !isVacation,
                                       'text-red-400 font-bold bg-red-50/80 hover:bg-red-100':
                                         isTO && !isPendingTO,
                                       'text-amber-500 font-bold bg-amber-50/80 hover:bg-amber-100':
                                         isPendingTO,
+                                      'bg-emerald-50/60 cursor-not-allowed': isVacation,
                                     },
                                   )}
                                 >
@@ -1561,6 +1604,14 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
                                 title={isPendingTO ? 'Folga Pendente' : 'Folga'}
                               >
                                 <CalendarOff className="h-2.5 w-2.5" />
+                              </div>
+                            )}
+                            {isVacation && (
+                              <div
+                                className="absolute top-0 right-0 p-0.5 text-emerald-600 opacity-80"
+                                title="Férias"
+                              >
+                                <Palmtree className="h-2.5 w-2.5" />
                               </div>
                             )}
                           </td>

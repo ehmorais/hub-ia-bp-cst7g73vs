@@ -39,6 +39,9 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Switch } from '@/components/ui/switch'
+import { Palmtree } from 'lucide-react'
+import { isVacationActive } from '@/lib/escala-vacation'
 import { Pencil, Plus, Search, Trash2, Users } from 'lucide-react'
 import { CollaboratorImportDialog } from '@/components/CollaboratorImportDialog'
 import { TimeoffRequestDialog } from './TimeoffRequestDialog'
@@ -74,6 +77,9 @@ export type ProfileForm = {
   contract_type: string
   monthly_hour_limit: string
   shift_type: string
+  vacation_enabled: boolean
+  vacation_start: string
+  vacation_end: string
 }
 
 const emptyForm: ProfileForm = {
@@ -88,6 +94,9 @@ const emptyForm: ProfileForm = {
   contract_type: 'none',
   monthly_hour_limit: '',
   shift_type: 'none',
+  vacation_enabled: false,
+  vacation_start: '',
+  vacation_end: '',
 }
 
 const CONTRACT_TYPES = ['CLT 180h', 'PJ', 'Autônomo'] as const
@@ -160,6 +169,9 @@ export function StaffProfiles({ departmentId }: { departmentId?: string; project
     setFormData({
       ...emptyForm,
       cycle_start_date: initialCycleStartDate || '',
+      vacation_enabled: false,
+      vacation_start: '',
+      vacation_end: '',
     })
     setIsFormOpen(true)
   }
@@ -171,6 +183,12 @@ export function StaffProfiles({ departmentId }: { departmentId?: string; project
     const contract = Array.isArray(linked) ? linked[0] : linked
     const rawCycleStart = profile.cycle_start_date || ''
     const cleanCycleStart = rawCycleStart ? rawCycleStart.split(' ')[0].split('T')[0] : ''
+    const cleanVacationStart = profile.vacation_start
+      ? profile.vacation_start.split(' ')[0].split('T')[0]
+      : ''
+    const cleanVacationEnd = profile.vacation_end
+      ? profile.vacation_end.split(' ')[0].split('T')[0]
+      : ''
 
     setEditingProfile(profile)
     setFormData({
@@ -189,6 +207,9 @@ export function StaffProfiles({ departmentId }: { departmentId?: string; project
       monthly_hour_limit:
         contract && contract.monthly_hour_limit != null ? String(contract.monthly_hour_limit) : '',
       shift_type: contract?.shift_type || 'none',
+      vacation_enabled: Boolean(profile.vacation_enabled),
+      vacation_start: cleanVacationStart,
+      vacation_end: cleanVacationEnd,
     })
     setIsFormOpen(true)
   }
@@ -287,6 +308,29 @@ export function StaffProfiles({ departmentId }: { departmentId?: string; project
       }
     }
 
+    // Validação de Férias
+    const vStart = formData.vacation_start.trim()
+    const vEnd = formData.vacation_end.trim()
+    if (formData.vacation_enabled) {
+      if (!vStart || !vEnd) {
+        toast({
+          title: 'Datas de férias obrigatórias',
+          description: 'Ao ativar as férias, as datas "De" e "Até" são obrigatórias.',
+          variant: 'destructive',
+        })
+        return
+      }
+      if (vEnd < vStart) {
+        toast({
+          title: 'Período de férias inválido',
+          description:
+            'A data final de férias ("Até") deve ser igual ou posterior à data inicial ("De").',
+          variant: 'destructive',
+        })
+        return
+      }
+    }
+
     const payload = {
       name: formData.name.trim(),
       professional_id: formData.professional_id.trim(),
@@ -296,6 +340,9 @@ export function StaffProfiles({ departmentId }: { departmentId?: string; project
       active: formData.active,
       shift_parity: formData.shift_parity,
       cycle_start_date: cleanDate,
+      vacation_enabled: formData.vacation_enabled,
+      vacation_start: formData.vacation_enabled && vStart ? `${vStart} 00:00:00.000Z` : null,
+      vacation_end: formData.vacation_enabled && vEnd ? `${vEnd} 00:00:00.000Z` : null,
     }
 
     // Contract data entered inline on the collaborator form. When a contract
@@ -499,6 +546,7 @@ export function StaffProfiles({ departmentId }: { departmentId?: string; project
                 <TableHead>Setor Padrão</TableHead>
                 <TableHead>Dias de Plantão</TableHead>
                 <TableHead>Início no Ciclo</TableHead>
+                <TableHead>Férias</TableHead>
                 <TableHead>Regras</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
@@ -578,6 +626,22 @@ export function StaffProfiles({ departmentId }: { departmentId?: string; project
                     )}
                   </TableCell>
                   <TableCell>
+                    {isVacationActive(profile) ? (
+                      <Badge
+                        variant="outline"
+                        className="bg-emerald-50 text-emerald-700 border-emerald-200 font-medium flex items-center gap-1 w-fit"
+                      >
+                        <Palmtree className="h-3 w-3" />
+                        <span>
+                          {profile.vacation_start?.split(' ')[0].split('T')[0]} a{' '}
+                          {profile.vacation_end?.split(' ')[0].split('T')[0]}
+                        </span>
+                      </Badge>
+                    ) : (
+                      <span className="text-xs text-slate-400">-</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
                     {profile.rules?.length ? (
                       <Badge variant="outline">{profile.rules.length} regra(s)</Badge>
                     ) : (
@@ -633,7 +697,7 @@ export function StaffProfiles({ departmentId }: { departmentId?: string; project
               ))}
               {filteredProfiles.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center text-muted-foreground py-10">
+                  <TableCell colSpan={9} className="text-center text-muted-foreground py-10">
                     Nenhum colaborador encontrado.
                   </TableCell>
                 </TableRow>
@@ -885,6 +949,66 @@ export function StaffProfiles({ departmentId }: { departmentId?: string; project
                   </div>
                 )}
               </div>
+            </div>
+
+            {/* Seção de Férias */}
+            <div className="space-y-3 pt-3 border-t bg-emerald-50/40 p-3 rounded-lg border border-emerald-100">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Palmtree className="h-4 w-4 text-emerald-600" />
+                  <Label htmlFor="vacation-switch" className="text-sm font-semibold text-slate-800">
+                    Férias
+                  </Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-600">Ativar período de férias</span>
+                  <Switch
+                    id="vacation-switch"
+                    checked={formData.vacation_enabled}
+                    onCheckedChange={(checked) =>
+                      setFormData({ ...formData, vacation_enabled: checked })
+                    }
+                  />
+                </div>
+              </div>
+
+              {formData.vacation_enabled && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="vacation-start" className="text-xs font-medium text-slate-700">
+                      De <span className="text-red-500">*</span>
+                    </Label>
+                    <Input
+                      id="vacation-start"
+                      type="date"
+                      value={formData.vacation_start}
+                      onChange={(event) =>
+                        setFormData({ ...formData, vacation_start: event.target.value })
+                      }
+                      className="bg-white"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="vacation-end" className="text-xs font-medium text-slate-700">
+                      Até <span className="text-red-500">*</span>
+                    </Label>
+                    <Input
+                      id="vacation-end"
+                      type="date"
+                      value={formData.vacation_end}
+                      min={formData.vacation_start || undefined}
+                      onChange={(event) =>
+                        setFormData({ ...formData, vacation_end: event.target.value })
+                      }
+                      className="bg-white"
+                    />
+                  </div>
+                  <p className="text-[11px] text-muted-foreground col-span-1 sm:col-span-2">
+                    Durante o período de férias (inclusive início e fim), o colaborador não será
+                    alocado na escala automática nem poderá receber plantões manuais.
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className="flex items-center gap-2 rounded-md border p-3 bg-slate-50">
