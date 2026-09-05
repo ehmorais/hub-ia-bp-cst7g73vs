@@ -167,13 +167,17 @@ routerAdd(
     }
 
     // Create the run now (after cycleId/sectorId validated) so every later
-    // step is traceable. Idempotency: if a non-terminal run already exists
-    // for this cycle+sector pair, reject with 409 so the UI can surface it.
-    // Each attempt needs its own unique key. The database index is globally
-    // unique, so reusing only cycle|sector prevented every retry after the
-    // first terminal run. In-flight detection is instead based on the
-    // authoritative cycle+sector fields.
-    var idempotencyKey = cycleId + '|' + sectorId + '|' + new Date().getTime()
+    // step is traceable. Concurrency & Stale Lock Management:
+    // If a non-terminal run exists for this cycle+sector pair:
+    //  - If it is older than 5 minutes (300.000 ms), treat as stale lock/orphan:
+    //    mark it atomically as failed (stage: 'lock_timeout', error_code: 'ORPHAN_LOCK_EXPIRED')
+    //    and allow the new generation to proceed, notifying the UI.
+    //  - If it is active (< 5 minutes), reject with 409.
+    var LOCK_TTL_MS = 300000 // 5 minutes
+    var recoveredStaleLock = false
+    var recoveredRunId = ''
+    var nowTs = new Date().getTime()
+
     try {
       var inFlightRuns = $app.findRecordsByFilter(
         'schedule_generation_runs',
@@ -184,19 +188,47 @@ routerAdd(
         { cyc: cycleId, sec: sectorId },
       )
       for (var ri = 0; ri < inFlightRuns.length; ri++) {
-        var st = inFlightRuns[ri].getString('status')
+        var existingRec = inFlightRuns[ri]
+        var st = existingRec.getString('status')
         if (st !== 'failed' && st !== 'cancelled' && st !== 'completed') {
-          var existingRunId = inFlightRuns[ri].id
-          return e.json(409, {
-            draft_exists: true,
-            existing_run_id: existingRunId,
-            run_id: existingRunId,
-            message: 'Já existe uma geração em andamento para este ciclo/setor.',
-          })
+          var existingRunId = existingRec.id
+          var rawTimestamp =
+            existingRec.getString('started_at') ||
+            existingRec.getString('updated') ||
+            existingRec.getString('created') ||
+            ''
+          var recordTime = rawTimestamp ? new Date(rawTimestamp.replace(' ', 'T')).getTime() : 0
+          var ageMs = recordTime > 0 ? nowTs - recordTime : Number.MAX_SAFE_INTEGER
+
+          if (ageMs > LOCK_TTL_MS) {
+            // Lock stale/órfão: finalizar atomicamente como failed
+            try {
+              existingRec.set('status', 'failed')
+              existingRec.set('stage', 'lock_timeout')
+              existingRec.set('error_code', 'ORPHAN_LOCK_EXPIRED')
+              existingRec.set(
+                'error_detail',
+                'Execução anterior sem resposta expirou após 5 minutos e foi encerrada.',
+              )
+              existingRec.set('finished_at', new Date().toISOString())
+              $app.saveNoValidate(existingRec)
+              recoveredStaleLock = true
+              recoveredRunId = existingRunId
+            } catch (_) {}
+          } else {
+            // Lock ativo recente (< 5 min)
+            return e.json(409, {
+              draft_exists: true,
+              existing_run_id: existingRunId,
+              run_id: existingRunId,
+              message: 'Geração em andamento para este ciclo/setor. Aguarde…',
+            })
+          }
         }
       }
     } catch (_) {}
 
+    var idempotencyKey = cycleId + '|' + sectorId + '|' + nowTs
     try {
       var runsCol = $app.findCollectionByNameOrId('schedule_generation_runs')
       var runRec = new Record(runsCol)
@@ -427,8 +459,17 @@ routerAdd(
     })
 
     if (eligible.length === 0) {
+      updateRun({
+        status: 'failed',
+        stage: 'no_eligible_staff',
+        error_code: 'NO_ELIGIBLE_STAFF',
+        error_detail: 'Nenhum colaborador elegível para este setor.',
+        finished_at: new Date().toISOString(),
+      })
       return e.json(400, {
         error: 'Nenhum colaborador elegível para este setor.',
+        stage: 'no_eligible_staff',
+        run_id: runId || undefined,
         diagnostics: {
           eligible_count: 0,
           excluded: excluded,
@@ -2203,6 +2244,8 @@ routerAdd(
       sector_id: sectorId,
       run_id: runId || undefined,
       draft_id: draftId || undefined,
+      stale_lock_recovered: recoveredStaleLock,
+      recovered_run_id: recoveredRunId || undefined,
     })
   },
   $apis.requireAuth(),

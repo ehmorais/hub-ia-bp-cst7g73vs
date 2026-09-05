@@ -156,12 +156,14 @@ export type GenerateDraftResponse = {
   stage?: string
   detail?: string
   message?: string
+  stale_lock_recovered?: boolean
+  recovered_run_id?: string
 }
 
 export const generateDraftShifts = (
   cycleId: string,
   sectorId: string,
-  context: any,
+  context?: any,
   additionalPrompt?: string,
   currentDraft?: any[],
   replace = false,
@@ -191,6 +193,21 @@ export const generateDraftShifts = (
 // Fetch a generation run by id (includes status, stage, progress, metrics,
 // ai_diagnostics — the full rastreability record).
 export const getGenerationRun = (id: string) => pb.collection('schedule_generation_runs').getOne(id)
+
+// Fetch the most recent generation run for a cycle + sector pair to reconcile
+// in-flight status and avoid orphan lock false positives.
+export const getLatestGenerationRun = async (cycleId: string, sectorId: string) => {
+  try {
+    const list = await pb.collection('schedule_generation_runs').getList(1, 1, {
+      filter: `cycle="${cycleId}" && sector="${sectorId}"`,
+      sort: '-created',
+    })
+    return list.items[0] || null
+  } catch (err) {
+    console.warn('Failed to fetch latest generation run:', err)
+    return null
+  }
+}
 
 // Fetch a schedule draft by id, expanding its cycle/sector/run relations.
 export const getDraft = (id: string) =>

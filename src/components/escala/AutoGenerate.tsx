@@ -25,6 +25,7 @@ import {
   getDraft,
   getDraftIssues,
   getRunIssues,
+  getLatestGenerationRun,
 } from '@/services/escala'
 import { useRealtime } from '@/hooks/use-realtime'
 import {
@@ -567,6 +568,45 @@ function AutoGenerateInner({
     }
   }, [cyclesStatus, cycles, selectedCycle])
 
+  // Reconciliação no mount e na seleção de ciclo + setor:
+  // Consulta o último run em schedule_generation_runs e reabilita o botão
+  // quando não houver execução ativa (status terminal ou > 5 min).
+  const [activeLockInfo, setActiveLockInfo] = useState<string>('')
+  const reconcileActiveRun = useCallback(async (cycleId: string, sectorId: string) => {
+    if (!cycleId || !sectorId) {
+      setActiveLockInfo('')
+      return
+    }
+    const latestRun: any = await getLatestGenerationRun(cycleId, sectorId)
+    if (!latestRun) {
+      setActiveLockInfo('')
+      return
+    }
+    const st = latestRun.status
+    const isTerminal = st === 'completed' || st === 'failed' || st === 'cancelled'
+    if (isTerminal) {
+      setActiveLockInfo('')
+      return
+    }
+    const rawTs = latestRun.started_at || latestRun.updated || latestRun.created || ''
+    const recordTime = rawTs ? new Date(rawTs.replace(' ', 'T')).getTime() : 0
+    const ageMs = recordTime > 0 ? Date.now() - recordTime : Number.MAX_SAFE_INTEGER
+    const TTL_MS = 300000 // 5 min
+    if (ageMs > TTL_MS) {
+      // Run stale / expirado: botão deve ficar livre (o backend recuperará no próximo trigger)
+      setActiveLockInfo('')
+    } else {
+      // Run realmente ativo
+      setActiveLockInfo('Geração em andamento para este ciclo/setor. Aguarde…')
+    }
+  }, [])
+
+  useEffect(() => {
+    if (selectedCycle && selectedSector) {
+      reconcileActiveRun(selectedCycle, selectedSector)
+    }
+  }, [selectedCycle, selectedSector, reconcileActiveRun])
+
   // --- Load sectors: route-independent, always terminates ---
   // A geração é centralizada e pode operar em qualquer setor cadastrado.
   // Restringir pelo departamento do projeto ocultava setores válidos, como
@@ -605,6 +645,7 @@ function AutoGenerateInner({
     !!selectedSector &&
     cyclesStatus === 'success' &&
     sectorsStatus === 'success' &&
+    !activeLockInfo &&
     genStatus !== 'generating' &&
     genStatus !== 'validating' &&
     genStatus !== 'saving'
@@ -701,6 +742,13 @@ function AutoGenerateInner({
         // Load full metrics + issues from the persisted run/draft.
         if (res.run_id) {
           loadRunTracking(res.run_id, res.draft_id)
+        }
+        if (res.stale_lock_recovered) {
+          toast({
+            title: 'Sessão anterior encerrada',
+            description:
+              'A execução anterior sem resposta foi encerrada automaticamente e a nova geração foi iniciada com sucesso.',
+          })
         }
         toast({
           title: isFallback ? 'Rascunho gerado (fallback)' : 'Rascunho Gerado',
@@ -1334,8 +1382,37 @@ function AutoGenerateInner({
               {genStatus === 'error' && genError && (
                 <span className="text-xs text-red-600 truncate">— {genError}</span>
               )}
+              {genStatus === 'error' && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="ml-auto h-7 text-xs bg-white text-red-700 border-red-300 hover:bg-red-100"
+                  onClick={() => handleGenerateDraft(false, false)}
+                >
+                  <RefreshCw className="h-3 w-3 mr-1" />
+                  Tentar novamente
+                </Button>
+              )}
               {/* Origin badge (AI / Fallback) on success. */}
               {genStatus === 'success' && genSource && <SourceBadge source={genSource} />}
+            </div>
+          )}
+
+          {activeLockInfo && (
+            <div className="flex items-center justify-between gap-3 p-3 rounded-md border border-amber-200 bg-amber-50 text-amber-800 text-sm">
+              <div className="flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin text-amber-600 shrink-0" />
+                <span>{activeLockInfo}</span>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs bg-white text-amber-800 border-amber-300 hover:bg-amber-100"
+                onClick={() => reconcileActiveRun(selectedCycle, selectedSector)}
+              >
+                <RefreshCw className="h-3 w-3 mr-1" />
+                Atualizar status
+              </Button>
             </div>
           )}
 
@@ -1377,7 +1454,9 @@ function AutoGenerateInner({
               </Button>
               {!canGenerate && selectedCycle && selectedSector && (
                 <p className="text-xs text-slate-500">
-                  Aguarde o carregamento dos dados ou resolva os pendentes acima.
+                  {activeLockInfo
+                    ? 'Geração em andamento para este ciclo/setor. Aguarde…'
+                    : 'Aguarde o carregamento dos dados ou resolva os pendentes acima.'}
                 </p>
               )}
             </div>
