@@ -767,11 +767,20 @@ function AutoGenerateInner({
         return
       }
 
-      // Error path with diagnostics
+      // Error path with diagnostics. Keep the failed run attached to the UI:
+      // the backend persists hard violations in schedule_validation_issues,
+      // but dropping run_id here reduced the error to the generic toast and
+      // hid the actionable rule/date details from the operator.
       setGenDiagnostics(res?.diagnostics || null)
       setGenSuggestion(res?.suggestion || '')
+      if (res?.run_id) {
+        setRunId(res.run_id)
+        loadRunTracking(res.run_id, res.draft_id)
+      }
+      const violations = Array.isArray(res?.violations) ? res.violations : []
       const msg = res?.error || res?.response?.error || 'A geração não retornou um rascunho válido.'
-      setGenError(typeof msg === 'string' ? msg : JSON.stringify(msg))
+      const detail = violations.length > 0 ? `${msg} ${violations.slice(0, 3).join(' • ')}` : msg
+      setGenError(typeof detail === 'string' ? detail : JSON.stringify(detail))
       setGenStatus('error')
       toast({
         title: 'Falha na geração',
@@ -803,6 +812,14 @@ function AutoGenerateInner({
       setGenError(typeof msg === 'string' ? msg : JSON.stringify(msg))
       setGenDiagnostics(respData?.diagnostics || null)
       setGenSuggestion(respData?.suggestion || '')
+      if (respData?.run_id) {
+        setRunId(respData.run_id)
+        loadRunTracking(respData.run_id, respData.draft_id)
+      }
+      const responseViolations = Array.isArray(respData?.violations) ? respData.violations : []
+      const detailedMsg =
+        responseViolations.length > 0 ? `${msg} ${responseViolations.slice(0, 3).join(' • ')}` : msg
+      setGenError(typeof detailedMsg === 'string' ? detailedMsg : JSON.stringify(detailedMsg))
       setGenStatus('error')
       toast({
         title: isTimeout ? 'Tempo limite da IA' : 'Falha na geração do draft',
