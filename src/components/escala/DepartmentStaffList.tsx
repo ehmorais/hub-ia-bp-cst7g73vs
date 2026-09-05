@@ -110,6 +110,7 @@ export function DepartmentStaffList({ departmentId }: { departmentId?: string })
     loadData()
   }, [departmentId])
   useRealtime('users', loadData)
+  useRealtime('staff_roles', loadData)
 
   const handleProfileChange = (profileId: string) => {
     if (profileId === 'none') {

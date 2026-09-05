@@ -160,6 +160,7 @@ export function StaffProfiles({ departmentId }: { departmentId?: string; project
 
   useRealtime('staff_profiles', loadData)
   useRealtime('hospital_sectors', loadData)
+  useRealtime('staff_roles', loadData)
 
   const openAdd = () => {
     setEditingProfile(null)

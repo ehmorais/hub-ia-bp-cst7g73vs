@@ -228,22 +228,27 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
     }
   }, [selectedCycleId, selectedSectorId, allShifts])
 
-  useRealtime(
-    'shifts',
-    () => {
-      if (selectedCycleId) {
-        setIsSyncing(true)
-        pb.collection('shifts')
-          .getFullList({
-            filter: `cycle="${selectedCycleId}"`,
-            expand: 'staff_profile,staff_profile.staff_role,user,sector',
-          })
-          .then(setAllShifts)
-          .finally(() => setTimeout(() => setIsSyncing(false), 1000))
-      }
-    },
-    !!selectedCycleId,
-  )
+  const reloadShiftsAndProfiles = () => {
+    if (selectedCycleId) {
+      setIsSyncing(true)
+      Promise.all([
+        pb.collection('shifts').getFullList({
+          filter: `cycle="${selectedCycleId}"`,
+          expand: 'staff_profile,staff_profile.staff_role,user,sector',
+        }),
+        getStaffProfiles(),
+      ])
+        .then(([shiftsData, profilesData]) => {
+          setAllShifts(shiftsData)
+          setUsers(profilesData.filter((profile: any) => profile.active !== false))
+        })
+        .finally(() => setTimeout(() => setIsSyncing(false), 1000))
+    }
+  }
+
+  useRealtime('shifts', reloadShiftsAndProfiles, !!selectedCycleId)
+  useRealtime('staff_roles', reloadShiftsAndProfiles, !!selectedCycleId)
+  useRealtime('staff_profiles', reloadShiftsAndProfiles, !!selectedCycleId)
 
   useEffect(() => {
     if (!selectedCycleId || !selectedSectorId) return
