@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-05T19:51:27.691Z",
+  "generatedAt": "2026-09-05T20:15:56.993Z",
   "collections": [
     {
       "name": "users",
@@ -29,21 +29,29 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         },
         {
           "name": "role",
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": ["Admin", "Operador"]
+          "selectValues": [
+            "Admin",
+            "Operador"
+          ]
         },
         {
           "name": "professional_id",
@@ -104,14 +112,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
       "indexes": []
@@ -144,14 +157,22 @@
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": ["fast", "reasoning", "embedding"]
+          "selectValues": [
+            "fast",
+            "reasoning",
+            "embedding"
+          ]
         },
         {
           "name": "status",
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": ["active", "draft", "archived"]
+          "selectValues": [
+            "active",
+            "draft",
+            "archived"
+          ]
         },
         {
           "name": "version",
@@ -172,14 +193,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         },
         {
           "name": "associated_departments",
@@ -219,14 +245,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         },
         {
           "name": "sort_order",
@@ -290,21 +321,29 @@
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": ["active", "inactive"]
+          "selectValues": [
+            "active",
+            "inactive"
+          ]
         },
         {
           "name": "created",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         },
         {
           "name": "members",
@@ -363,21 +402,30 @@
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": ["active", "closed", "draft"]
+          "selectValues": [
+            "active",
+            "closed",
+            "draft"
+          ]
         },
         {
           "name": "created",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
       "indexes": []
@@ -423,14 +471,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         },
         {
           "name": "bed_capacity",
@@ -457,7 +510,9 @@
           "system": false
         }
       ],
-      "indexes": ["CREATE INDEX `idx_hospital_sectors_active` ON `hospital_sectors` (active)"]
+      "indexes": [
+        "CREATE INDEX `idx_hospital_sectors_active` ON `hospital_sectors` (active)"
+      ]
     },
     {
       "name": "staff_roles",
@@ -493,14 +548,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
       "indexes": []
@@ -528,7 +588,11 @@
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": ["CLT 180h", "PJ", "Autônomo"]
+          "selectValues": [
+            "CLT 180h",
+            "PJ",
+            "Autônomo"
+          ]
         },
         {
           "name": "monthly_hour_limit",
@@ -541,14 +605,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         },
         {
           "name": "shift_type",
@@ -611,21 +680,30 @@
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": ["pending", "fulfilled", "not_fulfilled"]
+          "selectValues": [
+            "pending",
+            "fulfilled",
+            "not_fulfilled"
+          ]
         },
         {
           "name": "created",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         },
         {
           "name": "end_date",
@@ -695,14 +773,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         },
         {
           "name": "prompt",
@@ -762,14 +845,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         },
         {
           "name": "staff_profile",
@@ -846,14 +934,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         },
         {
           "name": "start_time",
@@ -868,7 +961,9 @@
           "system": false
         }
       ],
-      "indexes": ["CREATE UNIQUE INDEX `idx_shift_types_name` ON `shift_types` (name)"]
+      "indexes": [
+        "CREATE UNIQUE INDEX `idx_shift_types_name` ON `shift_types` (name)"
+      ]
     },
     {
       "name": "staff_profiles",
@@ -899,14 +994,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         },
         {
           "name": "professional_id",
@@ -939,7 +1039,10 @@
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": ["even", "odd"]
+          "selectValues": [
+            "even",
+            "odd"
+          ]
         },
         {
           "name": "cycle_start_date",
@@ -1042,7 +1145,11 @@
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": ["ai", "deterministic", "hybrid"]
+          "selectValues": [
+            "ai",
+            "deterministic",
+            "hybrid"
+          ]
         },
         {
           "name": "priority",
@@ -1109,14 +1216,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
       "indexes": [
@@ -1160,7 +1272,13 @@
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": ["draft", "validated", "published", "rejected", "superseded"]
+          "selectValues": [
+            "draft",
+            "validated",
+            "published",
+            "rejected",
+            "superseded"
+          ]
         },
         {
           "name": "version",
@@ -1180,7 +1298,11 @@
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": ["ai", "deterministic", "hybrid"]
+          "selectValues": [
+            "ai",
+            "deterministic",
+            "hybrid"
+          ]
         },
         {
           "name": "validation_summary",
@@ -1226,17 +1348,24 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
-      "indexes": ["CREATE INDEX idx_draft_cycle_sector_active ON schedule_drafts (cycle, sector)"]
+      "indexes": [
+        "CREATE INDEX idx_draft_cycle_sector_active ON schedule_drafts (cycle, sector)"
+      ]
     },
     {
       "name": "schedule_validation_issues",
@@ -1274,7 +1403,11 @@
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": ["hard", "preference", "info"]
+          "selectValues": [
+            "hard",
+            "preference",
+            "info"
+          ]
         },
         {
           "name": "code",
@@ -1318,14 +1451,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
       "indexes": [
