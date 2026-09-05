@@ -1,6 +1,30 @@
-onRecordBeforeCreateRequest((e) => {
+onRecordCreateRequest((e) => {
   const body = e.requestInfo().body || {}
   const code = body.code
+  const isAdministrative =
+    body.is_administrative !== undefined
+      ? Boolean(body.is_administrative)
+      : e.record.getBool('is_administrative')
+  const startTime =
+    body.start_time !== undefined ? body.start_time : e.record.getString('start_time')
+  const endTime = body.end_time !== undefined ? body.end_time : e.record.getString('end_time')
+
+  if (!isAdministrative && (!startTime || !endTime)) {
+    throw new BadRequestError(
+      'Horário de início e horário de fim são obrigatórios para turnos operacionais (não administrativos).',
+      {
+        start_time: new ValidationError(
+          'validation_required',
+          'Horário de início é obrigatório para turnos operacionais.',
+        ),
+        end_time: new ValidationError(
+          'validation_required',
+          'Horário de fim é obrigatório para turnos operacionais.',
+        ),
+      },
+    )
+  }
+
   if (code) {
     try {
       $app.findFirstRecordByData('shift_types', 'code', code)
@@ -14,9 +38,33 @@ onRecordBeforeCreateRequest((e) => {
   e.next()
 }, 'shift_types')
 
-onRecordBeforeUpdateRequest((e) => {
+onRecordUpdateRequest((e) => {
   const body = e.requestInfo().body || {}
   const code = body.code
+  const isAdministrative =
+    body.is_administrative !== undefined
+      ? Boolean(body.is_administrative)
+      : e.record.getBool('is_administrative')
+  const startTime =
+    body.start_time !== undefined ? body.start_time : e.record.getString('start_time')
+  const endTime = body.end_time !== undefined ? body.end_time : e.record.getString('end_time')
+
+  if (!isAdministrative && (!startTime || !endTime)) {
+    throw new BadRequestError(
+      'Horário de início e horário de fim são obrigatórios para turnos operacionais (não administrativos).',
+      {
+        start_time: new ValidationError(
+          'validation_required',
+          'Horário de início é obrigatório para turnos operacionais.',
+        ),
+        end_time: new ValidationError(
+          'validation_required',
+          'Horário de fim é obrigatório para turnos operacionais.',
+        ),
+      },
+    )
+  }
+
   if (code && code !== e.record.getString('code')) {
     try {
       $app.findFirstRecordByData('shift_types', 'code', code)
@@ -30,7 +78,7 @@ onRecordBeforeUpdateRequest((e) => {
   e.next()
 }, 'shift_types')
 
-onRecordBeforeDeleteRequest((e) => {
+onRecordDeleteRequest((e) => {
   const linked = $app.findRecordsByFilter(
     'staff_contracts',
     `shift_type = '${e.record.id}'`,

@@ -108,9 +108,12 @@ routerAdd(
           for (var j = 0; j < shiftTypes.length; j++) {
             if (shiftTypes[j].id === sTypeId) {
               sTypeName = shiftTypes[j].getString('name')
-              sTypeHours = shiftTypes[j].getInt('work_hours')
-              sTypeRest = shiftTypes[j].getInt('rest_hours')
-              sTypeStart = shiftTypes[j].getString('start_time') || '07:00'
+              sTypeHours = shiftTypes[j].getInt('work_hours') || 12
+              sTypeRest = shiftTypes[j].getInt('rest_hours') || 36
+              sTypeStart = shiftTypes[j].getString('start_time') || ''
+              if (!sTypeStart) {
+                sTypeStart = '07:00'
+              }
               break
             }
           }

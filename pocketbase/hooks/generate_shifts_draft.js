@@ -382,14 +382,37 @@ routerAdd(
     var shiftTypes = $app.findRecordsByFilter('shift_types', '', 'name', 10000, 0)
     var shiftTypeMap = {}
     shiftTypes.forEach(function (st) {
+      var wHours = st.getInt('work_hours') || 12
+      var rHours = st.getInt('rest_hours') || 36
+      var sStart = st.getString('start_time') || ''
+      var sEnd = st.getString('end_time') || ''
+
+      // Resiliência para tipos de turno com horários vazios (ex: 12x36 padrão)
+      if (!sStart) {
+        if (wHours === 12 && rHours >= 36) {
+          sStart = '07:00'
+        } else {
+          sStart = '07:00'
+        }
+      }
+      if (!sEnd) {
+        if (wHours === 12 && rHours >= 36 && sStart === '07:00') {
+          sEnd = '19:00'
+        } else {
+          var sHour = parseInt(sStart.split(':')[0], 10) || 7
+          var eHour = (sHour + wHours) % 24
+          sEnd = (eHour < 10 ? '0' + eHour : '' + eHour) + ':00'
+        }
+      }
+
       shiftTypeMap[st.id] = {
         id: st.id,
         name: st.getString('name'),
         code: st.getString('code'),
-        work_hours: st.getInt('work_hours') || 12,
-        rest_hours: st.getInt('rest_hours') || 36,
-        start_time: st.getString('start_time') || '07:00',
-        end_time: st.getString('end_time') || '',
+        work_hours: wHours,
+        rest_hours: rHours,
+        start_time: sStart,
+        end_time: sEnd,
         is_administrative: st.getBool('is_administrative'),
       }
     })
@@ -459,15 +482,24 @@ routerAdd(
     })
 
     if (eligible.length === 0) {
+      var excludedSummary = excluded
+        .map(function (item) {
+          return item.name + ': ' + item.reason
+        })
+        .join('; ')
+      var detailMsg =
+        'Nenhum colaborador elegível para este setor' +
+        (excludedSummary ? ' (motivos: ' + excludedSummary + ')' : '.')
+
       updateRun({
         status: 'failed',
         stage: 'no_eligible_staff',
         error_code: 'NO_ELIGIBLE_STAFF',
-        error_detail: 'Nenhum colaborador elegível para este setor.',
+        error_detail: detailMsg,
         finished_at: new Date().toISOString(),
       })
       return e.json(400, {
-        error: 'Nenhum colaborador elegível para este setor.',
+        error: detailMsg,
         stage: 'no_eligible_staff',
         run_id: runId || undefined,
         diagnostics: {

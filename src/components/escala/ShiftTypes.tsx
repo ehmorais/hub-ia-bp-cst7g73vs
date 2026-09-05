@@ -43,10 +43,11 @@ export function ShiftTypes() {
         variant: 'destructive',
       })
 
-    if (!startTime || !endTime) {
+    if (!isAdministrative && (!startTime || !endTime)) {
       return toast({
-        title: 'Erro',
-        description: 'Horário de início e fim são obrigatórios',
+        title: 'Erro de validação',
+        description:
+          'Horários de início e fim são obrigatórios para turnos operacionais (não administrativos).',
         variant: 'destructive',
       })
     }
@@ -110,6 +111,24 @@ export function ShiftTypes() {
         description: 'Nome de turno já existe.',
         variant: 'destructive',
       })
+    }
+    const targetType = types.find((t) => t.id === id)
+    const isAdmin = field === 'is_administrative' ? !!val : targetType?.is_administrative
+    if (!isAdmin) {
+      if (field === 'start_time' && !val) {
+        return toast({
+          title: 'Erro de validação',
+          description: 'Horário de início é obrigatório para turnos operacionais.',
+          variant: 'destructive',
+        })
+      }
+      if (field === 'end_time' && !val) {
+        return toast({
+          title: 'Erro de validação',
+          description: 'Horário de fim é obrigatório para turnos operacionais.',
+          variant: 'destructive',
+        })
+      }
     }
     try {
       await updateShiftType(id, { [field]: val })
