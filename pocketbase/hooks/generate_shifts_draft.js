@@ -831,7 +831,7 @@ routerAdd(
       '8. Distribua as duas alternâncias do 12x36 de forma equilibrada entre os dias pares e ímpares.',
       '9. NÃO invente IDs, pessoas, datas ou turnos. Use somente os IDs fornecidos. ' +
         'Datas devem estar dentro do intervalo do ciclo.',
-      '10. Cada colaborador deve ter pelo menos 1 fim de semana completo (sábado E domingo consecutivos) de folga em cada mês-calendário. Para colaboradores 12x36, o domingo escolhido deve ser um que seria naturalmente trabalhado na rotação — não vale domingo que já cairia como folga pelo padrão alternado.',
+      '10. Cada colaborador deve ter pelo menos 1 folga em sábado OU domingo por ciclo, escolhendo somente um dia em que normalmente trabalharia conforme sua paridade (pares ou ímpares). Não é necessário folgar sábado e domingo consecutivos.',
       '',
       'RASCUNHO ATUAL (para refinamento, se houver):',
       currentDraft ? JSON.stringify(currentDraft, null, 2) : 'nenhum',
@@ -1519,11 +1519,16 @@ routerAdd(
         if (weekendPairs.length > 0) {
           for (var pwi = 0; pwi < weekendPairs.length; pwi++) {
             var candidatePair = weekendPairs[(staffIndex + pwi) % weekendPairs.length]
+            var selectedWeekendDay = candidatePair.filter(function (day) {
+              return uNatMap[day] === true
+            })[0]
+            if (!selectedWeekendDay) continue
             var pairSafe = true
             var pairCounts = computeDailyStaffCount()
             var replacementShifts = []
             for (var pdi = 0; pdi < candidatePair.length; pdi++) {
               var pairDay = candidatePair[pdi]
+              if (pairDay !== selectedWeekendDay) continue
               var pairHasShift = workingShifts.some(function (shift) {
                 return shift.user_id === u.id && shift.date === pairDay
               })
@@ -1574,7 +1579,7 @@ routerAdd(
               replacementShifts.forEach(function (replacement) {
                 workingShifts.push(replacement)
               })
-              chosenWeekendOff = candidatePair
+              chosenWeekendOff = [selectedWeekendDay]
               break
             }
           }
@@ -2237,48 +2242,54 @@ routerAdd(
         uShiftSet[d] = true
       })
 
-      // 1. Validação de Fim de Semana: validar o par completo sábado+domingo.
-      // A ausência de um par completo no ciclo não é uma violação operacional.
+      // 1. Validação de uma folga em sábado OU domingo, na paridade trabalhada.
       var isVacationActiveStaff =
         u.vacation_enabled === true &&
         u.vacation_start &&
         u.vacation_end &&
         u.vacation_start <= u.vacation_end
       var userWeekendOffs = weekendOffAssignments[u.id] || []
-      var weekendPairFound = false
-      var weekendPairOff = false
-      var pairCheckDate = cycleStart
-      while (pairCheckDate <= cycleEnd) {
-        if (dayOfWeekDateOnly(pairCheckDate) === 6) {
-          var pairCheckSunday = addDaysDateOnly(pairCheckDate, 1)
-          if (pairCheckSunday <= cycleEnd) {
-            var pairInVacation =
-              isVacationActiveStaff &&
-              ((pairCheckDate >= u.vacation_start && pairCheckDate <= u.vacation_end) ||
-                (pairCheckSunday >= u.vacation_start && pairCheckSunday <= u.vacation_end))
-            if (!pairInVacation) {
-              weekendPairFound = true
-              if (!uShiftSet[pairCheckDate] && !uShiftSet[pairCheckSunday]) {
-                weekendPairOff = true
-                break
-              }
-            }
-          }
+      var weekendOffFound = false
+      for (
+        var weekendDate = cycleStart;
+        weekendDate <= cycleEnd;
+        weekendDate = addDaysDateOnly(weekendDate, 1)
+      ) {
+        var weekendDow = dayOfWeekDateOnly(weekendDate)
+        if (weekendDow !== 6 && weekendDow !== 0) continue
+        if (
+          isVacationActiveStaff &&
+          weekendDate >= u.vacation_start &&
+          weekendDate <= u.vacation_end
+        )
+          continue
+        if (!uNatSet[weekendDate]) continue
+        if (!uShiftSet[weekendDate]) {
+          weekendOffFound = true
+          break
         }
-        pairCheckDate = addDaysDateOnly(pairCheckDate, 1)
       }
-      if (!weekendPairFound) {
-        // No complete weekend in the selected cycle: nothing to validate.
-      } else if (!weekendPairOff) {
+      if (!weekendOffFound && !isVacationActiveStaff) {
         violations.push(
           'Fim de semana obrigatório não atendido: ' +
             u.name +
-            ' não tem sábado e domingo consecutivos de folga no ciclo.',
+            ' não tem folga no sábado ou domingo em dia de trabalho da sua paridade.',
         )
-      } else if (userWeekendOffs.length > 0) {
+      }
+      if (userWeekendOffs.length > 1) {
+        violations.push('Mais de uma folga de fim de semana registrada para ' + u.name + '.')
+      } else if (userWeekendOffs.length === 1) {
         var wOffDate = userWeekendOffs[0]
-        if (dayOfWeekDateOnly(wOffDate) !== 6) {
+        var wOffDow = dayOfWeekDateOnly(wOffDate)
+        if (wOffDow !== 6 && wOffDow !== 0) {
           violations.push('Folga de fim de semana inválida para ' + u.name + ': ' + wOffDate)
+        } else if (!uNatSet[wOffDate] || uShiftSet[wOffDate]) {
+          violations.push(
+            'Folga de fim de semana não corresponde a um dia de trabalho livre para ' +
+              u.name +
+              ': ' +
+              wOffDate,
+          )
         }
       }
 
