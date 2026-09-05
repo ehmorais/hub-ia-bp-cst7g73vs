@@ -1575,12 +1575,33 @@ routerAdd(
             )
           }
         } else {
-          weekendOffAssignments[u.id] = []
-          if (!isVacationActiveStaff) {
+          // No natural weekend shift means the collaborator already has all
+          // applicable weekend days off. Record a complete Saturday+Sunday
+          // pair when the cycle contains one; do not turn an impossible
+          // requirement (a cycle without a complete weekend) into a hard
+          // violation.
+          var alreadyFreeWeekend = []
+          var pairCursor = normStart
+          while (pairCursor <= normEnd) {
+            if (dayOfWeekDateOnly(pairCursor) === 6) {
+              var pairSunday = addDaysDateOnly(pairCursor, 1)
+              if (
+                pairSunday <= normEnd &&
+                !isDateInStaffVacation(pairCursor) &&
+                !isDateInStaffVacation(pairSunday)
+              ) {
+                alreadyFreeWeekend = [pairCursor, pairSunday]
+                break
+              }
+            }
+            pairCursor = addDaysDateOnly(pairCursor, 1)
+          }
+          weekendOffAssignments[u.id] = alreadyFreeWeekend
+          if (alreadyFreeWeekend.length === 0 && !isVacationActiveStaff) {
             issues.push(
-              'Fim de semana obrigatório não atendido: ' +
+              'Fim de semana obrigatório não aplicável: o ciclo não contém um sábado e domingo completos fora de férias para ' +
                 u.name +
-                ' sem dias de fim de semana na paridade.',
+                '.',
             )
           }
         }
@@ -2112,32 +2133,48 @@ routerAdd(
         uShiftSet[d] = true
       })
 
-      // 1. Validação de Fim de Semana (apenas exigida se o colaborador não estiver com todos os fins de semana em férias)
+      // 1. Validação de Fim de Semana: validar o par completo sábado+domingo.
+      // A ausência de um par completo no ciclo não é uma violação operacional.
       var isVacationActiveStaff =
         u.vacation_enabled === true &&
         u.vacation_start &&
         u.vacation_end &&
         u.vacation_start <= u.vacation_end
       var userWeekendOffs = weekendOffAssignments[u.id] || []
-      if (!userWeekendOffs || userWeekendOffs.length === 0) {
-        if (!isVacationActiveStaff) {
-          violations.push(
-            'Fim de semana obrigatório não atendido: ' +
-              u.name +
-              ' não tem folga de fim de semana no ciclo.',
-          )
+      var weekendPairFound = false
+      var weekendPairOff = false
+      var pairCheckDate = cycleStart
+      while (pairCheckDate <= cycleEnd) {
+        if (dayOfWeekDateOnly(pairCheckDate) === 6) {
+          var pairCheckSunday = addDaysDateOnly(pairCheckDate, 1)
+          if (pairCheckSunday <= cycleEnd) {
+            var pairInVacation =
+              isVacationActiveStaff &&
+              ((pairCheckDate >= u.vacation_start && pairCheckDate <= u.vacation_end) ||
+                (pairCheckSunday >= u.vacation_start && pairCheckSunday <= u.vacation_end))
+            if (!pairInVacation) {
+              weekendPairFound = true
+              if (!uShiftSet[pairCheckDate] && !uShiftSet[pairCheckSunday]) {
+                weekendPairOff = true
+                break
+              }
+            }
+          }
         }
-      } else {
+        pairCheckDate = addDaysDateOnly(pairCheckDate, 1)
+      }
+      if (!weekendPairFound) {
+        // No complete weekend in the selected cycle: nothing to validate.
+      } else if (!weekendPairOff) {
+        violations.push(
+          'Fim de semana obrigatório não atendido: ' +
+            u.name +
+            ' não tem sábado e domingo consecutivos de folga no ciclo.',
+        )
+      } else if (userWeekendOffs.length > 0) {
         var wOffDate = userWeekendOffs[0]
-        var dow = dayOfWeekDateOnly(wOffDate)
-        if (dow !== 6 && dow !== 0) {
+        if (dayOfWeekDateOnly(wOffDate) !== 6) {
           violations.push('Folga de fim de semana inválida para ' + u.name + ': ' + wOffDate)
-        } else if (!uNatSet[wOffDate]) {
-          violations.push('Folga de fim de semana para ' + u.name + ' está em paridade oposta.')
-        } else if (uShiftSet[wOffDate]) {
-          violations.push(
-            'Fim de semana obrigatório não atendido: ' + u.name + ' possui plantão em ' + wOffDate,
-          )
         }
       }
 
