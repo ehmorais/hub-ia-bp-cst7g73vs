@@ -9,30 +9,22 @@ routerAdd(
       return e.badRequestError('message is required')
 
     try {
-      var convId = null
-      if (body.conversation_id) {
-        convId = String(body.conversation_id)
-      }
-
-      if (convId) {
-        var conv = $ai.agent('escala-expert').getOrCreateConversation({
-          user_id: userId,
-          id: convId,
-        })
-      }
+      var conv = $ai.agent('escala-expert').getOrCreateConversation({
+        user_id: userId,
+        id: body.conversation_id ? String(body.conversation_id) : null,
+      })
+      var convId = conv.id
 
       var iter = $ai.agent('escala-expert').chat({
         user_id: userId,
-        conversation_id: convId || null,
+        conversation_id: convId,
         message: String(body.message),
         stream: true,
       })
 
       e.response.header().set('Content-Type', 'text/event-stream')
       e.response.header().set('Cache-Control', 'no-cache')
-      if (convId) {
-        e.response.header().set('X-Conversation-Id', convId)
-      }
+      e.response.header().set('X-Conversation-Id', convId)
 
       $response.stream(e, iter)
     } catch (err) {

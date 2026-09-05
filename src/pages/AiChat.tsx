@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import pb from '@/lib/pocketbase/client'
 import { ToolUsageChart } from '@/components/ToolUsageChart'
@@ -8,16 +8,25 @@ import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Send, Bot, User, Activity } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
+import { streamAgentChat } from '@/lib/skipAi'
+
+type Message = {
+  role: 'user' | 'assistant'
+  content: string
+}
 
 export default function AiChat() {
   const { id } = useParams()
   const { user } = useAuth()
   const [tool, setTool] = useState<any>(null)
   const [logs, setLogs] = useState<any[]>([])
-  const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([])
+  const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [conversationId, setConversationId] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const abortRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
     if (!id) return
@@ -40,37 +49,64 @@ export default function AiChat() {
   }, [id])
 
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
-    }
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
   }, [messages, loading])
 
+  useEffect(() => () => abortRef.current?.abort(), [])
+
   const handleSend = async () => {
-    if (!input.trim() || !tool) return
     const userMsg = input.trim()
-    setMessages((p) => [...p, { role: 'user', content: userMsg }])
+    if (!userMsg || !tool || loading) return
+
+    setMessages((previous) => [
+      ...previous,
+      { role: 'user', content: userMsg },
+      { role: 'assistant', content: '' },
+    ])
     setInput('')
+    setError(null)
     setLoading(true)
+    const controller = new AbortController()
+    abortRef.current = controller
 
     try {
-      await pb.send('/backend/v1/audit/tool-usage', {
-        method: 'POST',
-        body: JSON.stringify({ tool_id: tool.id }),
-        headers: { 'Content-Type': 'application/json' },
+      const response = await fetch(
+        `${import.meta.env.VITE_POCKETBASE_URL}/backend/v1/escala-expert/chat`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: pb.authStore.token,
+          },
+          body: JSON.stringify({ message: userMsg, conversation_id: conversationId }),
+          signal: controller.signal,
+        },
+      )
+
+      const result = await streamAgentChat(response, {
+        signal: controller.signal,
+        onChunk: (_delta, accumulated) => {
+          setMessages((previous) => {
+            const next = [...previous]
+            next[next.length - 1] = { role: 'assistant', content: accumulated }
+            return next
+          })
+        },
       })
 
-      setTimeout(() => {
-        setMessages((p) => [
-          ...p,
-          {
-            role: 'assistant',
-            content: `Esta é uma resposta simulada da ferramenta ${tool.name}. A integração real usaria o gateway Skip AI.`,
-          },
-        ])
-        setLoading(false)
-      }, 1000)
-    } catch (e) {
-      console.error(e)
+      setConversationId(response.headers.get('X-Conversation-Id') || result.conversation_id)
+      setMessages((previous) => {
+        const next = [...previous]
+        next[next.length - 1] = { role: 'assistant', content: result.content }
+        return next
+      })
+    } catch (err: any) {
+      if (err?.name !== 'AbortError') {
+        setError(err?.message || 'Não foi possível consultar o agente.')
+        setMessages((previous) => previous.slice(0, -1))
+      }
+    } finally {
+      abortRef.current = null
       setLoading(false)
     }
   }
@@ -104,65 +140,48 @@ export default function AiChat() {
                   </p>
                 </div>
               )}
-              {messages.map((m, i) => (
+              {messages.map((message, index) => (
                 <div
-                  key={i}
-                  className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                  key={`${message.role}-${index}`}
+                  className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
                   <div
-                    className={`flex gap-3 max-w-[85%] ${m.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
+                    className={`flex gap-3 max-w-[85%] ${message.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
                   >
                     <div
-                      className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${m.role === 'user' ? 'bg-primary/20 text-primary' : 'bg-secondary text-secondary-foreground'}`}
+                      className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${message.role === 'user' ? 'bg-primary/20 text-primary' : 'bg-secondary text-secondary-foreground'}`}
                     >
-                      {m.role === 'user' ? (
+                      {message.role === 'user' ? (
                         <User className="h-4 w-4" />
                       ) : (
                         <Bot className="h-4 w-4" />
                       )}
                     </div>
                     <div
-                      className={`p-4 rounded-xl shadow-sm ${m.role === 'user' ? 'bg-primary text-primary-foreground rounded-tr-sm' : 'bg-muted text-foreground rounded-tl-sm'}`}
+                      className={`p-4 rounded-xl shadow-sm whitespace-pre-wrap ${message.role === 'user' ? 'bg-primary text-primary-foreground rounded-tr-sm' : 'bg-muted text-foreground rounded-tl-sm'}`}
                     >
-                      {m.content}
+                      {message.content || (loading ? 'Consultando o Escala Expert...' : '')}
                     </div>
                   </div>
                 </div>
               ))}
-              {loading && (
-                <div className="flex justify-start">
-                  <div className="flex gap-3 max-w-[85%]">
-                    <div className="w-8 h-8 rounded-full bg-secondary text-secondary-foreground flex items-center justify-center shrink-0">
-                      <Bot className="h-4 w-4" />
-                    </div>
-                    <div className="p-4 rounded-xl rounded-tl-sm bg-muted flex items-center gap-2 shadow-sm">
-                      <div className="w-2 h-2 rounded-full bg-primary/40 animate-bounce" />
-                      <div
-                        className="w-2 h-2 rounded-full bg-primary/40 animate-bounce"
-                        style={{ animationDelay: '0.2s' }}
-                      />
-                      <div
-                        className="w-2 h-2 rounded-full bg-primary/40 animate-bounce"
-                        style={{ animationDelay: '0.4s' }}
-                      />
-                    </div>
-                  </div>
-                </div>
+              {error && (
+                <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">{error}</div>
               )}
             </div>
           </ScrollArea>
           <div className="p-4 border-t bg-white">
             <form
-              onSubmit={(e) => {
-                e.preventDefault()
+              onSubmit={(event) => {
+                event.preventDefault()
                 handleSend()
               }}
               className="flex gap-2 relative"
             >
               <Input
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder="Digite sua mensagem..."
+                onChange={(event) => setInput(event.target.value)}
+                placeholder="Pergunte sobre escalas, setores, folgas ou regras..."
                 className="flex-1 pr-12 rounded-lg bg-slate-50 focus-visible:bg-white transition-colors border-slate-200"
               />
               <Button
@@ -190,7 +209,6 @@ export default function AiChat() {
             <ToolUsageChart tool={tool} logs={logs} />
           </CardContent>
         </Card>
-
         <Card>
           <CardHeader className="py-4">
             <CardTitle className="text-lg">Sobre a Ferramenta</CardTitle>
