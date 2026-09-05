@@ -23,6 +23,7 @@ import {
   AlertTriangle,
   Info,
   CheckCircle2,
+  Palmtree,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -49,6 +50,7 @@ import {
 } from '@/lib/escala-weekend-off'
 import { StaffFilter } from './StaffFilter'
 import { formatCorenLabel, formatShiftCalendarSecondLine } from '@/lib/escala-calendar-formatter'
+import { isVacationDateInclusive } from '@/lib/escala-vacation'
 
 type ViewMode = 'cycle' | 'month' | 'week' | 'day'
 
@@ -505,6 +507,18 @@ export function ShiftCalendar({
 
     // Check rest rules (Validation)
     const collaboratorId = shift.staff_profile || shift.user
+    const targetDateStr = format(targetDay, 'yyyy-MM-dd')
+    const targetProfile = staffProfiles.find((sp) => sp.id === collaboratorId)
+
+    if (isVacationDateInclusive(targetProfile, targetDateStr)) {
+      toast({
+        title: 'Bloqueio de Férias',
+        description: 'Colaborador está de férias nesta data.',
+        variant: 'destructive',
+      })
+      return
+    }
+
     const userShifts = shifts.filter(
       (item) => (item.staff_profile || item.user) === collaboratorId && item.id !== shift.id,
     )
@@ -765,6 +779,11 @@ export function ShiftCalendar({
                         periodLetter,
                         professionalId,
                       )
+                      const isShiftOnVacation = isVacationDateInclusive(matchedProfile, dateKey)
+                      const vacationPeriodText =
+                        matchedProfile?.vacation_start && matchedProfile?.vacation_end
+                          ? `Férias de ${format(parseISO(matchedProfile.vacation_start.split(' ')[0]), 'dd/MM')} a ${format(parseISO(matchedProfile.vacation_end.split(' ')[0]), 'dd/MM')}`
+                          : 'Férias'
                       return (
                         <div
                           key={s.id}
@@ -778,11 +797,23 @@ export function ShiftCalendar({
                           )}
                         >
                           {/* 1. Primeira linha: nome COMPLETO do colaborador, sem ellipsis/truncamento, sem corte */}
-                          <div
-                            className="font-semibold text-slate-800 break-words whitespace-normal leading-snug"
-                            title={name}
-                          >
-                            {name}
+                          <div className="flex items-start justify-between gap-1">
+                            <div
+                              className="font-semibold text-slate-800 break-words whitespace-normal leading-snug flex-1"
+                              title={name}
+                            >
+                              {name}
+                            </div>
+                            {isShiftOnVacation && (
+                              <span
+                                className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 border border-emerald-300 text-emerald-800 shrink-0"
+                                title={vacationPeriodText}
+                                aria-label={vacationPeriodText}
+                              >
+                                <Palmtree className="h-3 w-3 shrink-0" />
+                                <span>FÉRIAS</span>
+                              </span>
+                            )}
                           </div>
                           {/* 2. Segunda linha: tipo de plantão somente "D" ou "N", seguido do número do COREN no lugar do horário */}
                           <div
@@ -811,6 +842,55 @@ export function ShiftCalendar({
                         </div>
                       )
                     })}
+
+                    {/* Placeholders de Férias (sem plantão no dia) */}
+                    {(() => {
+                      const allVisibleDayShifts = visibleShifts.filter((s) => {
+                        const sDateStr = s.start_time
+                          ? s.start_time.split(' ')[0].split('T')[0]
+                          : ''
+                        return sDateStr === dateKey
+                      })
+                      const workedStaffIds = new Set(
+                        allVisibleDayShifts.map((s) => s.staff_profile || s.user_id || s.user),
+                      )
+
+                      const vacationPlaceholders = sectorStaffProfiles.filter((staff) => {
+                        if (selectedStaffId && staff.id !== selectedStaffId) return false
+                        // Se já tem plantão no dia de férias, o plantão já exibe a badge de férias acompanhada
+                        if (workedStaffIds.has(staff.id)) return false
+                        const fullProfile = staffProfiles.find((sp) => sp.id === staff.id)
+                        return isVacationDateInclusive(fullProfile, dateKey)
+                      })
+
+                      return vacationPlaceholders.map((staff) => {
+                        const fullProfile = staffProfiles.find((sp) => sp.id === staff.id)
+                        const vacationPeriodText =
+                          fullProfile?.vacation_start && fullProfile?.vacation_end
+                            ? `Férias de ${format(parseISO(fullProfile.vacation_start.split(' ')[0]), 'dd/MM')} a ${format(parseISO(fullProfile.vacation_end.split(' ')[0]), 'dd/MM')}`
+                            : 'Férias'
+                        return (
+                          <div
+                            key={`vacation-${staff.id}-${dateKey}`}
+                            data-testid={`vacation-${staff.id}-${dateKey}`}
+                            title={vacationPeriodText}
+                            aria-label={vacationPeriodText}
+                            className="bg-emerald-50 border border-emerald-300 text-emerald-800 rounded px-2 py-1.5 text-xs shadow-sm flex flex-col gap-1 transition-colors select-none min-h-max"
+                          >
+                            <div
+                              className="font-semibold text-emerald-950 break-words whitespace-normal leading-snug"
+                              title={staff.name}
+                            >
+                              {staff.name}
+                            </div>
+                            <div className="flex items-center gap-1 text-[10px] font-bold text-emerald-700 tracking-wide uppercase">
+                              <Palmtree className="h-3 w-3 shrink-0" />
+                              <span>FÉRIAS</span>
+                            </div>
+                          </div>
+                        )
+                      })
+                    })()}
 
                     {/* Placeholders de Fim de Semana de Folga Mensal (WEEKEND_OFF) */}
                     {(() => {
@@ -860,9 +940,11 @@ export function ShiftCalendar({
                     {dayShifts.length === 0 &&
                       !sectorStaffProfiles.some((staff) => {
                         if (selectedStaffId && staff.id !== selectedStaffId) return false
+                        const fullProfile = staffProfiles.find((sp) => sp.id === staff.id)
+                        if (isVacationDateInclusive(fullProfile, dateKey)) return true
                         if (!isWeekendDay) return false
                         const offDates = weekendOffMap.get(staff.id)
-                        return offDates && offDates.has(dateKey)
+                        return Boolean(offDates && offDates.has(dateKey))
                       }) &&
                       view !== 'month' &&
                       view !== 'cycle' && (
@@ -876,6 +958,33 @@ export function ShiftCalendar({
             })}
           </div>
         </ScrollArea>
+
+        {/* Legenda do Calendário de Escalas */}
+        <div className="border-t bg-slate-50/70 px-4 py-2 flex flex-wrap items-center gap-4 text-xs text-slate-600">
+          <span className="font-semibold text-slate-700 select-none">Legenda:</span>
+          <div className="flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded bg-white border border-slate-300 font-bold text-[9px] text-emerald-700 inline-flex items-center justify-center">
+              D
+            </span>
+            <span>Plantão D</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded bg-white border border-slate-300 font-bold text-[9px] text-indigo-700 inline-flex items-center justify-center">
+              N
+            </span>
+            <span>Plantão N</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded bg-orange-100 border border-orange-300 inline-block" />
+            <span>Folga Fim de Semana</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded bg-emerald-50 border border-emerald-300 inline-flex items-center justify-center text-emerald-700">
+              <Palmtree className="h-2.5 w-2.5" />
+            </span>
+            <span className="font-medium text-emerald-900">Férias</span>
+          </div>
+        </div>
       </div>
 
       {/* Alert Panel */}
