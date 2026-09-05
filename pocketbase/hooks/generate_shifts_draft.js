@@ -2048,6 +2048,49 @@ routerAdd(
       })
     }
 
+    // --- Weekend-off guarantee before hard-rule validation ---
+    // The AI may fill every compatible Saturday/Sunday. Enforce one actual
+    // weekend day off here, after the draft is normalized and before any
+    // validation can reject it. Never remove a shift if that would breach the
+    // sector minimum; in that case the violation remains actionable.
+    eligible.forEach(function (u) {
+      if ((backendWeekendOffAssignments[u.id] || []).length > 0) return
+      var weekendCandidates = []
+      for (
+        var guaranteeDate = cycleStart;
+        guaranteeDate <= cycleEnd;
+        guaranteeDate = addDaysDateOnly(guaranteeDate, 1)
+      ) {
+        var guaranteeDow = dayOfWeekDateOnly(guaranteeDate)
+        if (guaranteeDow !== 6 && guaranteeDow !== 0) continue
+        if (!isStaffEligibleForCivilDate(guaranteeDate, u.shift_parity)) continue
+        if ((unavailableMap[u.id] || []).indexOf(guaranteeDate) !== -1) continue
+        var candidateIndex = -1
+        for (var guaranteeIndex = 0; guaranteeIndex < cleanDraft.length; guaranteeIndex++) {
+          if (
+            cleanDraft[guaranteeIndex].user_id === u.id &&
+            cleanDraft[guaranteeIndex].date === guaranteeDate
+          ) {
+            candidateIndex = guaranteeIndex
+            break
+          }
+        }
+        if (candidateIndex === -1) continue
+        var dayCount = 0
+        cleanDraft.forEach(function (entry) {
+          if (entry.date === guaranteeDate) dayCount++
+        })
+        if (sectorMinStaffing <= 0 || dayCount - 1 >= sectorMinStaffing) {
+          weekendCandidates.push({ index: candidateIndex, date: guaranteeDate })
+        }
+      }
+      if (weekendCandidates.length > 0) {
+        var chosenGuarantee = weekendCandidates[0]
+        cleanDraft.splice(chosenGuarantee.index, 1)
+        backendWeekendOffAssignments[u.id] = [chosenGuarantee.date]
+      }
+    })
+
     // --- Hard-rule validation ---
     var userHours = {}
     var userShifts = {}
