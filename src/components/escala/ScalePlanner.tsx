@@ -854,6 +854,27 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
 
   const handleSave = async (publish: boolean) => {
     if (!selectedCycleId || !selectedSectorId) return
+
+    // Validação preventiva de efetivo mínimo por dia obrigatório no ciclo
+    const secMin = selectedSector?.min_staffing || 0
+    if (secMin > 0) {
+      const understaffedDates: string[] = []
+      days.forEach((d) => {
+        const count = dailyCounts[d.key] || 0
+        if (count < secMin) {
+          understaffedDates.push(d.key)
+        }
+      })
+      if (understaffedDates.length > 0) {
+        toast({
+          title: 'Bloqueio de confirmação de escala',
+          description: `Existem ${understaffedDates.length} dia(s) com efetivo abaixo do mínimo obrigatório (${understaffedDates.slice(0, 3).join(', ')}${understaffedDates.length > 3 ? '...' : ''}). Preencha os plantões antes de salvar/publicar.`,
+          variant: 'destructive',
+        })
+        return
+      }
+    }
+
     setIsSaving(true)
     try {
       const toCreate: any[] = []
@@ -1194,6 +1215,34 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
           </Alert>
         )}
 
+        {(() => {
+          const secMin = selectedSector?.min_staffing || 0
+          if (secMin <= 0) return null
+          const understaffedDates = days.filter((d) => (dailyCounts[d.key] || 0) < secMin)
+          if (understaffedDates.length === 0) return null
+          return (
+            <Alert
+              variant="destructive"
+              className="bg-rose-50 border-rose-300 text-rose-900 py-2.5"
+            >
+              <AlertCircle className="h-4 w-4 text-rose-600" />
+              <AlertTitle className="text-sm font-semibold">
+                Lacuna de Efetivo Obrigatório ({understaffedDates.length} dias abaixo do mínimo)
+              </AlertTitle>
+              <AlertDescription className="text-xs mt-1">
+                Dias:{' '}
+                {understaffedDates
+                  .map((d) => d.key)
+                  .slice(0, 5)
+                  .join(', ')}
+                {understaffedDates.length > 5 ? '...' : ''}. A publicação da escala está bloqueada
+                até que o efetivo mínimo de {secMin} profissional(is) seja atingido em todos os dias
+                do ciclo.
+              </AlertDescription>
+            </Alert>
+          )
+        })()}
+
         <div className="relative border rounded-xl bg-white shadow-sm overflow-hidden flex flex-col">
           {isSyncing && (
             <div className="absolute top-2 right-2 z-40 flex items-center gap-2 bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-full shadow-sm animate-fade-in">
@@ -1236,12 +1285,37 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
                     return (
                       <th
                         key={ds}
-                        className="border-b border-r p-1.5 min-w-[95px] bg-slate-50 text-center relative"
+                        className={cn(
+                          'border-b border-r p-1.5 min-w-[95px] text-center relative transition-colors',
+                          selectedSector?.min_staffing && (dc || 0) < selectedSector.min_staffing
+                            ? 'bg-rose-100/70 border-rose-300'
+                            : 'bg-slate-50',
+                        )}
                       >
                         <div className="text-[10px] uppercase text-slate-500">
                           {format(dayItem.date, 'eee', { locale: ptBR })}
                         </div>
-                        <div className="text-xs">{format(dayItem.date, 'dd')}</div>
+                        <div className="text-xs flex items-center justify-center gap-1">
+                          <span
+                            className={cn(
+                              selectedSector?.min_staffing &&
+                                (dc || 0) < selectedSector.min_staffing &&
+                                'font-bold text-rose-700',
+                            )}
+                          >
+                            {format(dayItem.date, 'dd')}
+                          </span>
+                          {selectedSector?.min_staffing &&
+                            (dc || 0) < selectedSector.min_staffing && (
+                              <Badge
+                                variant="destructive"
+                                className="text-[9px] h-3.5 px-1 py-0 bg-rose-600 text-white font-semibold"
+                                title={`Efetivo insuficiente: ${dc || 0}/${selectedSector.min_staffing}`}
+                              >
+                                {dc || 0}/{selectedSector.min_staffing}
+                              </Badge>
+                            )}
+                        </div>
                       </th>
                     )
                   })}

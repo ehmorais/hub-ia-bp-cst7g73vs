@@ -198,6 +198,22 @@ routerAdd(
         )
       }
 
+      // Parity check: dias ímpares não recebem colaborador restrito a pares e vice-versa
+      if (profile.shift_parity === 'even' || profile.shift_parity === 'odd') {
+        var cPar = civilParity(day)
+        if (cPar !== profile.shift_parity) {
+          violations.push(
+            'Colaborador ' +
+              profile.name +
+              ' configurado com paridade ' +
+              (profile.shift_parity === 'even' ? 'Pares' : 'Ímpares') +
+              ' mas plantão em ' +
+              day +
+              ' corresponde à paridade oposta.',
+          )
+        }
+      }
+
       var duration = (endDate.getTime() - startDate.getTime()) / 3600000
       userHours[profileId] = (userHours[profileId] || 0) + duration
       if (!userShifts[profileId]) userShifts[profileId] = []
@@ -260,6 +276,47 @@ routerAdd(
       }
     })
 
+    // --- Pure date-only helpers (immune to timezone differences in goja/JS) ---
+    var parseDateOnly = function (s) {
+      var clean = (s || '').split('T')[0].split(' ')[0]
+      var parts = clean.split('-')
+      return { y: +parts[0], m: +parts[1], d: +parts[2] }
+    }
+
+    var dayOfMonth = function (dateStr) {
+      var clean = (dateStr || '').split('T')[0].split(' ')[0]
+      var parts = clean.split('-')
+      return parseInt(parts[2] || '0', 10)
+    }
+
+    var civilParity = function (dateStr) {
+      return dayOfMonth(dateStr) % 2 === 0 ? 'even' : 'odd'
+    }
+
+    var isStaffEligibleForCivilDate = function (dateStr, parity) {
+      if (!parity || (parity !== 'even' && parity !== 'odd')) return true
+      return civilParity(dateStr) === parity
+    }
+
+    var formatDateOnly = function (y, m, d) {
+      var utc = new Date(Date.UTC(y, m - 1, d))
+      var fY = utc.getUTCFullYear()
+      var fM = utc.getUTCMonth() + 1
+      var fD = utc.getUTCDate()
+      return fY + '-' + (fM < 10 ? '0' + fM : '' + fM) + '-' + (fD < 10 ? '0' + fD : '' + fD)
+    }
+
+    var addDaysDateOnly = function (dateStr, days) {
+      var parsed = parseDateOnly(dateStr)
+      var utc = new Date(Date.UTC(parsed.y, parsed.m - 1, parsed.d + days))
+      return formatDateOnly(utc.getUTCFullYear(), utc.getUTCMonth() + 1, utc.getUTCDate())
+    }
+
+    var dayOfWeekDateOnly = function (dateStr) {
+      var parsed = parseDateOnly(dateStr)
+      return new Date(Date.UTC(parsed.y, parsed.m - 1, parsed.d)).getUTCDay()
+    }
+
     var minStaffing = sector.getInt('min_staffing') || 0
     var idealStaffing = sector.getInt('ideal_staffing') || minStaffing
     var bedCapacity = sector.getInt('bed_capacity') || 0
@@ -269,12 +326,49 @@ routerAdd(
       requiredStaffing = Math.max(requiredStaffing, Math.ceil(bedCapacity / staffingRatio), 2)
     }
 
-    var cursor = new Date(cycleStart + 'T00:00:00Z')
-    var cycleEndDate = new Date(cycleEnd + 'T00:00:00Z')
-    while (cursor <= cycleEndDate) {
-      var dateKey = cursor.toISOString().split('T')[0]
+    var coverageDateCursor = cycleStart
+    while (coverageDateCursor <= cycleEnd) {
+      var dateKey = coverageDateCursor
       var assignments = dayAssignments[dateKey] || []
       if (assignments.length < requiredStaffing) {
+        // Encontrar colaboradores elegíveis não alocados neste dia para detalhar o motivo estruturado
+        var candidatesDetail = []
+        Object.keys(profileMap).forEach(function (pid) {
+          var p = profileMap[pid]
+          var isAssigned = assignments.some(function (a) {
+            return a.profile_id === pid
+          })
+          if (isAssigned) return
+
+          var reasons = []
+          if (p.shift_parity === 'even' || p.shift_parity === 'odd') {
+            if (civilParity(dateKey) !== p.shift_parity) {
+              reasons.push(
+                'paridade divergente (' +
+                  (p.shift_parity === 'even' ? 'Pares' : 'Ímpares') +
+                  ' vs dia civil ' +
+                  dayOfMonth(dateKey) +
+                  ')',
+              )
+            }
+          }
+          if (
+            p.vacation_enabled === true &&
+            p.vacation_start &&
+            p.vacation_end &&
+            dateKey >= p.vacation_start &&
+            dateKey <= p.vacation_end
+          ) {
+            reasons.push('em férias')
+          }
+          if (reasons.length === 0) {
+            reasons.push('disponível mas não alocado')
+          }
+          candidatesDetail.push(p.name + ' (' + reasons.join(', ') + ')')
+        })
+
+        var detailSuffix =
+          candidatesDetail.length > 0 ? ' [Candidatos: ' + candidatesDetail.join('; ') + ']' : ''
         violations.push(
           'Efetivo insuficiente em ' +
             dateKey +
@@ -282,7 +376,8 @@ routerAdd(
             assignments.length +
             ' de ' +
             requiredStaffing +
-            ' profissionais obrigatórios.',
+            ' profissionais obrigatórios.' +
+            detailSuffix,
         )
       } else if (assignments.length < idealStaffing) {
         warnings.push(
@@ -311,33 +406,7 @@ routerAdd(
           )
         }
       })
-      cursor = new Date(cursor.getTime() + 86400000)
-    }
-
-    // --- Pure date-only helpers (immune to timezone differences in goja/JS) ---
-    var parseDateOnly = function (s) {
-      var clean = (s || '').split('T')[0].split(' ')[0]
-      var parts = clean.split('-')
-      return { y: +parts[0], m: +parts[1], d: +parts[2] }
-    }
-
-    var formatDateOnly = function (y, m, d) {
-      var utc = new Date(Date.UTC(y, m - 1, d))
-      var fY = utc.getUTCFullYear()
-      var fM = utc.getUTCMonth() + 1
-      var fD = utc.getUTCDate()
-      return fY + '-' + (fM < 10 ? '0' + fM : '' + fM) + '-' + (fD < 10 ? '0' + fD : '' + fD)
-    }
-
-    var addDaysDateOnly = function (dateStr, days) {
-      var parsed = parseDateOnly(dateStr)
-      var utc = new Date(Date.UTC(parsed.y, parsed.m - 1, parsed.d + days))
-      return formatDateOnly(utc.getUTCFullYear(), utc.getUTCMonth() + 1, utc.getUTCDate())
-    }
-
-    var dayOfWeekDateOnly = function (dateStr) {
-      var parsed = parseDateOnly(dateStr)
-      return new Date(Date.UTC(parsed.y, parsed.m - 1, parsed.d)).getUTCDay()
+      coverageDateCursor = addDaysDateOnly(coverageDateCursor, 1)
     }
 
     var assertWeekendPair = function (saturday, sunday) {
@@ -403,7 +472,7 @@ routerAdd(
 
     var sortedProfileIds = Object.keys(profileMap).slice().sort()
 
-    // Helper determinístico de paridade
+    // Helper determinístico de paridade alinhado à paridade civil
     var computeNaturalPatternByStaffCommit = function (staffId, contractObj, cStart, cEnd) {
       var workHours = 12
       var restHours = 36
@@ -418,11 +487,9 @@ routerAdd(
         } catch (_) {}
       }
       var is12x36 = workHours === 12 && restHours >= 36
-      var stepDays = Math.max(2, Math.round((workHours + restHours) / 24))
       var normStart = cStart.split(' ')[0].split('T')[0]
       var normEnd = cEnd.split(' ')[0].split('T')[0]
 
-      var offset = 0
       var parity = ''
       var anchorDate = ''
       if (contractObj) {
@@ -433,16 +500,26 @@ routerAdd(
         } catch (_) {}
       }
 
+      var natDays = {}
+      if (is12x36 && (parity === 'even' || parity === 'odd')) {
+        var curDate = normStart
+        while (curDate <= normEnd) {
+          if (civilParity(curDate) === parity) {
+            natDays[curDate] = true
+          }
+          curDate = addDaysDateOnly(curDate, 1)
+        }
+        return natDays
+      }
+
+      var stepDays = Math.max(2, Math.round((workHours + restHours) / 24))
+      var offset = 0
       if (is12x36) {
-        if (parity === 'even') {
-          offset = 1
-        } else if (parity === 'odd') {
-          offset = 0
-        } else if (anchorDate && anchorDate >= normStart && anchorDate <= normEnd) {
+        if (anchorDate && anchorDate >= normStart && anchorDate <= normEnd) {
+          var pA = parseDateOnly(anchorDate)
+          var pS = parseDateOnly(normStart)
           var diffAnchor = Math.round(
-            (new Date(anchorDate + 'T00:00:00Z').getTime() -
-              new Date(normStart + 'T00:00:00Z').getTime()) /
-              86400000,
+            (Date.UTC(pA.y, pA.m - 1, pA.d) - Date.UTC(pS.y, pS.m - 1, pS.d)) / 86400000,
           )
           offset = ((diffAnchor % stepDays) + stepDays) % stepDays
         } else {
@@ -452,7 +529,6 @@ routerAdd(
         }
       }
 
-      var natDays = {}
       var cur = addDaysDateOnly(normStart, offset)
       while (cur <= normEnd) {
         natDays[cur] = true

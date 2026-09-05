@@ -635,11 +635,20 @@ routerAdd(
       var end = (t.getString('end_date') || t.getString('date') || '').split(' ')[0]
       if (!start) return
       if (!timeoffMap[pid]) timeoffMap[pid] = []
-      var cursor = new Date(start + 'T00:00:00Z')
-      var last = new Date((end || start) + 'T00:00:00Z')
-      while (cursor <= last) {
-        timeoffMap[pid].push(cursor.toISOString().split('T')[0])
-        cursor = new Date(cursor.getTime() + 86400000)
+      var curT = start
+      var lastT = end || start
+      while (curT <= lastT) {
+        timeoffMap[pid].push(curT)
+        var pT = curT.split('-')
+        var uT = new Date(Date.UTC(+pT[0], +pT[1] - 1, +pT[2] + 1))
+        var fm = uT.getUTCMonth() + 1
+        var fd = uT.getUTCDate()
+        curT =
+          uT.getUTCFullYear() +
+          '-' +
+          (fm < 10 ? '0' + fm : '' + fm) +
+          '-' +
+          (fd < 10 ? '0' + fd : '' + fd)
       }
     })
 
@@ -677,11 +686,20 @@ routerAdd(
         u.vacation_end &&
         u.vacation_start <= u.vacation_end
       ) {
-        var vCur = new Date(u.vacation_start + 'T00:00:00Z')
-        var vLast = new Date(u.vacation_end + 'T00:00:00Z')
+        var vCur = u.vacation_start
+        var vLast = u.vacation_end
         while (vCur <= vLast) {
-          vacationMap[u.id].push(vCur.toISOString().split('T')[0])
-          vCur = new Date(vCur.getTime() + 86400000)
+          vacationMap[u.id].push(vCur)
+          var pV = vCur.split('-')
+          var uV = new Date(Date.UTC(+pV[0], +pV[1] - 1, +pV[2] + 1))
+          var fm = uV.getUTCMonth() + 1
+          var fd = uV.getUTCDate()
+          vCur =
+            uV.getUTCFullYear() +
+            '-' +
+            (fm < 10 ? '0' + fm : '' + fm) +
+            '-' +
+            (fd < 10 ? '0' + fd : '' + fd)
         }
       }
     })
@@ -1062,15 +1080,22 @@ routerAdd(
 
     var preliminaryCoverageOk = Array.isArray(draft) && Object.keys(preliminarySeen).length > 0
     if (preliminaryCoverageOk && sectorMinStaffing > 0) {
-      var preliminaryCursor = new Date(cycleStart + 'T00:00:00Z')
-      var preliminaryEnd = new Date(cycleEnd + 'T00:00:00Z')
-      while (preliminaryCursor <= preliminaryEnd) {
-        var preliminaryDay = preliminaryCursor.toISOString().split('T')[0]
+      var preliminaryDay = cycleStart
+      while (preliminaryDay <= cycleEnd) {
         if ((preliminaryDayCounts[preliminaryDay] || 0) < sectorMinStaffing) {
           preliminaryCoverageOk = false
           break
         }
-        preliminaryCursor = new Date(preliminaryCursor.getTime() + 86400000)
+        var pDayParts = preliminaryDay.split('-')
+        var pDayUtc = new Date(Date.UTC(+pDayParts[0], +pDayParts[1] - 1, +pDayParts[2] + 1))
+        var fm = pDayUtc.getUTCMonth() + 1
+        var fd = pDayUtc.getUTCDate()
+        preliminaryDay =
+          pDayUtc.getUTCFullYear() +
+          '-' +
+          (fm < 10 ? '0' + fm : '' + fm) +
+          '-' +
+          (fd < 10 ? '0' + fd : '' + fd)
       }
     }
 
@@ -1120,16 +1145,14 @@ routerAdd(
       var fbDraft = []
       var fbUserHours = {}
       var fbLastDay = {} // uid -> last worked YYYY-MM-DD
-      var fbCursor = new Date(cycleStart + 'T00:00:00Z')
-      var fbEnd = new Date(cycleEnd + 'T00:00:00Z')
+      var fbDate = cycleStart
       // Min calendar-day gap required by effectiveRestHours. 36h ⇒ 2 days,
       // 11h ⇒ 1 day, etc. (ceiling, slightly conservative).
       var fbNeedGap = Math.max(1, Math.ceil((effectiveRestHours + 0.001) / 24))
       var fbTarget = Math.max(sectorMinStaffing, sectorIdealStaffing || sectorMinStaffing)
       var fbRot = 0
 
-      while (fbCursor <= fbEnd) {
-        var fbDate = fbCursor.toISOString().split('T')[0]
+      while (fbDate <= cycleEnd) {
         var fbAssigned = []
 
         // Rotating eligible order to spread load across the cycle.
@@ -1190,7 +1213,16 @@ routerAdd(
           fbDraft.push({ user_id: uid, date: fbDate })
         })
 
-        fbCursor = new Date(fbCursor.getTime() + 86400000)
+        var pFb = fbDate.split('-')
+        var uFb = new Date(Date.UTC(+pFb[0], +pFb[1] - 1, +pFb[2] + 1))
+        var fbm = uFb.getUTCMonth() + 1
+        var fbd = uFb.getUTCDate()
+        fbDate =
+          uFb.getUTCFullYear() +
+          '-' +
+          (fbm < 10 ? '0' + fbm : '' + fbm) +
+          '-' +
+          (fbd < 10 ? '0' + fbd : '' + fbd)
         fbRot = (fbRot + Math.max(1, sectorMinStaffing)) % Math.max(1, eligible.length)
       }
 
@@ -1237,81 +1269,26 @@ routerAdd(
     // --- Stable anchor natural worked projection helper (v0.0.251) ---
     // Deterministic anchor based on staff ID sorted order (or staff_id alphabetical rank),
     // guaranteeing identical offsets across completion, candidate selection, and validation.
-    var computeNaturalPatternByStaff = function (staffId, staffContracts, cStart, cEnd) {
-      var contract = null
-      if (Array.isArray(staffContracts)) {
-        for (var sci = 0; sci < staffContracts.length; sci++) {
-          var item = staffContracts[sci]
-          if (item && item.id === staffId) {
-            contract = item
-            break
-          }
-        }
-      } else if (staffContracts && typeof staffContracts === 'object') {
-        contract = staffContracts[staffId] || null
-      }
-      var workHours = contract ? contract.work_hours || contract.shift_work_hours || 12 : 12
-      var restHours = contract ? contract.rest_hours || contract.shift_rest_hours || 36 : 36
-      var is12x36 = workHours === 12 && restHours >= 36
-      var stepDays = Math.max(2, Math.round((workHours + restHours) / 24))
-
-      var normStart = cStart.split(' ')[0].split('T')[0]
-      var normEnd = cEnd.split(' ')[0].split('T')[0]
-
-      // Regra de paridade configurada por colaborador (shift_parity e cycle_start_date)
-      var offset = 0
-      var parity = contract ? contract.shift_parity : ''
-      var anchorDate =
-        contract && contract.cycle_start_date
-          ? (contract.cycle_start_date || '').split(' ')[0].split('T')[0]
-          : ''
-
-      if (is12x36) {
-        if (parity === 'even') {
-          offset = 1
-        } else if (parity === 'odd') {
-          offset = 0
-        } else if (anchorDate && anchorDate >= normStart && anchorDate <= normEnd) {
-          var diffAnchor = Math.round(
-            (new Date(anchorDate + 'T00:00:00Z').getTime() -
-              new Date(normStart + 'T00:00:00Z').getTime()) /
-              86400000,
-          )
-          offset = ((diffAnchor % stepDays) + stepDays) % stepDays
-        } else {
-          // Fallback determinístico legado por ID estável
-          var stableIdx = 0
-          if (Array.isArray(staffContracts)) {
-            var sortedIds = staffContracts
-              .map(function (c) {
-                return c.id
-              })
-              .filter(Boolean)
-              .sort()
-            var pos = sortedIds.indexOf(staffId)
-            if (pos !== -1) stableIdx = pos
-          } else if (staffContracts && typeof staffContracts === 'object') {
-            var keys = Object.keys(staffContracts).sort()
-            var kpos = keys.indexOf(staffId)
-            if (kpos !== -1) stableIdx = kpos
-          }
-          offset = stableIdx % stepDays
-        }
-      }
-
-      var map = {}
-      var cur = addDaysDateOnly(normStart, offset)
-      while (cur <= normEnd) {
-        map[cur] = true
-        cur = addDaysDateOnly(cur, stepDays)
-      }
-      return map
-    }
     // --- Pure date-only helpers (immune to timezone differences in goja/JS) ---
     var parseDateOnly = function (s) {
       var clean = (s || '').split('T')[0].split(' ')[0]
       var parts = clean.split('-')
       return { y: +parts[0], m: +parts[1], d: +parts[2] }
+    }
+
+    var dayOfMonth = function (dateStr) {
+      var clean = (dateStr || '').split('T')[0].split(' ')[0]
+      var parts = clean.split('-')
+      return parseInt(parts[2] || '0', 10)
+    }
+
+    var civilParity = function (dateStr) {
+      return dayOfMonth(dateStr) % 2 === 0 ? 'even' : 'odd'
+    }
+
+    var isStaffEligibleForCivilDate = function (dateStr, parity) {
+      if (!parity || (parity !== 'even' && parity !== 'odd')) return true
+      return civilParity(dateStr) === parity
     }
 
     var formatDateOnly = function (y, m, d) {
@@ -1331,6 +1308,81 @@ routerAdd(
     var dayOfWeekDateOnly = function (dateStr) {
       var parsed = parseDateOnly(dateStr)
       return new Date(Date.UTC(parsed.y, parsed.m - 1, parsed.d)).getUTCDay()
+    }
+
+    var computeNaturalPatternByStaff = function (staffId, staffContracts, cStart, cEnd) {
+      var contract = null
+      if (Array.isArray(staffContracts)) {
+        for (var sci = 0; sci < staffContracts.length; sci++) {
+          var item = staffContracts[sci]
+          if (item && item.id === staffId) {
+            contract = item
+            break
+          }
+        }
+      } else if (staffContracts && typeof staffContracts === 'object') {
+        contract = staffContracts[staffId] || null
+      }
+      var workHours = contract ? contract.work_hours || contract.shift_work_hours || 12 : 12
+      var restHours = contract ? contract.rest_hours || contract.shift_rest_hours || 36 : 36
+      var is12x36 = workHours === 12 && restHours >= 36
+      var normStart = cStart.split(' ')[0].split('T')[0]
+      var normEnd = cEnd.split(' ')[0].split('T')[0]
+      var parity = contract ? contract.shift_parity : ''
+
+      var map = {}
+      if (is12x36 && (parity === 'even' || parity === 'odd')) {
+        var curDate = normStart
+        while (curDate <= normEnd) {
+          if (civilParity(curDate) === parity) {
+            map[curDate] = true
+          }
+          curDate = addDaysDateOnly(curDate, 1)
+        }
+        return map
+      }
+
+      var stepDays = Math.max(2, Math.round((workHours + restHours) / 24))
+      var offset = 0
+      var anchorDate =
+        contract && contract.cycle_start_date
+          ? (contract.cycle_start_date || '').split(' ')[0].split('T')[0]
+          : ''
+
+      if (is12x36) {
+        if (anchorDate && anchorDate >= normStart && anchorDate <= normEnd) {
+          var pA = parseDateOnly(anchorDate)
+          var pS = parseDateOnly(normStart)
+          var diffAnchor = Math.round(
+            (Date.UTC(pA.y, pA.m - 1, pA.d) - Date.UTC(pS.y, pS.m - 1, pS.d)) / 86400000,
+          )
+          offset = ((diffAnchor % stepDays) + stepDays) % stepDays
+        } else {
+          var stableIdx = 0
+          if (Array.isArray(staffContracts)) {
+            var sortedIds = staffContracts
+              .map(function (c) {
+                return c.id
+              })
+              .filter(Boolean)
+              .sort()
+            var pos = sortedIds.indexOf(staffId)
+            if (pos !== -1) stableIdx = pos
+          } else if (staffContracts && typeof staffContracts === 'object') {
+            var keys = Object.keys(staffContracts).sort()
+            var kpos = keys.indexOf(staffId)
+            if (kpos !== -1) stableIdx = kpos
+          }
+          offset = stableIdx % stepDays
+        }
+      }
+
+      var cur = addDaysDateOnly(normStart, offset)
+      while (cur <= normEnd) {
+        map[cur] = true
+        cur = addDaysDateOnly(cur, stepDays)
+      }
+      return map
     }
 
     var assertWeekendPair = function (saturday, sunday) {
@@ -1353,6 +1405,10 @@ routerAdd(
     var naturalWorkedMap = getNaturalWorkedDays(eligible, cycleStart, cycleEnd)
 
     // --- enforceCycleOffDaysDraft: 1 Fim de Semana (Sáb OU Dom na paridade) + 1 Dia de Semana (Seg-Sex na paridade) ---
+    // Respeita minStaffing do setor: nunca remove plantão se deixar o dia abaixo de minStaffing.
+    // Se a remoção for insegura, tenta remanejar para outro dia elegível do mesmo tipo no ciclo.
+    // Se não houver dia seguro, pula a folga e registra aviso estruturado.
+    // Férias têm prioridade absoluta (dias de férias nunca recebem plantão nem folga).
     var enforceCycleOffDaysDraft = function (currentShifts, staffList, cStart, cEnd, minStaff) {
       var normStart = cStart.split(' ')[0].split('T')[0]
       var normEnd = cEnd.split(' ')[0].split('T')[0]
@@ -1369,6 +1425,14 @@ routerAdd(
         if (!shiftsByStaff[s.user_id]) shiftsByStaff[s.user_id] = {}
         shiftsByStaff[s.user_id][s.date] = true
       })
+
+      var computeDailyStaffCount = function () {
+        var counts = {}
+        workingShifts.forEach(function (s) {
+          counts[s.date] = (counts[s.date] || 0) + 1
+        })
+        return counts
+      }
 
       var weekendOffAssignments = {}
       var additionalOffAssignments = {}
@@ -1434,13 +1498,83 @@ routerAdd(
           curD = addDaysDateOnly(curD, 1)
         }
 
-        var targetWeekendOff = null
+        // Tentar alocar folga de fim de semana verificando se a remoção mantém o efetivo >= minStaffing
+        var chosenWeekendOff = null
         if (weekendWorkedDays.length > 0) {
-          targetWeekendOff = weekendWorkedDays[staffIndex % weekendWorkedDays.length]
-          weekendOffAssignments[u.id] = [targetWeekendOff]
+          var wPreferredIdx = staffIndex % weekendWorkedDays.length
+          // Tenta a partir do índice preferido e remaneja para outros fins de semana se necessário
+          for (var wi = 0; wi < weekendWorkedDays.length; wi++) {
+            var candDate = weekendWorkedDays[(wPreferredIdx + wi) % weekendWorkedDays.length]
+            var dayCountsBefore = computeDailyStaffCount()
+            var currentDayStaff = dayCountsBefore[candDate] || 0
+            var hasShiftOnCand = false
+            for (var si = 0; si < workingShifts.length; si++) {
+              if (workingShifts[si].user_id === u.id && workingShifts[si].date === candDate) {
+                hasShiftOnCand = true
+                break
+              }
+            }
+            if (!hasShiftOnCand) {
+              // Sem plantão no dia (já folga)
+              chosenWeekendOff = candDate
+              break
+            }
+            // Se tem plantão, só remove se (currentDayStaff - 1) >= minStaff
+            if (minStaff <= 0 || currentDayStaff - 1 >= minStaff) {
+              chosenWeekendOff = candDate
+              break
+            }
+          }
+
+          if (chosenWeekendOff) {
+            var countsNow = computeDailyStaffCount()
+            var staffOnChosen = countsNow[chosenWeekendOff] || 0
+            var userHasShift = false
+            var shiftIndexToRemove = -1
+            for (var rsi = 0; rsi < workingShifts.length; rsi++) {
+              if (
+                workingShifts[rsi].user_id === u.id &&
+                workingShifts[rsi].date === chosenWeekendOff
+              ) {
+                userHasShift = true
+                shiftIndexToRemove = rsi
+                break
+              }
+            }
+            if (userHasShift) {
+              if (minStaff <= 0 || staffOnChosen - 1 >= minStaff) {
+                workingShifts.splice(shiftIndexToRemove, 1)
+                shiftsByStaff[u.id][chosenWeekendOff] = false
+                weekendOffAssignments[u.id] = [chosenWeekendOff]
+              } else {
+                // Não é seguro remover: pula folga automática
+                weekendOffAssignments[u.id] = []
+                issues.push(
+                  'Folga de fim de semana suspensa para ' +
+                    u.name +
+                    ': remover plantão em ' +
+                    chosenWeekendOff +
+                    ' deixaria o efetivo abaixo do mínimo (' +
+                    (staffOnChosen - 1) +
+                    '/' +
+                    minStaff +
+                    ').',
+                )
+              }
+            } else {
+              weekendOffAssignments[u.id] = [chosenWeekendOff]
+            }
+          } else {
+            weekendOffAssignments[u.id] = []
+            issues.push(
+              'Folga de fim de semana não pôde ser alocada com segurança para ' +
+                u.name +
+                ': nenhum fim de semana na paridade suporta folga sem violar o efetivo mínimo (' +
+                minStaff +
+                ').',
+            )
+          }
         } else {
-          // Se o colaborador está de férias cobrindo os fins de semana do ciclo ou todo o ciclo:
-          // NÃO cria nem mostra folga de fim de semana no ciclo. Nunca converte para dia útil.
           weekendOffAssignments[u.id] = []
           if (!isVacationActiveStaff) {
             issues.push(
@@ -1448,17 +1582,6 @@ routerAdd(
                 u.name +
                 ' sem dias de fim de semana na paridade.',
             )
-          }
-        }
-
-        // Remove plantão na data de folga de fim de semana escolhida
-        if (targetWeekendOff) {
-          for (var si = 0; si < workingShifts.length; si++) {
-            if (workingShifts[si].user_id === u.id && workingShifts[si].date === targetWeekendOff) {
-              workingShifts.splice(si, 1)
-              shiftsByStaff[u.id][targetWeekendOff] = false
-              break
-            }
           }
         }
 
@@ -1476,9 +1599,8 @@ routerAdd(
           }
         })
 
-        var targetWeekdayOff = null
         if (validApprovedInCycle.length > 0) {
-          targetWeekdayOff = validApprovedInCycle[0]
+          // Solicitação formal aprovada: substitui folga automática
           additionalOffAssignments[u.id] = validApprovedInCycle
           validApprovedInCycle.forEach(function (apprD) {
             for (var wsi = 0; wsi < workingShifts.length; wsi++) {
@@ -1490,19 +1612,75 @@ routerAdd(
             }
           })
         } else if (weekdayWorkedDays.length > 0) {
-          var wIdx = (staffIndex * 3 + 1) % weekdayWorkedDays.length
-          targetWeekdayOff = weekdayWorkedDays[wIdx]
-          additionalOffAssignments[u.id] = [targetWeekdayOff]
-
-          for (var wsi2 = 0; wsi2 < workingShifts.length; wsi2++) {
-            if (
-              workingShifts[wsi2].user_id === u.id &&
-              workingShifts[wsi2].date === targetWeekdayOff
-            ) {
-              workingShifts.splice(wsi2, 1)
-              shiftsByStaff[u.id][targetWeekdayOff] = false
+          var wPreferredWkIdx = (staffIndex * 3 + 1) % weekdayWorkedDays.length
+          var chosenWeekdayOff = null
+          for (var wki = 0; wki < weekdayWorkedDays.length; wki++) {
+            var candWkDate = weekdayWorkedDays[(wPreferredWkIdx + wki) % weekdayWorkedDays.length]
+            var dayCountsWk = computeDailyStaffCount()
+            var currentDayWkStaff = dayCountsWk[candWkDate] || 0
+            var userHasWkShift = false
+            for (var fsi = 0; fsi < workingShifts.length; fsi++) {
+              if (workingShifts[fsi].user_id === u.id && workingShifts[fsi].date === candWkDate) {
+                userHasWkShift = true
+                break
+              }
+            }
+            if (!userHasWkShift) {
+              chosenWeekdayOff = candWkDate
               break
             }
+            if (minStaff <= 0 || currentDayWkStaff - 1 >= minStaff) {
+              chosenWeekdayOff = candWkDate
+              break
+            }
+          }
+
+          if (chosenWeekdayOff) {
+            var countsWkNow = computeDailyStaffCount()
+            var staffOnChosenWk = countsWkNow[chosenWeekdayOff] || 0
+            var userHasWkShift2 = false
+            var shiftIndexToRemoveWk = -1
+            for (var rsi2 = 0; rsi2 < workingShifts.length; rsi2++) {
+              if (
+                workingShifts[rsi2].user_id === u.id &&
+                workingShifts[rsi2].date === chosenWeekdayOff
+              ) {
+                userHasWkShift2 = true
+                shiftIndexToRemoveWk = rsi2
+                break
+              }
+            }
+            if (userHasWkShift2) {
+              if (minStaff <= 0 || staffOnChosenWk - 1 >= minStaff) {
+                workingShifts.splice(shiftIndexToRemoveWk, 1)
+                shiftsByStaff[u.id][chosenWeekdayOff] = false
+                additionalOffAssignments[u.id] = [chosenWeekdayOff]
+              } else {
+                additionalOffAssignments[u.id] = []
+                issues.push(
+                  'Folga de dia de semana suspensa para ' +
+                    u.name +
+                    ': remover plantão em ' +
+                    chosenWeekdayOff +
+                    ' deixaria o efetivo abaixo do mínimo (' +
+                    (staffOnChosenWk - 1) +
+                    '/' +
+                    minStaff +
+                    ').',
+                )
+              }
+            } else {
+              additionalOffAssignments[u.id] = [chosenWeekdayOff]
+            }
+          } else {
+            additionalOffAssignments[u.id] = []
+            issues.push(
+              'Folga de dia de semana não pôde ser alocada com segurança para ' +
+                u.name +
+                ': nenhum dia útil na paridade suporta folga sem violar o efetivo mínimo (' +
+                minStaff +
+                ').',
+            )
           }
         }
       })
@@ -1512,22 +1690,13 @@ routerAdd(
       workingShifts.forEach(function (s) {
         dayCounts[s.date] = (dayCounts[s.date] || 0) + 1
       })
-      var cCur = new Date(cStart + 'T00:00:00Z')
-      var cEndD = new Date(cEnd + 'T00:00:00Z')
-      while (cCur <= cEndD) {
-        var dStr = cCur.toISOString().split('T')[0]
-        if (minStaff > 0 && (dayCounts[dStr] || 0) < minStaff) {
-          issues.push(
-            'Efetivo insuficiente em ' +
-              dStr +
-              ': ' +
-              (dayCounts[dStr] || 0) +
-              '/' +
-              minStaff +
-              '.',
-          )
+      var cCur = normStart
+      while (cCur <= normEnd) {
+        var count = dayCounts[cCur] || 0
+        if (minStaff > 0 && count < minStaff) {
+          issues.push('Efetivo insuficiente em ' + cCur + ': ' + count + '/' + minStaff + '.')
         }
-        cCur = new Date(cCur.getTime() + 86400000)
+        cCur = addDaysDateOnly(cCur, 1)
       }
 
       return {
@@ -1583,73 +1752,75 @@ routerAdd(
         customPromptText && u.name && customPromptText.indexOf(u.name.toLowerCase()) !== -1
       if (!isRegular12x36 || hasNamedOverride) return
 
-      var stepDays = Math.max(2, Math.round((u.work_hours + u.rest_hours) / 24))
       var maxShifts = Math.floor((u.monthly_hour_limit || 0) / u.work_hours)
-
-      // Resolve offset do colaborador a partir de sua paridade ou âncora
       var uParity = u.shift_parity || ''
-      var uCycleStart = u.cycle_start_date
-        ? (u.cycle_start_date || '').split(' ')[0].split('T')[0]
-        : ''
-      var targetOffset = 0
-      var fixedOffset = false
-
-      if (uParity === 'even') {
-        targetOffset = 1
-        fixedOffset = true
-      } else if (uParity === 'odd') {
-        targetOffset = 0
-        fixedOffset = true
-      } else if (uCycleStart && uCycleStart >= cycleStart && uCycleStart <= cycleEnd) {
-        var diffFromCycleStart = Math.round(
-          (new Date(uCycleStart + 'T00:00:00Z').getTime() -
-            new Date(cycleStart + 'T00:00:00Z').getTime()) /
-            86400000,
-        )
-        targetOffset = ((diffFromCycleStart % stepDays) + stepDays) % stepDays
-        fixedOffset = true
-      } else {
-        var sortedEligibleIds = eligible
-          .map(function (c) {
-            return c.id
-          })
-          .filter(Boolean)
-          .sort()
-        var stableIdx = sortedEligibleIds.indexOf(u.id)
-        if (stableIdx === -1) stableIdx = 0
-        targetOffset = stableIdx % stepDays
-      }
-
       var bestDates = []
-      var bestScore = Number.MAX_SAFE_INTEGER
 
-      // Se o colaborador tem paridade/âncora definida, usa estritamente esse offset
-      var offsetRangeStart = fixedOffset ? targetOffset : 0
-      var offsetRangeEnd = fixedOffset ? targetOffset + 1 : stepDays
-
-      for (var offset = offsetRangeStart; offset < offsetRangeEnd; offset++) {
-        var dates = []
-        var offsetCursor = new Date(cycleStart + 'T00:00:00Z')
-        offsetCursor = new Date(offsetCursor.getTime() + offset * 86400000)
-        while (offsetCursor <= new Date(cycleEnd + 'T00:00:00Z') && dates.length < maxShifts) {
-          var offsetDate = offsetCursor.toISOString().split('T')[0]
-          if ((unavailableMap[u.id] || []).indexOf(offsetDate) === -1) {
-            dates.push(offsetDate)
+      if (uParity === 'even' || uParity === 'odd') {
+        var dCur = cycleStart
+        while (dCur <= cycleEnd && bestDates.length < maxShifts) {
+          if (civilParity(dCur) === uParity) {
+            if ((unavailableMap[u.id] || []).indexOf(dCur) === -1) {
+              bestDates.push(dCur)
+            }
           }
-          offsetCursor = new Date(offsetCursor.getTime() + stepDays * 86400000)
+          dCur = addDaysDateOnly(dCur, 1)
+        }
+      } else {
+        var stepDays = Math.max(2, Math.round((u.work_hours + u.rest_hours) / 24))
+        var uCycleStart = u.cycle_start_date
+          ? (u.cycle_start_date || '').split(' ')[0].split('T')[0]
+          : ''
+        var targetOffset = 0
+        var fixedOffset = false
+
+        if (uCycleStart && uCycleStart >= cycleStart && uCycleStart <= cycleEnd) {
+          var pCS = parseDateOnly(uCycleStart)
+          var pStart = parseDateOnly(cycleStart)
+          var diffFromCycleStart = Math.round(
+            (Date.UTC(pCS.y, pCS.m - 1, pCS.d) - Date.UTC(pStart.y, pStart.m - 1, pStart.d)) /
+              86400000,
+          )
+          targetOffset = ((diffFromCycleStart % stepDays) + stepDays) % stepDays
+          fixedOffset = true
+        } else {
+          var sortedEligibleIds = eligible
+            .map(function (c) {
+              return c.id
+            })
+            .filter(Boolean)
+            .sort()
+          var stableIdx = sortedEligibleIds.indexOf(u.id)
+          if (stableIdx === -1) stableIdx = 0
+          targetOffset = stableIdx % stepDays
         }
 
-        var score = -dates.length * 1000
-        if (offset === targetOffset) score -= 500
-        dates.forEach(function (date) {
-          score += (rebuiltDayCount[date] || 0) * 10
-          if (u.requires_supervision && !(rebuiltIndependentCount[date] > 0)) {
-            score += 100
+        var bestScore = Number.MAX_SAFE_INTEGER
+        var offsetRangeStart = fixedOffset ? targetOffset : 0
+        var offsetRangeEnd = fixedOffset ? targetOffset + 1 : stepDays
+
+        for (var offset = offsetRangeStart; offset < offsetRangeEnd; offset++) {
+          var dates = []
+          var offsetDate = addDaysDateOnly(cycleStart, offset)
+          while (offsetDate <= cycleEnd && dates.length < maxShifts) {
+            if ((unavailableMap[u.id] || []).indexOf(offsetDate) === -1) {
+              dates.push(offsetDate)
+            }
+            offsetDate = addDaysDateOnly(offsetDate, stepDays)
           }
-        })
-        if (score < bestScore) {
-          bestScore = score
-          bestDates = dates
+
+          var score = -dates.length * 1000
+          if (offset === targetOffset) score -= 500
+          dates.forEach(function (date) {
+            score += (rebuiltDayCount[date] || 0) * 10
+            if (u.requires_supervision && !(rebuiltIndependentCount[date] > 0)) {
+              score += 100
+            }
+          })
+          if (score < bestScore) {
+            bestScore = score
+            bestDates = dates
+          }
         }
       }
 
@@ -1778,6 +1949,22 @@ routerAdd(
         violations.push(u.name + ' já possui plantão em outro setor em ' + entry.date + '.')
       }
 
+      // Parity check: dias ímpares não recebem colaborador restrito a pares e vice-versa
+      if (u.shift_parity === 'even' || u.shift_parity === 'odd') {
+        var cPar = civilParity(entry.date)
+        if (cPar !== u.shift_parity) {
+          violations.push(
+            'Colaborador ' +
+              u.name +
+              ' configurado com paridade ' +
+              (u.shift_parity === 'even' ? 'Pares' : 'Ímpares') +
+              ' mas plantão em ' +
+              entry.date +
+              ' corresponde à paridade oposta.',
+          )
+        }
+      }
+
       // Hours accumulation
       userHours[u.id] = (userHours[u.id] || 0) + u.work_hours
       if (userHours[u.id] > u.monthly_hour_limit) {
@@ -1861,10 +2048,8 @@ routerAdd(
     })
 
     // Daily staffing + supervision
-    var cursor = new Date(cycleStart + 'T00:00:00Z')
-    var lastDay = new Date(cycleEnd + 'T00:00:00Z')
-    while (cursor <= lastDay) {
-      var dateKey = cursor.toISOString().split('T')[0]
+    var dateKey = cycleStart
+    while (dateKey <= cycleEnd) {
       var assigns = dayAssignments[dateKey] || []
       if (assigns.length < sectorMinStaffing) {
         violations.push(
@@ -1902,7 +2087,7 @@ routerAdd(
           )
         }
       })
-      cursor = new Date(cursor.getTime() + 86400000)
+      dateKey = addDaysDateOnly(dateKey, 1)
     }
 
     // Validação per-cycle de folgas (1 Fim de Semana Sáb OU Dom + 1 Dia de Semana Seg-Sex)

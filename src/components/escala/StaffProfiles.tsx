@@ -60,7 +60,7 @@ import {
   updateStaffContract,
   updateStaffProfile,
 } from '@/services/escala'
-import { parseDateOnly } from '@/lib/escala-weekend-off'
+import { parseDateOnly, civilParity, dayOfMonth } from '@/lib/escala-weekend-off'
 import { useRealtime } from '@/hooks/use-realtime'
 
 export type ShiftParity = 'even' | 'odd'
@@ -280,28 +280,21 @@ export function StaffProfiles({ departmentId }: { departmentId?: string; project
           return
         }
 
-        // Validação de coerência entre a data de início (posição relativa no ciclo) e a paridade selecionada
-        // Posição 1-based: diffFromStart = 0 -> dia 1 (ímpar); diffFromStart = 1 -> dia 2 (par)
-        const diffFromStart = Math.round(
-          (new Date(cleanDate + 'T00:00:00Z').getTime() -
-            new Date(cStart + 'T00:00:00Z').getTime()) /
-            86400000,
-        )
-        const dayPositionParity = diffFromStart % 2 === 0 ? 'odd' : 'even'
+        // Validação de coerência com a paridade civil (even = dia civil par, odd = dia civil ímpar)
+        const datePar = civilParity(cleanDate)
+        const dom = dayOfMonth(cleanDate)
 
-        if (formData.shift_parity !== dayPositionParity) {
+        if (formData.shift_parity !== datePar) {
           const expectedParityLabel =
             formData.shift_parity === 'even'
-              ? 'Dias pares (2º dia, 4º dia... / posições pares do ciclo)'
-              : 'Dias ímpares (1º dia, 3º dia... / posições ímpares do ciclo)'
-          const actualPositionLabel =
-            dayPositionParity === 'even'
-              ? 'posição par relativa ao ciclo (2º dia, 4º dia...)'
-              : 'posição ímpar relativa ao ciclo (1º dia, 3º dia...)'
+              ? 'Dias pares (dias civis pares: 2, 4, 6, 8...)'
+              : 'Dias ímpares (dias civis ímpares: 1, 3, 5, 7...)'
+          const actualLabel =
+            datePar === 'even' ? `dia civil par (${dom})` : `dia civil ímpar (${dom})`
 
           toast({
-            title: 'Incoerência com a paridade selecionada',
-            description: `A data de início informada (${cleanDate}) corresponde a uma ${actualPositionLabel}, mas você selecionou "${expectedParityLabel}". Ajuste a data ou a paridade para manter a alternância correta.`,
+            title: 'Incoerência com a paridade civil selecionada',
+            description: `A data de início informada (${cleanDate}) é um ${actualLabel}, mas você selecionou "${expectedParityLabel}". Ajuste a data ou a paridade para manter a alternância civil correta.`,
             variant: 'destructive',
           })
           return
@@ -873,17 +866,16 @@ export function StaffProfiles({ departmentId }: { departmentId?: string; project
                   onValueChange={(value: 'even' | 'odd') => {
                     setFormData((prev) => {
                       const next = { ...prev, shift_parity: value }
-                      // Se houver ciclo ativo e data não preenchida ou vazia, sugere a data correspondente
+                      // Se houver ciclo ativo e data não preenchida ou vazia, sugere a data correspondente à paridade civil
                       if (activeCycle) {
                         const cStart = activeCycle.start_date
                           ? activeCycle.start_date.split(' ')[0].split('T')[0]
                           : ''
                         if (cStart) {
-                          if (value === 'odd') {
-                            // Dias ímpares -> posição 1 (início do ciclo)
+                          const startParity = civilParity(cStart)
+                          if (startParity === value) {
                             next.cycle_start_date = cStart
-                          } else if (value === 'even') {
-                            // Dias pares -> posição 2 (segundo dia do ciclo)
+                          } else {
                             const { y, m, d } = parseDateOnly(cStart)
                             const nextDate = new Date(Date.UTC(y, m - 1, d + 1))
                               .toISOString()
@@ -900,13 +892,13 @@ export function StaffProfiles({ departmentId }: { departmentId?: string; project
                     <SelectValue placeholder="Selecione a paridade..." />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="even">Dias pares</SelectItem>
-                    <SelectItem value="odd">Dias ímpares</SelectItem>
+                    <SelectItem value="even">Dias pares (dia civil par)</SelectItem>
+                    <SelectItem value="odd">Dias ímpares (dia civil ímpar)</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="text-[11px] text-muted-foreground">
-                  Define a equipe de alternância 12x36 do colaborador dentro de cada ciclo
-                  operacional.
+                  Define a equipe de alternância 12x36 do colaborador baseada na paridade do dia
+                  civil do calendário (ex: 2, 4, 8 vs 1, 3, 5).
                 </p>
               </div>
 
@@ -937,9 +929,8 @@ export function StaffProfiles({ departmentId }: { departmentId?: string; project
                   className="bg-white"
                 />
                 <p className="text-[11px] text-muted-foreground">
-                  Data que ancora o primeiro plantão do colaborador no ciclo selecionado. A
-                  alternância é calculada pela posição relativa ao início do ciclo, garantindo
-                  consistência mesmo em ciclos que atravessam a virada do mês.
+                  Data civil de início do plantão no ciclo. Deve respeitar a paridade civil
+                  selecionada (dias pares ou dias ímpares do calendário).
                 </p>
                 {activeCycle && (
                   <div className="text-[11px] text-slate-500 bg-white/80 p-2 rounded border">

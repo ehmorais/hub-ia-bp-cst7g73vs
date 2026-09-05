@@ -110,6 +110,26 @@ export function dayOfWeekDateOnly(dateStr: string): number {
 }
 
 /**
+ * Retorna o dia do mês civil (1..31) de uma string de data (YYYY-MM-DD),
+ * derivando dia diretamente da string sem qualquer conversão de fuso horário.
+ */
+export function dayOfMonth(dateStr: string): number {
+  const clean = (dateStr || '').split('T')[0].split(' ')[0]
+  const parts = clean.split('-')
+  return parseInt(parts[2] || '0', 10)
+}
+
+/**
+ * Retorna a paridade civil da data:
+ * 'even' para dias civis pares (ex: 2, 4, 8, 10, ...)
+ * 'odd' para dias civis ímpares (ex: 1, 3, 5, 7, 9, ...)
+ */
+export function civilParity(dateStr: string): 'even' | 'odd' {
+  const dom = dayOfMonth(dateStr)
+  return dom % 2 === 0 ? 'even' : 'odd'
+}
+
+/**
  * Formata um objeto Date do JS local diretamente para YYYY-MM-DD
  * usando métodos locais (getFullYear, getMonth, getDate) sem qualquer conversão de timezone ou UTC shift.
  */
@@ -458,6 +478,19 @@ export function moveWeekendOffAssignment(
  * - odd (dias ímpares): posições 1, 3, 5... (offset 0)
  * - even (dias pares): posições 2, 4, 6... (offset 1)
  */
+/**
+ * Verifica elegibilidade estrita de um colaborador 12x36 para trabalhar em dateStr:
+ * baseada estritamente na paridade do dia civil (even = dia civil par, odd = dia civil ímpar).
+ * Retorna true se elegível, false caso contrário.
+ */
+export function isStaffEligibleForCivilDate(
+  dateStr: string,
+  parity?: 'even' | 'odd' | string,
+): boolean {
+  if (!parity || (parity !== 'even' && parity !== 'odd')) return true
+  return civilParity(dateStr) === parity
+}
+
 export function computeNaturalPatternByStaff(
   staffId: string,
   allStaffIds: string[],
@@ -473,23 +506,34 @@ export function computeNaturalPatternByStaff(
   const normStart = cStart.split(' ')[0].split('T')[0]
   const normEnd = cEnd.split(' ')[0].split('T')[0]
   const is12x36 = wHours === 12 && rHours >= 36
-  const stepDays = Math.max(2, Math.round((wHours + rHours) / 24))
-
-  let offset = 0
   const parity = options?.shift_parity
+
+  const natDays: Record<string, boolean> = {}
+
+  if (is12x36 && (parity === 'even' || parity === 'odd')) {
+    let cur = normStart
+    while (cur <= normEnd) {
+      if (civilParity(cur) === parity) {
+        natDays[cur] = true
+      }
+      cur = addDaysDateOnly(cur, 1)
+    }
+    return natDays
+  }
+
+  const stepDays = Math.max(2, Math.round((wHours + rHours) / 24))
+  let offset = 0
   const anchorDate = options?.cycle_start_date
     ? options.cycle_start_date.split(' ')[0].split('T')[0]
     : ''
 
   if (is12x36) {
-    if (parity === 'even') {
-      offset = 1
-    } else if (parity === 'odd') {
-      offset = 0
-    } else if (anchorDate && anchorDate >= normStart && anchorDate <= normEnd) {
+    if (anchorDate && anchorDate >= normStart && anchorDate <= normEnd) {
+      const pAnchor = parseDateOnly(anchorDate)
+      const pStart = parseDateOnly(normStart)
       const diffAnchor = Math.round(
-        (new Date(anchorDate + 'T00:00:00Z').getTime() -
-          new Date(normStart + 'T00:00:00Z').getTime()) /
+        (Date.UTC(pAnchor.y, pAnchor.m - 1, pAnchor.d) -
+          Date.UTC(pStart.y, pStart.m - 1, pStart.d)) /
           86400000,
       )
       offset = ((diffAnchor % stepDays) + stepDays) % stepDays
@@ -501,7 +545,6 @@ export function computeNaturalPatternByStaff(
     }
   }
 
-  const natDays: Record<string, boolean> = {}
   let cur = addDaysDateOnly(normStart, offset)
   while (cur <= normEnd) {
     natDays[cur] = true

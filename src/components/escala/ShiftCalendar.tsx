@@ -47,6 +47,8 @@ import {
   addDaysDateOnly,
   dayOfWeekDateOnly,
   buildWeekendOffMap,
+  dayOfMonth,
+  civilParity,
 } from '@/lib/escala-weekend-off'
 import { StaffFilter } from './StaffFilter'
 import { formatCorenLabel, formatShiftCalendarSecondLine } from '@/lib/escala-calendar-formatter'
@@ -287,10 +289,10 @@ export function ShiftCalendar({
     }
 
     if (dayFilter === 'even') {
-      return items.filter((item) => item.date.getDate() % 2 === 0)
+      return items.filter((item) => civilParity(item.key) === 'even')
     }
     if (dayFilter === 'odd') {
-      return items.filter((item) => item.date.getDate() % 2 !== 0)
+      return items.filter((item) => civilParity(item.key) === 'odd')
     }
     return items
   }, [currentDate, view, cycleStartDateStr, cycleEndDateStr, cycleInterval, dayFilter])
@@ -713,6 +715,10 @@ export function ShiftCalendar({
               const inCycle = cycle ? isWithinInterval(day, cycleInterval) : true
               // Garante que é sábado (6) ou domingo (0)
               const isWeekendDay = dayItem.dayOfWeek === 6 || dayItem.dayOfWeek === 0
+              const activeSector = sectors.find((s) => s.id === selectedSectorId)
+              const secMinStaff = activeSector?.min_staffing || 0
+              const isCoverageBelowMin =
+                inCycle && secMinStaff > 0 && dayShifts.length < secMinStaff
 
               return (
                 <div
@@ -720,9 +726,13 @@ export function ShiftCalendar({
                   onDrop={(e) => handleDrop(e, day)}
                   onDragOver={handleDragOver}
                   className={cn(
-                    'border-r border-b p-2 flex flex-col gap-1 transition-colors',
+                    'border-r border-b p-2 flex flex-col gap-1 transition-colors relative',
                     view === 'cycle' ? 'overflow-visible' : 'overflow-hidden',
-                    !inCycle ? 'bg-slate-100/50 opacity-50' : 'hover:bg-slate-50/80',
+                    isCoverageBelowMin && inCycle
+                      ? 'bg-rose-50/50 border-rose-300 ring-1 ring-rose-400 ring-inset'
+                      : !inCycle
+                        ? 'bg-slate-100/50 opacity-50'
+                        : 'hover:bg-slate-50/80',
                   )}
                 >
                   <div
@@ -732,7 +742,7 @@ export function ShiftCalendar({
                     )}
                   >
                     <div className="flex items-center justify-between">
-                      <span>
+                      <span className={cn(isCoverageBelowMin && 'text-rose-700 font-bold')}>
                         {format(
                           day,
                           (view === 'month' || view === 'cycle') && dayFilter === 'all'
@@ -741,11 +751,24 @@ export function ShiftCalendar({
                           { locale: ptBR },
                         )}
                       </span>
-                      {dayShifts.length > 0 && (view === 'month' || view === 'cycle') && (
-                        <Badge variant="secondary" className="text-[10px] h-4 px-1">
-                          {dayShifts.length}
-                        </Badge>
-                      )}
+                      <div className="flex items-center gap-1">
+                        {isCoverageBelowMin && (
+                          <Badge
+                            variant="destructive"
+                            className="text-[10px] h-4 px-1 py-0 bg-rose-600 text-white font-semibold"
+                            title={`Efetivo abaixo do mínimo: ${dayShifts.length}/${secMinStaff}`}
+                          >
+                            {dayShifts.length}/{secMinStaff}
+                          </Badge>
+                        )}
+                        {dayShifts.length > 0 &&
+                          !isCoverageBelowMin &&
+                          (view === 'month' || view === 'cycle') && (
+                            <Badge variant="secondary" className="text-[10px] h-4 px-1">
+                              {dayShifts.length}
+                            </Badge>
+                          )}
+                      </div>
                     </div>
                   </div>
                   <div

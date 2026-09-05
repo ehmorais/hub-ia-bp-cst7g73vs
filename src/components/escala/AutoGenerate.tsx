@@ -825,6 +825,23 @@ function AutoGenerateInner({
   // --- Publish the saved draft (commit) ---
   const handleSaveScale = async () => {
     if (!draftShifts.length) return
+
+    // Bloqueia confirmação se houver lacuna de efetivo (dias com efetivo zero ou abaixo do mínimo)
+    const severeUnderstaffed = dailyStaffing.filter((d) => d.status === 'understaffed')
+    if (severeUnderstaffed.length > 0) {
+      toast({
+        title: 'Bloqueio de confirmação de escala',
+        description: `Existem ${severeUnderstaffed.length} dia(s) com efetivo abaixo do mínimo obrigatório (${severeUnderstaffed
+          .map((d) => format(d.date, 'dd/MM'))
+          .slice(0, 3)
+          .join(
+            ', ',
+          )}${severeUnderstaffed.length > 3 ? '...' : ''}). Corrija a cobertura antes de publicar.`,
+        variant: 'destructive',
+      })
+      return
+    }
+
     setGenStatus('saving')
     try {
       const result: any = await commitShiftSchedule(
@@ -1574,8 +1591,17 @@ function AutoGenerateInner({
                 <Button
                   size="sm"
                   onClick={handleSaveScale}
-                  disabled={genStatus === 'saving' || genStatus === 'generating'}
-                  className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white w-full sm:w-auto shadow-sm"
+                  disabled={
+                    genStatus === 'saving' ||
+                    genStatus === 'generating' ||
+                    dailyStaffing.some((d) => d.status === 'understaffed')
+                  }
+                  className={cn(
+                    'gap-2 text-white w-full sm:w-auto shadow-sm',
+                    dailyStaffing.some((d) => d.status === 'understaffed')
+                      ? 'bg-slate-400 hover:bg-slate-400 cursor-not-allowed opacity-70'
+                      : 'bg-emerald-600 hover:bg-emerald-700',
+                  )}
                 >
                   {genStatus === 'saving' ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -1586,6 +1612,18 @@ function AutoGenerateInner({
                 </Button>
               </div>
             </div>
+
+            {/* Banner de alerta crítico antes do botão / cabeçalho se houver dias com déficit */}
+            {dailyStaffing.some((d) => d.status === 'understaffed') && (
+              <div className="mx-6 mb-2 p-3 bg-rose-50 border border-rose-300 rounded-md flex items-center gap-2 text-rose-800 text-xs font-medium">
+                <AlertCircle className="h-4 w-4 text-rose-600 shrink-0" />
+                <span>
+                  <strong>Atenção:</strong> Existem dias obrigatórios no ciclo com efetivo zero ou
+                  abaixo do mínimo. A confirmação está bloqueada até que todas as lacunas sejam
+                  supridas.
+                </span>
+              </div>
+            )}
           </CardHeader>
           <CardContent className="p-0">
             <ShiftCalendar
