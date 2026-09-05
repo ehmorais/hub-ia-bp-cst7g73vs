@@ -367,9 +367,25 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
   )
 
   // Mapa de fins de semana de folga para destaque visual na grade exclusivamente de activeDraftRecord
+  // Sanitiza contra férias ativas para prioridade absoluta de férias
   const weekendOffMap = useMemo(() => {
-    return buildWeekendOffMap(activeDraftRecord?.validation_summary)
-  }, [activeDraftRecord])
+    const vacationsByStaff: Record<
+      string,
+      {
+        vacation_enabled?: boolean | null
+        vacation_start?: string | null
+        vacation_end?: string | null
+      }
+    > = {}
+    draftUsers.forEach((sp) => {
+      vacationsByStaff[sp.id] = {
+        vacation_enabled: sp.vacation_enabled,
+        vacation_start: sp.vacation_start,
+        vacation_end: sp.vacation_end,
+      }
+    })
+    return buildWeekendOffMap(activeDraftRecord?.validation_summary, vacationsByStaff)
+  }, [activeDraftRecord, draftUsers])
 
   const hasWeekendOffMetadata = useMemo(() => {
     return weekendOffMap.size > 0
@@ -1289,6 +1305,7 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
                         const isWeekendDay = dayItem.dayOfWeek === 6 || dayItem.dayOfWeek === 0
                         const isWeekendOff =
                           isWeekendDay &&
+                          !isVacation &&
                           (!val || val === 'F') &&
                           (weekendOffMap.get(user.id)?.has(ds) ?? false)
 

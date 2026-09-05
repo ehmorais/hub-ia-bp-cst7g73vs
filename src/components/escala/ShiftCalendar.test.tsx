@@ -271,6 +271,37 @@ describe('ShiftCalendar - Férias dos Colaboradores no Calendário', () => {
     expect(screen.queryByTestId('vacation-staff-vacation-01-2025-11-02')).toBeNull()
   })
 
+  it('Calendário nunca renderiza simultaneamente FÉRIAS e Folga Fim de Semana na mesma célula', () => {
+    // Colaborador em férias no domingo 2025-11-02
+    // E um draft legado que incluiu 2025-11-02 em weekend_off_assignments
+    const legacyDraft = {
+      id: 'draft-legacy',
+      validation_summary: {
+        weekend_off_assignments: {
+          'staff-vacation-01': ['2025-11-02'],
+        },
+      },
+    }
+
+    render(
+      <ShiftCalendar
+        shifts={[]}
+        cycle={dummyCycle}
+        contracts={dummyContracts}
+        staffProfiles={dummyStaffProfiles}
+        draft={legacyDraft}
+      />,
+    )
+
+    // O card de férias DEVE ser exibido
+    const vacEl = screen.getByTestId('vacation-staff-vacation-01-2025-11-02')
+    expect(vacEl).toBeDefined()
+    expect(vacEl.textContent).toContain('FÉRIAS')
+
+    // O card de Folga Fim de Semana NÃO PODE existir para essa colaboradora nesta célula
+    expect(screen.queryByTestId('weekend-off-staff-vacation-01-2025-11-02')).toBeNull()
+  })
+
   it('Exibe item de legenda "Férias" com amostra esmeralda junto a Plantão D, Plantão N e Folga Fim de Semana', () => {
     render(
       <ShiftCalendar

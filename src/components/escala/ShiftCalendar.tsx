@@ -183,9 +183,25 @@ export function ShiftCalendar({
   }, [staffProfiles, selectedSectorId, visibleShifts])
 
   // Computa o mapa de fins de semana de folga (staffId -> Set<dateStr>) exclusivamente de draft.validation_summary.weekend_off_assignments
+  // Sanitiza contra férias ativas do colaborador para que nunca coincidam
   const weekendOffMap = useMemo(() => {
-    return buildWeekendOffMap(draft?.validation_summary)
-  }, [draft])
+    const vacationsByStaff: Record<
+      string,
+      {
+        vacation_enabled?: boolean | null
+        vacation_start?: string | null
+        vacation_end?: string | null
+      }
+    > = {}
+    staffProfiles.forEach((sp) => {
+      vacationsByStaff[sp.id] = {
+        vacation_enabled: sp.vacation_enabled,
+        vacation_start: sp.vacation_start,
+        vacation_end: sp.vacation_end,
+      }
+    })
+    return buildWeekendOffMap(draft?.validation_summary, vacationsByStaff)
+  }, [draft, staffProfiles])
 
   const hasWeekendOffMetadata = useMemo(() => {
     return weekendOffMap.size > 0
@@ -913,6 +929,9 @@ export function ShiftCalendar({
                         if (selectedStaffId && staff.id !== selectedStaffId) return false
                         // Não renderiza se a célula tem shifts (a folga não é real ou há conflito)
                         if (workedStaffIds.has(staff.id)) return false
+                        // Prioridade absoluta de Férias: célula de férias NUNCA renderiza também folga
+                        const fullProfile = staffProfiles.find((sp) => sp.id === staff.id)
+                        if (isVacationDateInclusive(fullProfile, dateKey)) return false
                         const offDates = weekendOffMap.get(staff.id)
                         return offDates && offDates.has(dateKey)
                       })

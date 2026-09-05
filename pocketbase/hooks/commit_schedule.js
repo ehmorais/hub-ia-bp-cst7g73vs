@@ -466,6 +466,16 @@ routerAdd(
       var contract = contractMap[profileId]
       if (!contract) return
 
+      var isVacationActiveStaff =
+        profile.vacation_enabled === true &&
+        profile.vacation_start &&
+        profile.vacation_end &&
+        profile.vacation_start <= profile.vacation_end
+      var isDateInStaffVacation = function (dStr) {
+        if (!isVacationActiveStaff) return false
+        return dStr >= profile.vacation_start && dStr <= profile.vacation_end
+      }
+
       var uShifts = normalized
         .filter(function (s) {
           return s.staff_profile === profileId
@@ -485,40 +495,60 @@ routerAdd(
         cycleEnd,
       )
 
-      // 1. Validar Folga de Fim de Semana (exatamente 1 data no ciclo em sábado OU domingo na paridade trabalhada)
+      // 1. Validar Folga de Fim de Semana (exatamente 1 data no ciclo em sábado OU domingo na paridade trabalhada e FORA de férias)
       var staffWeekendOffs = weekendOffAssignments ? weekendOffAssignments[profileId] : null
       var weekendOffDate = null
       if (Array.isArray(staffWeekendOffs) && staffWeekendOffs.length > 0) {
-        weekendOffDate = staffWeekendOffs[0]
+        // Saneamento defensivo: se a folga salva no rascunho coincidir com férias, descarta
+        for (var swoi = 0; swoi < staffWeekendOffs.length; swoi++) {
+          var cand = staffWeekendOffs[swoi]
+          if (!isDateInStaffVacation(cand)) {
+            weekendOffDate = cand
+            break
+          }
+        }
       } else if (typeof staffWeekendOffs === 'string' && staffWeekendOffs) {
-        weekendOffDate = staffWeekendOffs
+        if (!isDateInStaffVacation(staffWeekendOffs)) {
+          weekendOffDate = staffWeekendOffs
+        }
       }
 
-      // Se não veio do draft, calcula a data esperada
-      if (!weekendOffDate) {
-        var wCandidates = []
-        var cCur = cycleStart
-        while (cCur <= cycleEnd) {
-          if (naturalDays[cCur]) {
-            var dow = dayOfWeekDateOnly(cCur)
-            if (dow === 6 || dow === 0) {
+      // Candidatos de fim de semana elegíveis: sáb/dom na paridade e FORA de férias ativas
+      var wCandidates = []
+      var cCur = cycleStart
+      while (cCur <= cycleEnd) {
+        if (naturalDays[cCur]) {
+          var dow = dayOfWeekDateOnly(cCur)
+          if (dow === 6 || dow === 0) {
+            if (!isDateInStaffVacation(cCur)) {
               wCandidates.push(cCur)
             }
           }
-          cCur = addDaysDateOnly(cCur, 1)
         }
-        if (wCandidates.length > 0) {
-          var pIdx = sortedProfileIds.indexOf(profileId)
-          weekendOffDate = wCandidates[(pIdx !== -1 ? pIdx : 0) % wCandidates.length]
-        }
+        cCur = addDaysDateOnly(cCur, 1)
       }
 
+      // Se não veio do draft (ou coincidia com férias), remaneja para outro dia de fim de semana elegível
+      if (!weekendOffDate && wCandidates.length > 0) {
+        var pIdx = sortedProfileIds.indexOf(profileId)
+        weekendOffDate = wCandidates[(pIdx !== -1 ? pIdx : 0) % wCandidates.length]
+      }
+
+      // Se a folga remanescente ainda coincidir com férias, rejeita/anula sem criar plantão
+      if (weekendOffDate && isDateInStaffVacation(weekendOffDate)) {
+        weekendOffDate = null
+      }
+
+      // Se não existir nenhum sábado/domingo elegível fora das férias (inclusive férias cobrindo todo o ciclo ou fins de semana):
+      // NÃO cria nem cobra folga de fim de semana para esse colaborador nesse ciclo. NUNCA converte para dia útil.
       if (!weekendOffDate) {
-        violations.push(
-          'Fim de semana obrigatório não atendido: ' +
-            profile.name +
-            '. Nenhuma folga de fim de semana elegível no ciclo.',
-        )
+        if (!isVacationActiveStaff) {
+          violations.push(
+            'Fim de semana obrigatório não atendido: ' +
+              profile.name +
+              '. Nenhuma folga de fim de semana elegível no ciclo.',
+          )
+        }
       } else {
         var wDow = dayOfWeekDateOnly(weekendOffDate)
         if (wDow !== 6 && wDow !== 0) {

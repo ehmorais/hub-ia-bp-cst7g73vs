@@ -165,6 +165,20 @@ routerAdd(
       return e.badRequestError('Colaborador não encontrado.')
     }
 
+    // Regra obrigatória: A data de destino não pode coincidir com o período de férias ativo do colaborador
+    var vacEnabled = staffProfile.getBool('vacation_enabled')
+    var vacStart = (staffProfile.getString('vacation_start') || '').split(' ')[0].split('T')[0]
+    var vacEnd = (staffProfile.getString('vacation_end') || '').split(' ')[0].split('T')[0]
+    if (vacEnabled && vacStart && vacEnd && vacStart <= vacEnd) {
+      if (targetDate >= vacStart && targetDate <= vacEnd) {
+        return e.badRequestError(
+          'A data de destino (' +
+            targetDate +
+            ') coincide com o período de férias do colaborador. Dias de férias não podem receber folga de fim de semana.',
+        )
+      }
+    }
+
     var contracts = $app.findRecordsByFilter(
       'staff_contracts',
       'staff_profile={:sp}',

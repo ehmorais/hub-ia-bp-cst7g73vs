@@ -234,10 +234,30 @@ export function getCycleWeekendCandidates(
  * - Compatibilidade retroativa com arrays de strings `[sat, sun]`.
  * Valida que as datas pertencem a sábado (6) ou domingo (0).
  */
-export function buildWeekendOffMap(validationSummary: any): Map<string, Set<string>> {
+export function buildWeekendOffMap(
+  validationSummary: any,
+  vacationsByStaff?: Record<
+    string,
+    {
+      vacation_enabled?: boolean | null
+      vacation_start?: string | null
+      vacation_end?: string | null
+    }
+  >,
+): Map<string, Set<string>> {
   const map = new Map<string, Set<string>>()
   const persistedAssignments = validationSummary?.weekend_off_assignments
   if (!persistedAssignments) return map
+
+  const isStaffOnVacationOnDate = (staffId: string, d: string): boolean => {
+    if (!vacationsByStaff) return false
+    const vac = vacationsByStaff[staffId]
+    if (!vac || vac.vacation_enabled !== true) return false
+    const start = (vac.vacation_start || '').split(' ')[0].split('T')[0]
+    const end = (vac.vacation_end || '').split(' ')[0].split('T')[0]
+    if (!start || !end || start > end) return false
+    return d >= start && d <= end
+  }
 
   if (Array.isArray(persistedAssignments)) {
     persistedAssignments.forEach((item: any) => {
@@ -252,10 +272,12 @@ export function buildWeekendOffMap(validationSummary: any): Map<string, Set<stri
           map.set(staffId, set)
         }
         if (singleDate && isWeekendDay(singleDate)) {
-          set.add(singleDate)
+          if (!isStaffOnVacationOnDate(staffId, singleDate)) {
+            set.add(singleDate)
+          }
         } else if (sat && sun && assertWeekendPair(sat, sun)) {
-          set.add(sat)
-          set.add(sun)
+          if (!isStaffOnVacationOnDate(staffId, sat)) set.add(sat)
+          if (!isStaffOnVacationOnDate(staffId, sun)) set.add(sun)
         }
       }
     })
@@ -265,14 +287,18 @@ export function buildWeekendOffMap(validationSummary: any): Map<string, Set<stri
         const validDates: string[] = []
         dates.forEach((d) => {
           if (typeof d === 'string' && isWeekendDay(d)) {
-            validDates.push(d)
+            if (!isStaffOnVacationOnDate(staffId, d)) {
+              validDates.push(d)
+            }
           }
         })
         if (validDates.length > 0) {
           map.set(staffId, new Set(validDates))
         }
       } else if (typeof dates === 'string' && isWeekendDay(dates)) {
-        map.set(staffId, new Set([dates]))
+        if (!isStaffOnVacationOnDate(staffId, dates)) {
+          map.set(staffId, new Set([dates]))
+        }
       }
     })
   }
@@ -325,6 +351,7 @@ export function validateWeekendOffOverride({
   cycleStart,
   cycleEnd,
   currentAssignments,
+  vacation,
 }: {
   staffId: string
   sourceDate: string
@@ -332,6 +359,11 @@ export function validateWeekendOffOverride({
   cycleStart: string
   cycleEnd: string
   currentAssignments?: string[]
+  vacation?: {
+    vacation_enabled?: boolean | null
+    vacation_start?: string | null
+    vacation_end?: string | null
+  }
 }): { valid: boolean; error?: string; weekday?: number } {
   const normSrc = (sourceDate || '').split(' ')[0].split('T')[0]
   const normTgt = (targetDate || '').split(' ')[0].split('T')[0]
@@ -352,6 +384,18 @@ export function validateWeekendOffOverride({
   }
   if (normTgt < normStart || normTgt > normEnd) {
     return { valid: false, error: `A data de destino (${normTgt}) está fora do ciclo.` }
+  }
+
+  // Validação: destino não pode estar dentro do período de férias
+  if (vacation && vacation.vacation_enabled === true) {
+    const vStart = (vacation.vacation_start || '').split(' ')[0].split('T')[0]
+    const vEnd = (vacation.vacation_end || '').split(' ')[0].split('T')[0]
+    if (vStart && vEnd && vStart <= vEnd && normTgt >= vStart && normTgt <= vEnd) {
+      return {
+        valid: false,
+        error: `A data de destino (${normTgt}) coincide com o período de férias do colaborador. Dias de férias não podem receber folga de fim de semana.`,
+      }
+    }
   }
 
   const srcDow = dayOfWeekDateOnly(normSrc)
@@ -523,6 +567,9 @@ export function calculateCycleOffDaysForStaff({
     cycle_start_date?: string
     work_hours?: number
     rest_hours?: number
+    vacation_enabled?: boolean | null
+    vacation_start?: string | null
+    vacation_end?: string | null
   }
   timeoffRequests?: TimeoffRequestItem[]
   staffIndex?: number
@@ -547,7 +594,18 @@ export function calculateCycleOffDaysForStaff({
     profile,
   )
 
+  // Verificação de férias ativas com limites inclusivos
+  const vacEnabled = profile?.vacation_enabled === true
+  const vacStart = (profile?.vacation_start || '').split(' ')[0].split('T')[0]
+  const vacEnd = (profile?.vacation_end || '').split(' ')[0].split('T')[0]
+  const hasVacation = Boolean(vacEnabled && vacStart && vacEnd && vacStart <= vacEnd)
+  const isDateInVacation = (d: string): boolean => {
+    if (!hasVacation) return false
+    return d >= vacStart && d <= vacEnd
+  }
+
   // 1. Candidatos de fim de semana: dias de sábado ou domingo em que o colaborador trabalharia pela paridade
+  // E FORA de qualquer período de férias ativo (com limites inclusivos).
   const weekendWorkedCandidates: string[] = []
   // 2. Candidatos de dia de semana: dias de segunda a sexta em que o colaborador trabalharia pela paridade
   const weekdayWorkedCandidates: string[] = []
@@ -557,7 +615,9 @@ export function calculateCycleOffDaysForStaff({
     if (naturalDays[cur]) {
       const dow = dayOfWeekDateOnly(cur)
       if (dow === 6 || dow === 0) {
-        weekendWorkedCandidates.push(cur)
+        if (!isDateInVacation(cur)) {
+          weekendWorkedCandidates.push(cur)
+        }
       } else if (dow >= 1 && dow <= 5) {
         weekdayWorkedCandidates.push(cur)
       }
@@ -565,7 +625,9 @@ export function calculateCycleOffDaysForStaff({
     cur = addDaysDateOnly(cur, 1)
   }
 
-  // Escolha determinística de fim de semana (round-robin estável)
+  // Escolha determinística de fim de semana (round-robin estável entre os elegíveis fora das férias)
+  // Se não existir nenhum sábado/domingo elegível fora das férias no ciclo:
+  // NÃO cria folga de fim de semana (retorna null) e NUNCA converte para dia útil.
   let weekendOffDate: string | null = null
   if (weekendWorkedCandidates.length > 0) {
     const idx = staffIndex % weekendWorkedCandidates.length

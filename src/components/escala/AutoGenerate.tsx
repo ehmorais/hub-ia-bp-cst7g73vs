@@ -1132,7 +1132,25 @@ function AutoGenerateInner({
           }
         }
 
-        const weekendOffMap = buildWeekendOffMap(currentDraftRecord?.validation_summary)
+        const vacationsByStaff: Record<
+          string,
+          {
+            vacation_enabled?: boolean | null
+            vacation_start?: string | null
+            vacation_end?: string | null
+          }
+        > = {}
+        staffProfiles.forEach((sp) => {
+          vacationsByStaff[sp.id] = {
+            vacation_enabled: sp.vacation_enabled,
+            vacation_start: sp.vacation_start,
+            vacation_end: sp.vacation_end,
+          }
+        })
+        const weekendOffMap = buildWeekendOffMap(
+          currentDraftRecord?.validation_summary,
+          vacationsByStaff,
+        )
 
         exportAutoGenerateCalendarPdf({
           title: 'Escala de Plantões — Calendário',

@@ -702,7 +702,17 @@ routerAdd(
         staffList.forEach(function (u, staffIndex) {
           var uNatMap = naturalWorkedMapGen[u.id] || {}
 
-          // 1. FOLGA DE FIM DE SEMANA (Sábado OU Domingo na paridade trabalhada)
+          // 1. FOLGA DE FIM DE SEMANA (Sábado OU Domingo na paridade trabalhada e FORA de férias ativas)
+          var isVacationActiveStaff =
+            u.vacation_enabled === true &&
+            u.vacation_start &&
+            u.vacation_end &&
+            u.vacation_start <= u.vacation_end
+          var isDateInStaffVacation = function (dStr) {
+            if (!isVacationActiveStaff) return false
+            return dStr >= u.vacation_start && dStr <= u.vacation_end
+          }
+
           var weekendWorkedDays = []
           var weekdayWorkedDays = []
           var curD = normStart
@@ -710,7 +720,9 @@ routerAdd(
             if (uNatMap[curD]) {
               var dow = dayOfWeekDateOnly(curD)
               if (dow === 6 || dow === 0) {
-                weekendWorkedDays.push(curD)
+                if (!isDateInStaffVacation(curD)) {
+                  weekendWorkedDays.push(curD)
+                }
               } else if (dow >= 1 && dow <= 5) {
                 weekdayWorkedDays.push(curD)
               }
@@ -723,11 +735,16 @@ routerAdd(
             targetWeekendOff = weekendWorkedDays[staffIndex % weekendWorkedDays.length]
             weekendOffAssignments[u.id] = [targetWeekendOff]
           } else {
-            issues.push(
-              'Fim de semana obrigatório não atendido: ' +
-                u.name +
-                ' sem dias de fim de semana na paridade.',
-            )
+            // Se o colaborador está de férias cobrindo os fins de semana do ciclo ou todo o ciclo:
+            // NÃO cria nem mostra folga de fim de semana no ciclo. Nunca converte para dia útil.
+            weekendOffAssignments[u.id] = []
+            if (!isVacationActiveStaff) {
+              issues.push(
+                'Fim de semana obrigatório não atendido: ' +
+                  u.name +
+                  ' sem dias de fim de semana na paridade.',
+              )
+            }
           }
 
           // Remove plantão na data de folga de fim de semana escolhida
@@ -1059,14 +1076,21 @@ routerAdd(
 
         var uNatMap = naturalWorkedMapGen[u.id] || {}
 
-        // Validação Fim de Semana
+        // Validação Fim de Semana (apenas exigida se o colaborador não estiver com todos os fins de semana em férias)
+        var isVacationActiveStaff =
+          u.vacation_enabled === true &&
+          u.vacation_start &&
+          u.vacation_end &&
+          u.vacation_start <= u.vacation_end
         var wOffs = genWeekendOffMap[u.id]
         if (!wOffs || !Array.isArray(wOffs) || wOffs.length === 0) {
-          violations.push(
-            'Fim de semana obrigatório não atendido: ' +
-              u.name +
-              ' não tem folga de fim de semana no ciclo.',
-          )
+          if (!isVacationActiveStaff) {
+            violations.push(
+              'Fim de semana obrigatório não atendido: ' +
+                u.name +
+                ' não tem folga de fim de semana no ciclo.',
+            )
+          }
         } else {
           var wOffDate = wOffs[0]
           var dow = dayOfWeekDateOnly(wOffDate)
