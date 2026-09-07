@@ -119,6 +119,34 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
   const { toast } = useToast()
   const isCollectionPast = new Date().getDate() > 10
 
+  // The generator persists the exact contract times. Keep the planner grid
+  // independent from a small hard-coded set of clock pairs so every valid
+  // contract/shift type is visible here.
+  const getDateOnly = (value: unknown) => {
+    const text = String(value || '')
+    const match = text.match(/(\d{4}-\d{2}-\d{2})/)
+    return match?.[1] || ''
+  }
+
+  const getTimeOnly = (value: unknown) => {
+    const match = String(value || '').match(/(?:T|\s)(\d{2}:\d{2})/)
+    return match?.[1] || ''
+  }
+
+  const classifyShiftCell = (shift: any): DraftCell => {
+    const start = getTimeOnly(shift.start_time)
+    const end = getTimeOnly(shift.end_time)
+    const startMinutes = start ? Number(start.slice(0, 2)) * 60 + Number(start.slice(3)) : -1
+    const endMinutes = end ? Number(end.slice(0, 2)) * 60 + Number(end.slice(3)) : -1
+    const duration =
+      startMinutes >= 0 && endMinutes >= 0 ? (endMinutes - startMinutes + 1440) % 1440 || 1440 : 0
+
+    if (startMinutes >= 18 * 60 || (endMinutes >= 0 && endMinutes < startMinutes)) return 'N'
+    if (duration >= 10 * 60) return 'D'
+    if (startMinutes >= 12 * 60) return 'T'
+    return 'M'
+  }
+
   const handleGenerateAI = async () => {
     if (!selectedCycleId || !selectedSectorId) return
     setIsGenerating(true)
@@ -252,7 +280,9 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
 
   useEffect(() => {
     if (!selectedCycleId || !selectedSectorId) return
-    const sectorShifts = allShifts.filter((s) => s.sector === selectedSectorId)
+    const sectorShifts = allShifts.filter(
+      (s) => s.sector === selectedSectorId || s.expand?.sector?.id === selectedSectorId,
+    )
     const newDraft: Record<string, Record<string, DraftCell>> = {}
     const newUsers = new Map<string, any>()
 
@@ -279,17 +309,10 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
       newUsers.set(u.id, u)
       if (!newDraft[collaboratorId]) newDraft[collaboratorId] = {}
 
-      const dateStr = s.start_time.split(' ')[0]
-      const sh = s.start_time.split(' ')[1]?.substring(0, 8)
-      const eh = s.end_time.split(' ')[1]?.substring(0, 8)
+      const dateStr = getDateOnly(s.start_time)
+      const val = classifyShiftCell(s)
 
-      let val: DraftCell = ''
-      if (sh === '07:00:00' && eh === '19:00:00') val = 'D'
-      else if (sh === '19:00:00' && eh === '07:00:00') val = 'N'
-      else if (sh === '07:00:00' && eh === '13:00:00') val = 'M'
-      else if (sh === '13:00:00' && eh === '19:00:00') val = 'T'
-
-      if (val) newDraft[collaboratorId][dateStr] = val
+      if (dateStr && val) newDraft[collaboratorId][dateStr] = val
     })
 
     setDraftUsers(Array.from(newUsers.values()))
