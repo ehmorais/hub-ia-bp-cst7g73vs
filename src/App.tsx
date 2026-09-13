@@ -76,6 +76,11 @@ const App = () => (
               <Route path="/auditoria" element={<Admin key="auditoria" defaultTab="audit" />} />
               <Route path="/colaboradores" element={<Admin key="users" defaultTab="users" />} />
               <Route
+                path="/relatorios"
+                element={<Admin key="relatorios" defaultTab="relatorios" />}
+              />
+              <Route path="/relatorio" element={<Navigate to="/relatorios" replace />} />
+              <Route
                 path="/gestao-escalas"
                 element={<Admin key="escalas" defaultTab="escalas" />}
               />

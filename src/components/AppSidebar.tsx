@@ -21,6 +21,7 @@ import {
   CalendarClock,
   Activity,
   ScrollText,
+  FileSpreadsheet,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import pb from '@/lib/pocketbase/client'
@@ -171,6 +172,8 @@ export function AppSidebar() {
     location.pathname === '/auditoria' ||
     location.pathname === '/sectors' ||
     location.pathname === '/colaboradores' ||
+    location.pathname === '/relatorios' ||
+    location.pathname === '/relatorio' ||
     location.pathname === '/gestao-escalas'
 
   return (
@@ -253,6 +256,16 @@ export function AppSidebar() {
                       icon={Users}
                       label="Usuários do Sistema"
                       active={location.pathname === '/colaboradores'}
+                    />
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <NavButton
+                      to="/relatorios"
+                      icon={FileSpreadsheet}
+                      label="Relatório"
+                      active={
+                        location.pathname === '/relatorios' || location.pathname === '/relatorio'
+                      }
                     />
                   </SidebarMenuItem>
                   <SidebarMenuItem>

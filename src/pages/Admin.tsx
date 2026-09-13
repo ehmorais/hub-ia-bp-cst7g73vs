@@ -70,6 +70,7 @@ import { useRealtime } from '@/hooks/use-realtime'
 import { cn } from '@/lib/utils'
 import { getIcon } from '@/lib/icons'
 import { EscalasManagement } from '@/components/EscalasManagement'
+import { StaffGeneralReport } from '@/components/escala/StaffGeneralReport'
 import { useNavigate } from 'react-router-dom'
 import { ToolUsageChart } from '@/components/ToolUsageChart'
 
@@ -173,6 +174,7 @@ function AdminContent({ defaultTab }: { defaultTab?: string }) {
       performance: '/performance',
       audit: '/auditoria',
       users: '/colaboradores',
+      relatorios: '/relatorios',
       escalas: '/gestao-escalas',
     }
     if (tabRoutes[value] && tabRoutes[value] !== window.location.pathname) {
@@ -588,6 +590,12 @@ function AdminContent({ defaultTab }: { defaultTab?: string }) {
             className="rounded-md px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all hover:bg-accent hover:text-accent-foreground"
           >
             Usuários do Sistema
+          </TabsTrigger>
+          <TabsTrigger
+            value="relatorios"
+            className="rounded-md px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all hover:bg-accent hover:text-accent-foreground"
+          >
+            Relatório
           </TabsTrigger>
           <TabsTrigger
             value="ia_tools"
@@ -1522,6 +1530,10 @@ function AdminContent({ defaultTab }: { defaultTab?: string }) {
               </Table>
             </Card>
           </div>
+        </TabsContent>
+
+        <TabsContent value="relatorios" className="space-y-6">
+          <StaffGeneralReport />
         </TabsContent>
 
         <TabsContent value="escalas" className="space-y-6">

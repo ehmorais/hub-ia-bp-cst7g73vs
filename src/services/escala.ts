@@ -79,6 +79,33 @@ export const getStaffProfiles = () =>
     sort: 'name',
     expand: 'staff_role,default_sector,rules,staff_contracts',
   })
+
+/**
+ * Busca TODOS os colaboradores cadastrados paginando exaustivamente pela API do PocketBase,
+ * garantindo a recuperação completa mesmo em bases com centenas ou milhares de registros,
+ * ordenados alfabeticamente por nome.
+ */
+export const getAllStaffProfilesPaginated = async (batchSize = 200) => {
+  let page = 1
+  let allItems: any[] = []
+  let totalPages = 1
+
+  do {
+    const res = await pb.collection('staff_profiles').getList(page, batchSize, {
+      sort: 'name',
+      expand: 'staff_role,default_sector,rules,staff_contracts',
+    })
+    allItems = allItems.concat(res.items || [])
+    totalPages = res.totalPages || 1
+    page += 1
+  } while (page <= totalPages)
+
+  // Garante ordenação alfabética case-insensitive e acentos
+  return allItems.sort((a, b) =>
+    (a.name || '').localeCompare(b.name || '', 'pt-BR', { sensitivity: 'base' }),
+  )
+}
+
 export const createStaffProfile = (data: any) => pb.collection('staff_profiles').create(data)
 export const updateStaffProfile = (id: string, data: any) =>
   pb.collection('staff_profiles').update(id, data)
