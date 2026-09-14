@@ -27,8 +27,20 @@ import { AutoGenerate } from './escala/AutoGenerate'
 import { ScalePlanner } from './escala/ScalePlanner'
 
 import { cn } from '@/lib/utils'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
+import { useState, useEffect } from 'react'
+import { getHospitalSectors } from '@/services/escala'
+import { useRealtime } from '@/hooks/use-realtime'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { ChevronDown, FileSpreadsheet } from 'lucide-react'
 
 export interface EscalasManagementProps {
   departmentId?: string
@@ -36,6 +48,41 @@ export interface EscalasManagementProps {
 }
 
 export function EscalasManagement({ departmentId, projectId }: EscalasManagementProps) {
+  const navigate = useNavigate()
+  const [sectors, setSectors] = useState<any[]>([])
+  const [loadingSectors, setLoadingSectors] = useState(false)
+
+  const loadSectors = async () => {
+    setLoadingSectors(true)
+    try {
+      const data = await getHospitalSectors()
+      const sorted = (data || []).sort((a: any, b: any) =>
+        (a.name || '').localeCompare(b.name || '', 'pt-BR', { sensitivity: 'base' }),
+      )
+      setSectors(sorted)
+    } catch (e) {
+      console.error('Falha ao carregar setores:', e)
+    } finally {
+      setLoadingSectors(false)
+    }
+  }
+
+  useEffect(() => {
+    loadSectors()
+  }, [])
+
+  useRealtime('hospital_sectors', () => {
+    loadSectors()
+  })
+
+  const handleSelectSector = (sectorParam: string) => {
+    if (sectorParam === 'todos') {
+      navigate('/relatorios?setor=todos')
+    } else {
+      navigate(`/relatorios?setor=${encodeURIComponent(sectorParam)}`)
+    }
+  }
+
   const currentDay = new Date().getDate()
 
   const phases = [
@@ -75,12 +122,54 @@ export function EscalasManagement({ departmentId, projectId }: EscalasManagement
             Administração unificada de ciclos, setores, colaboradores e geração automática com IA.
           </p>
         </div>
-        <Button asChild variant="outline" className="shrink-0 bg-white shadow-sm border-slate-200">
-          <Link to="/schedules/drafts">
-            <FileText className="h-4 w-4 mr-2" />
-            Gerenciar Rascunhos
-          </Link>
-        </Button>
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                className="bg-white shadow-sm border-slate-200 gap-2 font-interactive"
+                aria-label="Relatório"
+              >
+                <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
+                Relatório
+                <ChevronDown className="h-4 w-4 text-muted-foreground opacity-70" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56 max-h-72 overflow-y-auto">
+              <DropdownMenuLabel className="text-xs text-muted-foreground font-semibold">
+                Filtrar por Setor
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="cursor-pointer font-medium"
+                onClick={() => handleSelectSector('todos')}
+              >
+                Todos
+              </DropdownMenuItem>
+              {sectors.map((s) => (
+                <DropdownMenuItem
+                  key={s.id}
+                  className="cursor-pointer text-slate-700"
+                  onClick={() => handleSelectSector(s.id)}
+                >
+                  {s.name}
+                </DropdownMenuItem>
+              ))}
+              {sectors.length === 0 && !loadingSectors && (
+                <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                  Nenhum setor encontrado
+                </div>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <Button asChild variant="outline" className="bg-white shadow-sm border-slate-200">
+            <Link to="/schedules/drafts">
+              <FileText className="h-4 w-4 mr-2" />
+              Gerenciar Rascunhos
+            </Link>
+          </Button>
+        </div>
       </div>
 
       <Card className="relative overflow-hidden shadow-sm">

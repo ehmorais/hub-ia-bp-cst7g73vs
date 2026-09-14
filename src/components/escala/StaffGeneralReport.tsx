@@ -1,4 +1,5 @@
-import { useEffect, useState, useMemo, useCallback } from 'react'
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import {
   Table,
@@ -59,6 +60,7 @@ function formatIsoDateOnly(dateStr?: string | null): string {
 
 export function StaffGeneralReport() {
   const { toast } = useToast()
+  const [searchParams] = useSearchParams()
 
   const [profiles, setProfiles] = useState<any[]>([])
   const [contracts, setContracts] = useState<any[]>([])
@@ -114,6 +116,47 @@ export function StaffGeneralReport() {
   useEffect(() => {
     loadData()
   }, [loadData])
+
+  // Pré-aplicar filtro de setor a partir da URL (?setor=... ou ?sector=...)
+  // Suporta tanto id do setor quanto nome exato, ou "todos" / "ALL"
+  const appliedQueryParamRef = useRef<string | null>(null)
+  useEffect(() => {
+    const rawSectorParam = searchParams.get('setor') || searchParams.get('sector')
+    if (!rawSectorParam) return
+    const paramVal = rawSectorParam.trim()
+
+    // Se mudou o query param ou ainda não aplicamos este valor
+    if (appliedQueryParamRef.current === paramVal && sectors.length > 0) return
+
+    if (paramVal.toLowerCase() === 'todos' || paramVal.toUpperCase() === 'ALL') {
+      setSelectedSector('ALL')
+      appliedQueryParamRef.current = paramVal
+      return
+    }
+
+    if (sectors.length > 0) {
+      // Tenta achar por ID
+      const matchedById = sectors.find((s) => s.id === paramVal)
+      if (matchedById) {
+        setSelectedSector(matchedById.name)
+        appliedQueryParamRef.current = paramVal
+        return
+      }
+
+      // Tenta achar por nome (case insensitive)
+      const matchedByName = sectors.find(
+        (s) => s.name?.trim().toLowerCase() === paramVal.toLowerCase(),
+      )
+      if (matchedByName) {
+        setSelectedSector(matchedByName.name)
+        appliedQueryParamRef.current = paramVal
+        return
+      }
+
+      // Se não encontrou setor correspondente, fallback seguro
+      appliedQueryParamRef.current = paramVal
+    }
+  }, [searchParams, sectors])
 
   // Realtime para manter sincronizado com edições no cadastro
   useRealtime('staff_profiles', loadData)

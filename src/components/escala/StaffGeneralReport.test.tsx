@@ -10,6 +10,10 @@ import pb from '@/lib/pocketbase/client'
 import * as XLSX from 'xlsx'
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import { render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
+import { StaffGeneralReport } from '@/components/escala/StaffGeneralReport'
+import * as escalaService from '@/services/escala'
 
 // Mock de jsPDF, jspdf-autotable e XLSX para testar chamadas e estruturas de exportação
 vi.mock('jspdf-autotable', () => ({
@@ -87,6 +91,88 @@ describe('StaffGeneralReport e Serviços de Relatório de Colaboradores', () => 
   })
 
   describe('2. Filtros e total do resultado filtrado', () => {
+    it('pré-aplica o filtro de setor via query param (?setor=...) ao carregar o componente', async () => {
+      const mockSectors = [
+        { id: 'sec-uti', name: 'UTI Geral' },
+        { id: 'sec-ps', name: 'Pronto Socorro' },
+      ]
+      const mockProfiles = [
+        {
+          id: 'p1',
+          name: 'Maria Helena Silva',
+          default_sector: 'sec-uti',
+          expand: { default_sector: { id: 'sec-uti', name: 'UTI Geral' } },
+        },
+        {
+          id: 'p2',
+          name: 'João Pedro Santos',
+          default_sector: 'sec-ps',
+          expand: { default_sector: { id: 'sec-ps', name: 'Pronto Socorro' } },
+        },
+      ]
+
+      vi.spyOn(escalaService, 'getAllStaffProfilesPaginated').mockResolvedValue(mockProfiles as any)
+      vi.spyOn(escalaService, 'getHospitalSectors').mockResolvedValue(mockSectors as any)
+      vi.spyOn(escalaService, 'getStaffContracts').mockResolvedValue([])
+      vi.spyOn(escalaService, 'getStaffRoles').mockResolvedValue([])
+      vi.spyOn(escalaService, 'getShiftTypes').mockResolvedValue([])
+      vi.spyOn(escalaService, 'getShiftRules').mockResolvedValue([])
+
+      render(
+        <MemoryRouter initialEntries={['/relatorios?setor=sec-uti']}>
+          <StaffGeneralReport />
+        </MemoryRouter>,
+      )
+
+      await waitFor(() => {
+        expect(screen.getByText('Maria Helena Silva')).toBeDefined()
+      })
+
+      // Como o filtro foi pré-aplicado para UTI Geral, João Pedro (Pronto Socorro) deve ter sido filtrado
+      expect(screen.queryByText('João Pedro Santos')).toBeNull()
+      expect(screen.getByText('1 colaborador')).toBeDefined()
+    })
+
+    it('quando o query param for ?setor=todos, exibe todos os colaboradores sem filtrar por setor', async () => {
+      const mockSectors = [
+        { id: 'sec-uti', name: 'UTI Geral' },
+        { id: 'sec-ps', name: 'Pronto Socorro' },
+      ]
+      const mockProfiles = [
+        {
+          id: 'p1',
+          name: 'Maria Helena Silva',
+          default_sector: 'sec-uti',
+          expand: { default_sector: { id: 'sec-uti', name: 'UTI Geral' } },
+        },
+        {
+          id: 'p2',
+          name: 'João Pedro Santos',
+          default_sector: 'sec-ps',
+          expand: { default_sector: { id: 'sec-ps', name: 'Pronto Socorro' } },
+        },
+      ]
+
+      vi.spyOn(escalaService, 'getAllStaffProfilesPaginated').mockResolvedValue(mockProfiles as any)
+      vi.spyOn(escalaService, 'getHospitalSectors').mockResolvedValue(mockSectors as any)
+      vi.spyOn(escalaService, 'getStaffContracts').mockResolvedValue([])
+      vi.spyOn(escalaService, 'getStaffRoles').mockResolvedValue([])
+      vi.spyOn(escalaService, 'getShiftTypes').mockResolvedValue([])
+      vi.spyOn(escalaService, 'getShiftRules').mockResolvedValue([])
+
+      render(
+        <MemoryRouter initialEntries={['/relatorios?setor=todos']}>
+          <StaffGeneralReport />
+        </MemoryRouter>,
+      )
+
+      await waitFor(() => {
+        expect(screen.getByText('Maria Helena Silva')).toBeDefined()
+        expect(screen.getByText('João Pedro Santos')).toBeDefined()
+      })
+
+      expect(screen.getByText('2 colaboradores')).toBeDefined()
+    })
     const sampleRows: CollaboratorReportRow[] = [
       {
         id: 'p1',

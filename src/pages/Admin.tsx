@@ -168,6 +168,12 @@ function AdminContent({ defaultTab }: { defaultTab?: string }) {
 
   const [activeTab, setActiveTab] = useState(defaultTab || 'performance')
 
+  useEffect(() => {
+    if (defaultTab && defaultTab !== activeTab) {
+      setActiveTab(defaultTab)
+    }
+  }, [defaultTab])
+
   const handleTabChange = (value: string) => {
     setActiveTab(value)
     const tabRoutes: Record<string, string> = {
