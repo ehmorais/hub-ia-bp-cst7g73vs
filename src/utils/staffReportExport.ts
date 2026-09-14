@@ -24,7 +24,7 @@ export interface CollaboratorReportRow {
 }
 
 /**
- * 16 colunas oficiais compartilhadas entre as exportações Excel e PDF.
+ * 14 colunas oficiais compartilhadas entre as exportações Excel e PDF.
  * A ordem e a grafia dos campos atendem estritamente à especificação.
  */
 export const COLLABORATOR_REPORT_COLUMNS = [
@@ -32,8 +32,6 @@ export const COLLABORATOR_REPORT_COLUMNS = [
   'Registro Profissional (COREN/CRM)',
   'Função/Cargo',
   'Setor Padrão',
-  'Tipo de Contrato',
-  'Limite Mensal (h)',
   'Regime/Turno',
   'Dias de Plantão (Paridade)',
   'Início no Ciclo',
@@ -47,7 +45,7 @@ export const COLLABORATOR_REPORT_COLUMNS = [
 ] as const
 
 /**
- * Mapeamento padronizado de uma linha de colaborador para os 16 valores correspondentes
+ * Mapeamento padronizado de uma linha de colaborador para os 14 valores correspondentes
  * às colunas COLLABORATOR_REPORT_COLUMNS. Garante coerência idêntica entre Excel e PDF.
  */
 export function mapCollaboratorRowToValues(r: CollaboratorReportRow): (string | number)[] {
@@ -56,8 +54,6 @@ export function mapCollaboratorRowToValues(r: CollaboratorReportRow): (string | 
     r.professionalId || '-',
     r.role || '-',
     r.sector || '-',
-    r.contractType || '-',
-    r.monthlyHourLimit || '-',
     r.shiftType || '-',
     r.shiftParity || '-',
     r.cycleStartDate || '-',
@@ -117,28 +113,26 @@ export function exportCollaboratorsToExcel(
 
   const worksheet = XLSX.utils.aoa_to_sheet(sheetData)
 
-  // Larguras ajustadas para evitar truncamento
+  // Larguras ajustadas para evitar truncamento (14 colunas)
   worksheet['!cols'] = [
-    { wch: 32 }, // Nome
-    { wch: 22 }, // Registro
-    { wch: 22 }, // Função
-    { wch: 22 }, // Setor
-    { wch: 16 }, // Contrato
-    { wch: 16 }, // Limite Horas
-    { wch: 24 }, // Regime/Turno
-    { wch: 22 }, // Paridade
-    { wch: 15 }, // Início Ciclo
+    { wch: 32 }, // Nome do Colaborador
+    { wch: 22 }, // Registro Profissional (COREN/CRM)
+    { wch: 24 }, // Função/Cargo
+    { wch: 24 }, // Setor Padrão
+    { wch: 26 }, // Regime/Turno
+    { wch: 22 }, // Dias de Plantão (Paridade)
+    { wch: 16 }, // Início no Ciclo
     { wch: 12 }, // Status
-    { wch: 16 }, // Férias Status
-    { wch: 26 }, // Período Férias
-    { wch: 13 }, // Qtd Regras
-    { wch: 30 }, // Regras Vinculadas
-    { wch: 16 }, // Data Cadastro
+    { wch: 16 }, // Férias (Status)
+    { wch: 26 }, // Período de Férias
+    { wch: 13 }, // Qtd. Regras
+    { wch: 32 }, // Regras Vinculadas
+    { wch: 16 }, // Data de Cadastro
     { wch: 16 }, // Última Atualização
   ]
 
-  // Linha 4 (índice 3) é o cabeçalho de dados -> Autofilter
-  const lastColLetter = 'P'
+  // Linha 4 (índice 3) é o cabeçalho de dados -> Autofilter (14 colunas = A até N)
+  const lastColLetter = 'N'
   const lastRowIndex = sheetData.length
   worksheet['!autofilter'] = { ref: `A4:${lastColLetter}${lastRowIndex}` }
 
@@ -248,22 +242,20 @@ export function exportCollaboratorsToPdf(
       fillColor: [248, 250, 252], // slate-50
     },
     columnStyles: {
-      0: { cellWidth: 26, fontStyle: 'bold' }, // Nome do Colaborador
-      1: { cellWidth: 18, halign: 'center' }, // Registro Profissional (COREN/CRM)
-      2: { cellWidth: 20 }, // Função/Cargo
-      3: { cellWidth: 19 }, // Setor Padrão
-      4: { cellWidth: 14 }, // Tipo de Contrato
-      5: { cellWidth: 13, halign: 'center' }, // Limite Mensal (h)
-      6: { cellWidth: 21 }, // Regime/Turno
-      7: { cellWidth: 18, halign: 'center' }, // Dias de Plantão (Paridade)
-      8: { cellWidth: 14, halign: 'center' }, // Início no Ciclo
-      9: { cellWidth: 12, halign: 'center' }, // Status
-      10: { cellWidth: 14, halign: 'center' }, // Férias (Status)
-      11: { cellWidth: 21, halign: 'center' }, // Período de Férias
-      12: { cellWidth: 11, halign: 'center' }, // Qtd. Regras
-      13: { cellWidth: 28 }, // Regras Vinculadas
-      14: { cellWidth: 14, halign: 'center' }, // Data de Cadastro
-      15: { cellWidth: 14, halign: 'center' }, // Última Atualização
+      0: { cellWidth: 32, fontStyle: 'bold' }, // Nome do Colaborador
+      1: { cellWidth: 22, halign: 'center' }, // Registro Profissional (COREN/CRM)
+      2: { cellWidth: 24 }, // Função/Cargo
+      3: { cellWidth: 22 }, // Setor Padrão
+      4: { cellWidth: 24 }, // Regime/Turno
+      5: { cellWidth: 20, halign: 'center' }, // Dias de Plantão (Paridade)
+      6: { cellWidth: 15, halign: 'center' }, // Início no Ciclo
+      7: { cellWidth: 13, halign: 'center' }, // Status
+      8: { cellWidth: 16, halign: 'center' }, // Férias (Status)
+      9: { cellWidth: 22, halign: 'center' }, // Período de Férias
+      10: { cellWidth: 13, halign: 'center' }, // Qtd. Regras
+      11: { cellWidth: 30 }, // Regras Vinculadas
+      12: { cellWidth: 15, halign: 'center' }, // Data de Cadastro
+      13: { cellWidth: 15, halign: 'center' }, // Última Atualização
     },
     margin: { top: 28, right: 10, bottom: 12, left: 10 },
     showHead: 'everyPage',

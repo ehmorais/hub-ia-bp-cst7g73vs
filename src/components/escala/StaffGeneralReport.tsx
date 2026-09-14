@@ -594,8 +594,6 @@ export function StaffGeneralReport() {
                     <TableHead className="min-w-[140px]">Registro (COREN/CRM)</TableHead>
                     <TableHead className="min-w-[140px]">Função / Cargo</TableHead>
                     <TableHead className="min-w-[140px]">Setor Padrão</TableHead>
-                    <TableHead className="min-w-[120px]">Contrato</TableHead>
-                    <TableHead className="min-w-[90px] text-center">Limite (h)</TableHead>
                     <TableHead className="min-w-[160px]">Regime / Turno</TableHead>
                     <TableHead className="min-w-[130px] text-center">Dias de Plantão</TableHead>
                     <TableHead className="min-w-[110px] text-center">Início Ciclo</TableHead>
@@ -607,7 +605,7 @@ export function StaffGeneralReport() {
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={12} className="text-center py-16 text-muted-foreground">
+                      <TableCell colSpan={10} className="text-center py-16 text-muted-foreground">
                         <div className="flex flex-col items-center justify-center gap-2">
                           <RotateCw className="h-6 w-6 animate-spin text-primary" />
                           <span>Carregando todos os colaboradores do cadastro...</span>
@@ -616,7 +614,7 @@ export function StaffGeneralReport() {
                     </TableRow>
                   ) : filteredRows.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={12} className="text-center py-16 text-muted-foreground">
+                      <TableCell colSpan={10} className="text-center py-16 text-muted-foreground">
                         <div className="flex flex-col items-center justify-center gap-2">
                           <Users className="h-8 w-8 text-slate-400" />
                           <span className="font-medium text-slate-600">
@@ -661,14 +659,6 @@ export function StaffGeneralReport() {
 
                         {/* Setor Padrão */}
                         <TableCell className="text-sm text-slate-700">{r.sector}</TableCell>
-
-                        {/* Contrato */}
-                        <TableCell className="text-sm text-slate-700">{r.contractType}</TableCell>
-
-                        {/* Limite Horas */}
-                        <TableCell className="text-center font-mono text-xs text-slate-700">
-                          {r.monthlyHourLimit !== '-' ? `${r.monthlyHourLimit}h` : '-'}
-                        </TableCell>
 
                         {/* Regime / Turno */}
                         <TableCell className="text-xs text-slate-700">{r.shiftType}</TableCell>

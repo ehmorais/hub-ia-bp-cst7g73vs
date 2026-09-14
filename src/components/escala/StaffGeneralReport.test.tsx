@@ -371,7 +371,7 @@ describe('StaffGeneralReport e Serviços de Relatório de Colaboradores', () => 
 
       // Verifica propriedades de autofilter, freeze, margins, printHeader e pageSetup
       expect(worksheet['!autofilter']).toBeDefined()
-      expect(worksheet['!autofilter'].ref).toBe('A4:P6')
+      expect(worksheet['!autofilter'].ref).toBe('A4:N6')
       expect(worksheet['!freeze']).toEqual({
         xSplit: 0,
         ySplit: 4,
@@ -404,9 +404,9 @@ describe('StaffGeneralReport e Serviços de Relatório de Colaboradores', () => 
       expect(saveSpy).toHaveBeenCalledWith('teste-colaboradores.pdf')
     })
 
-    it('exportCollaboratorsToPdf gera exatamente os 16 cabeçalhos exigidos na ordem oficial', () => {
+    it('exportCollaboratorsToPdf gera exatamente os 14 cabeçalhos exigidos na ordem oficial (sem Contrato e Limite)', () => {
       vi.spyOn(jsPDF.prototype, 'save').mockImplementation(() => undefined as any)
-      exportCollaboratorsToPdf(rowsToExport, 'teste-16-colunas.pdf')
+      exportCollaboratorsToPdf(rowsToExport, 'teste-14-colunas.pdf')
 
       expect(autoTable).toHaveBeenCalled()
       const lastCall = vi.mocked(autoTable).mock.calls[vi.mocked(autoTable).mock.calls.length - 1]
@@ -417,8 +417,6 @@ describe('StaffGeneralReport e Serviços de Relatório de Colaboradores', () => 
         'Registro Profissional (COREN/CRM)',
         'Função/Cargo',
         'Setor Padrão',
-        'Tipo de Contrato',
-        'Limite Mensal (h)',
         'Regime/Turno',
         'Dias de Plantão (Paridade)',
         'Início no Ciclo',
@@ -431,7 +429,10 @@ describe('StaffGeneralReport e Serviços de Relatório de Colaboradores', () => 
         'Última Atualização',
       ]
 
+      expect(COLLABORATOR_REPORT_COLUMNS).toHaveLength(14)
       expect(COLLABORATOR_REPORT_COLUMNS).toEqual(expectedHeaders)
+      expect(COLLABORATOR_REPORT_COLUMNS).not.toContain('Tipo de Contrato')
+      expect(COLLABORATOR_REPORT_COLUMNS).not.toContain('Limite Mensal (h)')
       expect(options.head).toEqual([expectedHeaders])
       expect(options.rowPageBreak).toBe('avoid')
     })
@@ -472,6 +473,63 @@ describe('StaffGeneralReport e Serviços de Relatório de Colaboradores', () => 
       expect(emptyRow.cycleStartDate).toBe('-')
       expect(emptyRow.vacationPeriod).toBe('-')
       expect(emptyRow.rulesList).toBe('-')
+    })
+  })
+
+  describe('4. Interface e coerência das colunas na tela (StaffGeneralReport)', () => {
+    it('renderiza os cabeçalhos esperados na tela, sem as colunas CONTRATO e LIMITE (H)', async () => {
+      const mockProfiles = [
+        {
+          id: 'p1',
+          name: 'Maria Helena Silva',
+          default_sector: 'sec-uti',
+          professional_id: '123456-SP',
+          shift_parity: 'even',
+          expand: {
+            default_sector: { id: 'sec-uti', name: 'UTI Geral' },
+            staff_role: { id: 'r1', name: 'Enfermeiro(a)' },
+          },
+        },
+      ]
+
+      vi.spyOn(escalaService, 'getAllStaffProfilesPaginated').mockResolvedValue(mockProfiles as any)
+      vi.spyOn(escalaService, 'getHospitalSectors').mockResolvedValue([
+        { id: 'sec-uti', name: 'UTI Geral' },
+      ] as any)
+      vi.spyOn(escalaService, 'getStaffContracts').mockResolvedValue([])
+      vi.spyOn(escalaService, 'getStaffRoles').mockResolvedValue([])
+      vi.spyOn(escalaService, 'getShiftTypes').mockResolvedValue([])
+      vi.spyOn(escalaService, 'getShiftRules').mockResolvedValue([])
+
+      render(
+        <MemoryRouter initialEntries={['/relatorios']}>
+          <StaffGeneralReport />
+        </MemoryRouter>,
+      )
+
+      await waitFor(() => {
+        expect(screen.getByText('Maria Helena Silva')).toBeDefined()
+      })
+
+      // Cabeçalhos que DEVEM estar presentes
+      expect(screen.getByRole('columnheader', { name: /Colaborador/i })).toBeDefined()
+      expect(screen.getByRole('columnheader', { name: /Registro/i })).toBeDefined()
+      expect(screen.getByRole('columnheader', { name: /Função \/ Cargo/i })).toBeDefined()
+      expect(screen.getByRole('columnheader', { name: /Setor Padrão/i })).toBeDefined()
+      expect(screen.getByRole('columnheader', { name: /Regime \/ Turno/i })).toBeDefined()
+      expect(screen.getByRole('columnheader', { name: /Dias de Plantão/i })).toBeDefined()
+      expect(screen.getByRole('columnheader', { name: /Início Ciclo/i })).toBeDefined()
+      expect(screen.getByRole('columnheader', { name: /Status/i })).toBeDefined()
+      expect(screen.getByRole('columnheader', { name: /Férias/i })).toBeDefined()
+      expect(screen.getByRole('columnheader', { name: /Regras/i })).toBeDefined()
+
+      // Cabeçalhos que NÃO devem existir na tabela
+      const allHeaders = screen.getAllByRole('columnheader')
+      const headerTexts = allHeaders.map((h) => h.textContent?.trim().toUpperCase())
+      expect(headerTexts).not.toContain('CONTRATO')
+      expect(headerTexts).not.toContain('LIMITE (H)')
+      expect(headerTexts).not.toContain('LIMITE')
+      expect(allHeaders).toHaveLength(10) // 10 colunas visíveis na tabela resumida da UI
     })
   })
 })
