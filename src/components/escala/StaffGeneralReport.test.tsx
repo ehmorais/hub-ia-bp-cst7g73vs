@@ -268,7 +268,24 @@ describe('StaffGeneralReport e Serviços de Relatório de Colaboradores', () => 
       },
     ]
 
-    it('exportCollaboratorsToExcel gera planilha .xlsx com aba Colaboradores, metadados e total', () => {
+    it('exportCollaboratorsToExcel gera planilha .xlsx com aba Colaboradores, metadados e total', async () => {
+      const actualXlsx = await vi.importActual<typeof import('xlsx')>('xlsx')
+      const wb = actualXlsx.utils.book_new()
+      const ws = actualXlsx.utils.aoa_to_sheet([['test']])
+      ws['!pageSetup'] = { orientation: 'landscape', paperSize: 9, fitToWidth: 1, fitToHeight: 0 }
+      ws['!margins'] = {
+        left: 0.25,
+        right: 0.25,
+        top: 0.75,
+        bottom: 0.75,
+        header: 0.3,
+        footer: 0.3,
+      }
+      ws['!printHeader'] = [4, 4]
+      actualXlsx.utils.book_append_sheet(wb, ws, 'Test')
+      const buffer = actualXlsx.write(wb, { type: 'array', bookType: 'xlsx' })
+      expect(buffer.byteLength).toBe(0) // intentionally fail so vitest prints the diff or error
+
       const filename = exportCollaboratorsToExcel(rowsToExport, 'teste-colaboradores.xlsx')
       expect(filename).toBe('teste-colaboradores.xlsx')
       expect(XLSX.writeFile).toHaveBeenCalledTimes(1)

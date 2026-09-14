@@ -15,7 +15,7 @@ async function decompressDeflateRaw(data: Uint8Array): Promise<Uint8Array> {
   return new Uint8Array(result)
 }
 
-async function parseZip(data: ArrayBuffer): Promise<Map<string, Uint8Array>> {
+export async function parseZip(data: ArrayBuffer): Promise<Map<string, Uint8Array>> {
   const files = new Map<string, Uint8Array>()
   const view = new DataView(data)
   const bytes = new Uint8Array(data)
