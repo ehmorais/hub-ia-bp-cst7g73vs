@@ -1,5 +1,4 @@
 import '@/lib/safe-styles'
-import '@/utils/staffReportExport'
 import { BrowserRouter, Routes, Route, Outlet, useLocation, Navigate } from 'react-router-dom'
 import { Toaster } from '@/components/ui/toaster'
 import { Toaster as Sonner } from '@/components/ui/sonner'

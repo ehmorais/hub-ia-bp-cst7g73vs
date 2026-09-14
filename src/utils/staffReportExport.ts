@@ -1,30 +1,7 @@
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
-import { parseZip } from '@/lib/xlsx-parser'
 import { BPSCS_LOGO_BASE64 } from './scalePdfExport'
-
-// Temporary diagnostic run
-{
-  const wb = XLSX.utils.book_new()
-  const ws = XLSX.utils.aoa_to_sheet([['A', 'B'], ['1', '2']])
-  ws['!pageSetup'] = { orientation: 'landscape', paperSize: 9, fitToWidth: 1, fitToHeight: 0 }
-  ws['!margins'] = { left: 0.25, right: 0.25, top: 0.75, bottom: 0.75, header: 0.3, footer: 0.3 }
-  ws['!freeze'] = { xSplit: 0, ySplit: 4, topLeftCell: 'A5', activePane: 'bottomLeft', state: 'frozen' }
-  ws['!printHeader'] = [4, 4]
-  XLSX.utils.book_append_sheet(wb, ws, 'Test')
-  const u8 = XLSX.write(wb, { type: 'array', bookType: 'xlsx' })
-  parseZip(u8).then(files => {
-    for (const [name, data] of files.entries()) {
-      if (name.includes('sheet') || name.includes('workbook')) {
-        const text = new TextDecoder().decode(data)
-        throw new Error(`DEBUG_FILE ${name}: ${text}`)
-      }
-    }
-  }).catch(e => {
-    throw new Error(`DIAGNOSTIC: ${e.message}`)
-  })
-}
 
 export interface CollaboratorReportRow {
   id: string
@@ -160,10 +137,22 @@ export function exportCollaboratorsToExcel(
     state: 'frozen',
   }
 
-  // Configurações de impressão: Landscape e repetição do cabeçalho na linha 4
+  // Configurações de margens de página (formato estreito/narrow adequado para planilhas horizontais)
+  worksheet['!margins'] = {
+    left: 0.25,
+    right: 0.25,
+    top: 0.75,
+    bottom: 0.75,
+    header: 0.3,
+    footer: 0.3,
+  }
+
+  // Configurações de impressão: Landscape A4, fitToWidth: 1, fitToHeight: 0
   worksheet['!pageSetup'] = {
     orientation: 'landscape',
     paperSize: 9, // A4
+    fitToWidth: 1,
+    fitToHeight: 0,
   }
   // Repete linha 4 (cabeçalho) em cada página na impressão
   worksheet['!printHeader'] = [4, 4]

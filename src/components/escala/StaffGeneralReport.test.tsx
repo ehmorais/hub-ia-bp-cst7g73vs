@@ -268,24 +268,7 @@ describe('StaffGeneralReport e Serviços de Relatório de Colaboradores', () => 
       },
     ]
 
-    it('exportCollaboratorsToExcel gera planilha .xlsx com aba Colaboradores, metadados e total', async () => {
-      const actualXlsx = await vi.importActual<typeof import('xlsx')>('xlsx')
-      const wb = actualXlsx.utils.book_new()
-      const ws = actualXlsx.utils.aoa_to_sheet([['test']])
-      ws['!pageSetup'] = { orientation: 'landscape', paperSize: 9, fitToWidth: 1, fitToHeight: 0 }
-      ws['!margins'] = {
-        left: 0.25,
-        right: 0.25,
-        top: 0.75,
-        bottom: 0.75,
-        header: 0.3,
-        footer: 0.3,
-      }
-      ws['!printHeader'] = [4, 4]
-      actualXlsx.utils.book_append_sheet(wb, ws, 'Test')
-      const buffer = actualXlsx.write(wb, { type: 'array', bookType: 'xlsx' })
-      expect(buffer.byteLength).toBe(0) // intentionally fail so vitest prints the diff or error
-
+    it('exportCollaboratorsToExcel gera planilha .xlsx com aba Colaboradores, metadados e total', () => {
       const filename = exportCollaboratorsToExcel(rowsToExport, 'teste-colaboradores.xlsx')
       expect(filename).toBe('teste-colaboradores.xlsx')
       expect(XLSX.writeFile).toHaveBeenCalledTimes(1)
@@ -294,12 +277,29 @@ describe('StaffGeneralReport e Serviços de Relatório de Colaboradores', () => 
       expect(workbookArg.SheetNames).toContain('Colaboradores')
       const worksheet = workbookArg.Sheets['Colaboradores']
 
-      // Verifica propriedades de autofilter, freeze e pageSetup
+      // Verifica propriedades de autofilter, freeze, margins, printHeader e pageSetup
       expect(worksheet['!autofilter']).toBeDefined()
-      expect(worksheet['!freeze']).toBeDefined()
+      expect(worksheet['!autofilter'].ref).toBe('A4:P6')
+      expect(worksheet['!freeze']).toEqual({
+        xSplit: 0,
+        ySplit: 4,
+        topLeftCell: 'A5',
+        activePane: 'bottomLeft',
+        state: 'frozen',
+      })
+      expect(worksheet['!margins']).toEqual({
+        left: 0.25,
+        right: 0.25,
+        top: 0.75,
+        bottom: 0.75,
+        header: 0.3,
+        footer: 0.3,
+      })
       expect(worksheet['!pageSetup']).toEqual({
         orientation: 'landscape',
         paperSize: 9,
+        fitToWidth: 1,
+        fitToHeight: 0,
       })
       expect(worksheet['!printHeader']).toEqual([4, 4])
     })
