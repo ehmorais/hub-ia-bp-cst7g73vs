@@ -3,13 +3,19 @@ import { getAllStaffProfilesPaginated } from '@/services/escala'
 import {
   exportCollaboratorsToExcel,
   exportCollaboratorsToPdf,
+  COLLABORATOR_REPORT_COLUMNS,
   type CollaboratorReportRow,
 } from '@/utils/staffReportExport'
 import pb from '@/lib/pocketbase/client'
 import * as XLSX from 'xlsx'
 import { jsPDF } from 'jspdf'
+import autoTable from 'jspdf-autotable'
 
-// Mock de jsPDF e XLSX para testar chamadas e estruturas de exportação
+// Mock de jsPDF, jspdf-autotable e XLSX para testar chamadas e estruturas de exportação
+vi.mock('jspdf-autotable', () => ({
+  default: vi.fn(),
+}))
+
 vi.mock('xlsx', async (importOriginal) => {
   const actual = await importOriginal<typeof import('xlsx')>()
   return {
@@ -310,6 +316,62 @@ describe('StaffGeneralReport e Serviços de Relatório de Colaboradores', () => 
 
       expect(filename).toBe('teste-colaboradores.pdf')
       expect(saveSpy).toHaveBeenCalledWith('teste-colaboradores.pdf')
+    })
+
+    it('exportCollaboratorsToPdf gera exatamente os 16 cabeçalhos exigidos na ordem oficial', () => {
+      vi.spyOn(jsPDF.prototype, 'save').mockImplementation(() => undefined as any)
+      exportCollaboratorsToPdf(rowsToExport, 'teste-16-colunas.pdf')
+
+      expect(autoTable).toHaveBeenCalled()
+      const lastCall = vi.mocked(autoTable).mock.calls[vi.mocked(autoTable).mock.calls.length - 1]
+      const options = lastCall[1]
+
+      const expectedHeaders = [
+        'Nome do Colaborador',
+        'Registro Profissional (COREN/CRM)',
+        'Função/Cargo',
+        'Setor Padrão',
+        'Tipo de Contrato',
+        'Limite Mensal (h)',
+        'Regime/Turno',
+        'Dias de Plantão (Paridade)',
+        'Início no Ciclo',
+        'Status',
+        'Férias (Status)',
+        'Período de Férias',
+        'Qtd. Regras',
+        'Regras Vinculadas',
+        'Data de Cadastro',
+        'Última Atualização',
+      ]
+
+      expect(COLLABORATOR_REPORT_COLUMNS).toEqual(expectedHeaders)
+      expect(options.head).toEqual([expectedHeaders])
+      expect(options.rowPageBreak).toBe('avoid')
+    })
+
+    it('exportCollaboratorsToPdf inclui o primeiro e o último colaboradores da lista filtrada no documento', () => {
+      vi.spyOn(jsPDF.prototype, 'save').mockImplementation(() => undefined as any)
+      exportCollaboratorsToPdf(rowsToExport, 'teste-primeiro-ultimo.pdf')
+
+      expect(autoTable).toHaveBeenCalled()
+      const lastCall = vi.mocked(autoTable).mock.calls[vi.mocked(autoTable).mock.calls.length - 1]
+      const options = lastCall[1]
+      const body = options.body as (string | number)[][]
+
+      expect(body).toHaveLength(rowsToExport.length)
+
+      // Primeiro colaborador (índice 0)
+      const firstRow = body[0]
+      expect(firstRow[0]).toBe('Maria Helena Silva') // Nome
+      expect(firstRow[1]).toBe('123456-SP') // Registro
+      expect(firstRow[2]).toBe('Enfermeiro(a) Pleno') // Cargo
+
+      // Último colaborador (índice final)
+      const lastRow = body[body.length - 1]
+      expect(lastRow[0]).toBe('Carlos Oliveira') // Nome
+      expect(lastRow[1]).toBe('-') // Registro vazio -> '-'
+      expect(lastRow[2]).toBe('-') // Cargo vazio -> '-'
     })
 
     it('campos vazios ou ausentes são exibidos estritamente como "-"', () => {

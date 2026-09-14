@@ -23,6 +23,54 @@ export interface CollaboratorReportRow {
   updatedAt: string
 }
 
+/**
+ * 16 colunas oficiais compartilhadas entre as exportações Excel e PDF.
+ * A ordem e a grafia dos campos atendem estritamente à especificação.
+ */
+export const COLLABORATOR_REPORT_COLUMNS = [
+  'Nome do Colaborador',
+  'Registro Profissional (COREN/CRM)',
+  'Função/Cargo',
+  'Setor Padrão',
+  'Tipo de Contrato',
+  'Limite Mensal (h)',
+  'Regime/Turno',
+  'Dias de Plantão (Paridade)',
+  'Início no Ciclo',
+  'Status',
+  'Férias (Status)',
+  'Período de Férias',
+  'Qtd. Regras',
+  'Regras Vinculadas',
+  'Data de Cadastro',
+  'Última Atualização',
+] as const
+
+/**
+ * Mapeamento padronizado de uma linha de colaborador para os 16 valores correspondentes
+ * às colunas COLLABORATOR_REPORT_COLUMNS. Garante coerência idêntica entre Excel e PDF.
+ */
+export function mapCollaboratorRowToValues(r: CollaboratorReportRow): (string | number)[] {
+  return [
+    r.name || '-',
+    r.professionalId || '-',
+    r.role || '-',
+    r.sector || '-',
+    r.contractType || '-',
+    r.monthlyHourLimit || '-',
+    r.shiftType || '-',
+    r.shiftParity || '-',
+    r.cycleStartDate || '-',
+    r.status || '-',
+    r.vacationStatus || '-',
+    r.vacationPeriod || '-',
+    r.rulesCount ?? 0,
+    r.rulesList || '-',
+    r.createdAt || '-',
+    r.updatedAt || '-',
+  ]
+}
+
 function getFormattedDateStamp(): { dateStr: string; timestampStr: string } {
   const now = new Date()
   const y = now.getFullYear()
@@ -60,45 +108,11 @@ export function exportCollaboratorsToExcel(
     ['RELATÓRIO GERAL DE COLABORADORES - BENEFICÊNCIA PORTUGUESA'],
     [`Gerado em: ${timestampStr}`, '', '', '', `Total de Colaboradores: ${total}`],
     [], // linha vazia de respiro
-    [
-      'Nome do Colaborador',
-      'Registro Profissional (COREN/CRM)',
-      'Função / Cargo',
-      'Setor Padrão',
-      'Tipo de Contrato',
-      'Limite Mensal (h)',
-      'Regime / Turno',
-      'Dias de Plantão (Paridade)',
-      'Início no Ciclo',
-      'Status',
-      'Férias (Status)',
-      'Período de Férias',
-      'Qtd. Regras',
-      'Regras Vinculadas',
-      'Data de Cadastro',
-      'Última Atualização',
-    ],
+    [...COLLABORATOR_REPORT_COLUMNS],
   ]
 
   rows.forEach((r) => {
-    sheetData.push([
-      r.name || '-',
-      r.professionalId || '-',
-      r.role || '-',
-      r.sector || '-',
-      r.contractType || '-',
-      r.monthlyHourLimit || '-',
-      r.shiftType || '-',
-      r.shiftParity || '-',
-      r.cycleStartDate || '-',
-      r.status || '-',
-      r.vacationStatus || '-',
-      r.vacationPeriod || '-',
-      r.rulesCount ?? 0,
-      r.rulesList || '-',
-      r.createdAt || '-',
-      r.updatedAt || '-',
-    ])
+    sheetData.push(mapCollaboratorRowToValues(r))
   })
 
   const worksheet = XLSX.utils.aoa_to_sheet(sheetData)
@@ -202,78 +216,56 @@ export function exportCollaboratorsToPdf(
     author: 'Gestão de Escalas BP',
   })
 
-  const tableHead = [
-    [
-      'Colaborador',
-      'Registro',
-      'Função / Cargo',
-      'Setor',
-      'Contrato',
-      'Limite',
-      'Regime / Turno',
-      'Plantão (Paridade)',
-      'Início Ciclo',
-      'Status',
-      'Férias',
-      'Regras',
-    ],
-  ]
+  const tableHead = [[...COLLABORATOR_REPORT_COLUMNS]]
 
-  const tableBody = rows.map((r) => [
-    r.name || '-',
-    r.professionalId || '-',
-    r.role || '-',
-    r.sector || '-',
-    r.contractType || '-',
-    r.monthlyHourLimit ? `${r.monthlyHourLimit}h` : '-',
-    r.shiftType || '-',
-    r.shiftParity || '-',
-    r.cycleStartDate || '-',
-    r.status || '-',
-    r.vacationPeriod !== '-'
-      ? `${r.vacationStatus}\n(${r.vacationPeriod})`
-      : r.vacationStatus || '-',
-    r.rulesCount > 0 ? `${r.rulesCount} regra(s)` : '-',
-  ])
+  const tableBody = rows.map((r) => mapCollaboratorRowToValues(r))
 
   autoTable(doc, {
     startY: 28,
     head: tableHead,
     body: tableBody,
     theme: 'grid',
+    rowPageBreak: 'avoid',
     styles: {
       font: 'helvetica',
-      fontSize: 7,
-      cellPadding: 1.5,
+      fontSize: 5.5,
+      cellPadding: 1,
       overflow: 'linebreak',
       valign: 'middle',
       lineColor: [226, 232, 240], // slate-200
-      lineWidth: 0.2,
+      lineWidth: 0.15,
     },
     headStyles: {
       fillColor: [6, 64, 43], // #06402B verde institucional BPSCS
       textColor: [255, 255, 255],
       fontStyle: 'bold',
+      fontSize: 5.5,
+      cellPadding: 1.2,
       halign: 'center',
+      valign: 'middle',
     },
     alternateRowStyles: {
       fillColor: [248, 250, 252], // slate-50
     },
     columnStyles: {
-      0: { cellWidth: 38, fontStyle: 'bold' }, // Colaborador
-      1: { cellWidth: 20 }, // Registro
-      2: { cellWidth: 24 }, // Cargo
-      3: { cellWidth: 24 }, // Setor
-      4: { cellWidth: 18 }, // Contrato
-      5: { cellWidth: 14, halign: 'center' }, // Limite
-      6: { cellWidth: 28 }, // Turno
-      7: { cellWidth: 24, halign: 'center' }, // Paridade
-      8: { cellWidth: 18, halign: 'center' }, // Início Ciclo
-      9: { cellWidth: 15, halign: 'center' }, // Status
-      10: { cellWidth: 32 }, // Férias
-      11: { cellWidth: 18, halign: 'center' }, // Regras
+      0: { cellWidth: 26, fontStyle: 'bold' }, // Nome do Colaborador
+      1: { cellWidth: 18, halign: 'center' }, // Registro Profissional (COREN/CRM)
+      2: { cellWidth: 20 }, // Função/Cargo
+      3: { cellWidth: 19 }, // Setor Padrão
+      4: { cellWidth: 14 }, // Tipo de Contrato
+      5: { cellWidth: 13, halign: 'center' }, // Limite Mensal (h)
+      6: { cellWidth: 21 }, // Regime/Turno
+      7: { cellWidth: 18, halign: 'center' }, // Dias de Plantão (Paridade)
+      8: { cellWidth: 14, halign: 'center' }, // Início no Ciclo
+      9: { cellWidth: 12, halign: 'center' }, // Status
+      10: { cellWidth: 14, halign: 'center' }, // Férias (Status)
+      11: { cellWidth: 21, halign: 'center' }, // Período de Férias
+      12: { cellWidth: 11, halign: 'center' }, // Qtd. Regras
+      13: { cellWidth: 28 }, // Regras Vinculadas
+      14: { cellWidth: 14, halign: 'center' }, // Data de Cadastro
+      15: { cellWidth: 14, halign: 'center' }, // Última Atualização
     },
-    margin: { top: 28, right: 10, bottom: 14, left: 10 },
+    margin: { top: 28, right: 10, bottom: 12, left: 10 },
     showHead: 'everyPage',
     didDrawPage: () => {
       // Logotipo no cabeçalho superior direito (proporção 4:3 ~ 24x18mm, padrão v0.0.282)
