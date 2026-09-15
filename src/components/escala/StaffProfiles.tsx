@@ -49,6 +49,7 @@ import { useToast } from '@/components/ui/use-toast'
 import {
   createStaffProfile,
   deleteStaffProfile,
+  getAllStaffProfilesPaginated,
   getHospitalSectors,
   getShiftCycles,
   getShiftRules,
@@ -103,6 +104,7 @@ const CONTRACT_TYPES = ['CLT 180h', 'PJ', 'Autônomo'] as const
 
 export function StaffProfiles({ departmentId }: { departmentId?: string; projectId?: string }) {
   const [profiles, setProfiles] = useState<any[]>([])
+  const [totalCount, setTotalCount] = useState<number | null>(null)
   const [roles, setRoles] = useState<any[]>([])
   const [sectors, setSectors] = useState<any[]>([])
   const [rules, setRules] = useState<any[]>([])
@@ -125,20 +127,37 @@ export function StaffProfiles({ departmentId }: { departmentId?: string; project
 
   const loadData = async () => {
     try {
-      const [profileList, roleList, sectorList, ruleList, contractList, shiftTypeList, cycleList] =
-        await Promise.all([
-          getStaffProfiles().catch(() => []),
-          getStaffRoles().catch(() => []),
-          // Colaboradores podem ser realocados entre setores de qualquer
-          // departamento; o combo deve usar o cadastro mestre completo.
-          getHospitalSectors().catch(() => []),
-          departmentId
-            ? getShiftRules(departmentId).catch(() => [])
-            : getShiftRules().catch(() => []),
-          getStaffContracts().catch(() => []),
-          getShiftTypes().catch(() => []),
-          getShiftCycles().catch(() => []),
-        ])
+      const [
+        allProfilesPaginated,
+        profileList,
+        roleList,
+        sectorList,
+        ruleList,
+        contractList,
+        shiftTypeList,
+        cycleList,
+      ] = await Promise.all([
+        getAllStaffProfilesPaginated().catch(() => []),
+        getStaffProfiles().catch(() => []),
+        getStaffRoles().catch(() => []),
+        // Colaboradores podem ser realocados entre setores de qualquer
+        // departamento; o combo deve usar o cadastro mestre completo.
+        getHospitalSectors().catch(() => []),
+        departmentId
+          ? getShiftRules(departmentId).catch(() => [])
+          : getShiftRules().catch(() => []),
+        getStaffContracts().catch(() => []),
+        getShiftTypes().catch(() => []),
+        getShiftCycles().catch(() => []),
+      ])
+      // O total absoluto de colaboradores no banco, cobrindo todas as páginas da API
+      const absoluteTotal =
+        Array.isArray(allProfilesPaginated) && allProfilesPaginated.length > 0
+          ? allProfilesPaginated.length
+          : Array.isArray(profileList)
+            ? profileList.length
+            : 0
+      setTotalCount(absoluteTotal)
       setProfiles(profileList)
       setRoles(roleList)
       setSectors(sectorList)
@@ -473,10 +492,21 @@ export function StaffProfiles({ departmentId }: { departmentId?: string; project
       <Card className="border-slate-200 bg-white">
         <CardHeader className="pb-3 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
           <div>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Users className="h-5 w-5" />
-              Cadastro de Colaboradores
-            </CardTitle>
+            <div className="flex flex-wrap items-center gap-2">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Users className="h-5 w-5" />
+                Cadastro de Colaboradores
+              </CardTitle>
+              {totalCount !== null && (
+                <Badge
+                  variant="secondary"
+                  data-testid="collaborators-total-badge"
+                  className="font-medium text-slate-700 bg-slate-100 hover:bg-slate-100 border border-slate-200 text-xs px-2.5 py-0.5 rounded-full shrink-0"
+                >
+                  {totalCount} Colaboradores
+                </Badge>
+              )}
+            </div>
             <p className="text-sm text-muted-foreground mt-1">
               Cadastro operacional integrado a contratos, folgas e geração de escalas. Estes
               colaboradores não são usuários do portal.

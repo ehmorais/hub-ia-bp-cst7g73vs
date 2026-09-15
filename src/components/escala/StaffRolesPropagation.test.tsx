@@ -19,6 +19,7 @@ vi.mock('@/hooks/use-realtime', () => ({
 
 vi.mock('@/services/escala', () => ({
   getStaffProfiles: vi.fn(),
+  getAllStaffProfilesPaginated: vi.fn(),
   getStaffRoles: vi.fn(),
   getHospitalSectors: vi.fn(),
   getShiftRules: vi.fn(),
