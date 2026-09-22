@@ -55,6 +55,7 @@ import { useRealtime } from '@/hooks/use-realtime'
 import { TimeoffRequestDialog } from './TimeoffRequestDialog'
 import { useAuth } from '@/hooks/use-auth'
 import { Badge } from '@/components/ui/badge'
+import { canonicalLabel } from '@/lib/parity-labels'
 
 export function DepartmentStaffList({ departmentId }: { departmentId?: string }) {
   const [users, setUsers] = useState<any[]>([])
@@ -450,7 +451,7 @@ export function DepartmentStaffList({ departmentId }: { departmentId?: string })
                               variant="outline"
                               className="text-[10px] bg-blue-50 text-blue-600 border-blue-200"
                             >
-                              Pares
+                              {canonicalLabel('even')}
                             </Badge>
                           )}
                           {u.expand.staff_profile.shift_parity === 'odd' && (
@@ -458,7 +459,7 @@ export function DepartmentStaffList({ departmentId }: { departmentId?: string })
                               variant="outline"
                               className="text-[10px] bg-purple-50 text-purple-600 border-purple-200"
                             >
-                              Ímpares
+                              {canonicalLabel('odd')}
                             </Badge>
                           )}
                         </div>

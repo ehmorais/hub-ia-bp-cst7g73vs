@@ -2,6 +2,7 @@ import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
 import { BPSCS_LOGO_BASE64 } from './scalePdfExport'
+import { canonicalLabel } from '@/lib/parity-labels'
 
 export interface CollaboratorReportRow {
   id: string
@@ -12,7 +13,7 @@ export interface CollaboratorReportRow {
   contractType: string
   monthlyHourLimit: string
   shiftType: string
-  shiftParity: string // 'Dias pares' | 'Dias ímpares' | '-'
+  shiftParity: string // 'Equipe 1' | 'Equipe 2' | '-'
   cycleStartDate: string
   status: string // 'Ativo' | 'Inativo'
   vacationStatus: string // 'Em férias' | 'Sem férias' | 'Programadas'
@@ -33,7 +34,7 @@ export const COLLABORATOR_REPORT_COLUMNS = [
   'Função/Cargo',
   'Setor Padrão',
   'Regime/Turno',
-  'Dias de Plantão (Paridade)',
+  'Equipe de Plantão',
   'Início no Ciclo',
   'Status',
   'Férias (Status)',
@@ -49,13 +50,15 @@ export const COLLABORATOR_REPORT_COLUMNS = [
  * às colunas COLLABORATOR_REPORT_COLUMNS. Garante coerência idêntica entre Excel e PDF.
  */
 export function mapCollaboratorRowToValues(r: CollaboratorReportRow): (string | number)[] {
+  const formattedParity =
+    canonicalLabel(r.shiftParity) === '-' ? r.shiftParity || '-' : canonicalLabel(r.shiftParity)
   return [
     r.name || '-',
     r.professionalId || '-',
     r.role || '-',
     r.sector || '-',
     r.shiftType || '-',
-    r.shiftParity || '-',
+    formattedParity,
     r.cycleStartDate || '-',
     r.status || '-',
     r.vacationStatus || '-',
@@ -120,7 +123,7 @@ export function exportCollaboratorsToExcel(
     { wch: 24 }, // Função/Cargo
     { wch: 24 }, // Setor Padrão
     { wch: 26 }, // Regime/Turno
-    { wch: 22 }, // Dias de Plantão (Paridade)
+    { wch: 22 }, // Equipe de Plantão
     { wch: 16 }, // Início no Ciclo
     { wch: 12 }, // Status
     { wch: 16 }, // Férias (Status)
@@ -247,7 +250,7 @@ export function exportCollaboratorsToPdf(
       2: { cellWidth: 24 }, // Função/Cargo
       3: { cellWidth: 22 }, // Setor Padrão
       4: { cellWidth: 24 }, // Regime/Turno
-      5: { cellWidth: 20, halign: 'center' }, // Dias de Plantão (Paridade)
+      5: { cellWidth: 20, halign: 'center' }, // Equipe de Plantão
       6: { cellWidth: 15, halign: 'center' }, // Início no Ciclo
       7: { cellWidth: 13, halign: 'center' }, // Status
       8: { cellWidth: 16, halign: 'center' }, // Férias (Status)

@@ -1571,8 +1571,8 @@ function AutoGenerateInner({
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">Todos</SelectItem>
-                      <SelectItem value="even">Dias Pares</SelectItem>
-                      <SelectItem value="odd">Dias Ímpares</SelectItem>
+                      <SelectItem value="even">Equipe 1</SelectItem>
+                      <SelectItem value="odd">Equipe 2</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

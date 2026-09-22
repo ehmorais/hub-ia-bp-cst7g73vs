@@ -47,6 +47,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { useToast } from '@/components/ui/use-toast'
 import { Badge } from '@/components/ui/badge'
+import { canonicalLabel } from '@/lib/parity-labels'
 import { AlertCircle } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
@@ -299,14 +300,14 @@ export function StaffContracts({ departmentId }: { departmentId?: string; projec
                         variant="outline"
                         className="w-fit bg-blue-50 text-blue-700 border-blue-200"
                       >
-                        Dias pares
+                        {canonicalLabel('even')}
                       </Badge>
                     ) : c.expand?.staff_profile?.shift_parity === 'odd' ? (
                       <Badge
                         variant="outline"
                         className="w-fit bg-purple-50 text-purple-700 border-purple-200"
                       >
-                        Dias ímpares
+                        {canonicalLabel('odd')}
                       </Badge>
                     ) : (
                       <span className="text-slate-400">Paridade não definida</span>

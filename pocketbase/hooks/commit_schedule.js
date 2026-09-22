@@ -198,18 +198,17 @@ routerAdd(
         )
       }
 
-      // Parity check: dias ímpares não recebem colaborador restrito a pares e vice-versa
+      // Parity check: dias ímpares não recebem colaborador restrito a pares e vice-versa (com inversão determinística)
       if (profile.shift_parity === 'even' || profile.shift_parity === 'odd') {
-        var cPar = civilParity(day)
-        if (cPar !== profile.shift_parity) {
+        if (!isStaffEligibleForCivilDate(day, profile.shift_parity)) {
           violations.push(
             'Colaborador ' +
               profile.name +
-              ' configurado com paridade ' +
-              (profile.shift_parity === 'even' ? 'Pares' : 'Ímpares') +
+              ' configurado com equipe ' +
+              (profile.shift_parity === 'even' ? 'Equipe 1' : 'Equipe 2') +
               ' mas plantão em ' +
               day +
-              ' corresponde à paridade oposta.',
+              ' corresponde à equipe oposta.',
           )
         }
       }
@@ -289,13 +288,56 @@ routerAdd(
       return parseInt(parts[2] || '0', 10)
     }
 
-    var civilParity = function (dateStr) {
-      return dayOfMonth(dateStr) % 2 === 0 ? 'even' : 'odd'
+    var ANCHOR_YEAR = 2026
+    var ANCHOR_MONTH = 10
+
+    var getDaysInMonth = function (y, m) {
+      return new Date(Date.UTC(y, m, 0)).getUTCDate()
+    }
+
+    var resolveTeamWorkingParity = function (base, year, month) {
+      if (!base || (base !== 'even' && base !== 'odd')) return base
+      var targetTotalMonths = year * 12 + (month - 1)
+      var anchorTotalMonths = ANCHOR_YEAR * 12 + (ANCHOR_MONTH - 1)
+      if (targetTotalMonths === anchorTotalMonths) return base
+
+      var count31 = 0
+      if (targetTotalMonths > anchorTotalMonths) {
+        for (var mi = anchorTotalMonths; mi < targetTotalMonths; mi++) {
+          var cy = Math.floor(mi / 12)
+          var cm = (mi % 12) + 1
+          if (getDaysInMonth(cy, cm) === 31) count31++
+        }
+      } else {
+        for (var mj = targetTotalMonths; mj < anchorTotalMonths; mj++) {
+          var cby = Math.floor(mj / 12)
+          var cbm = (mj % 12) + 1
+          if (getDaysInMonth(cby, cbm) === 31) count31++
+        }
+      }
+      var shouldInvert = count31 % 2 !== 0
+      if (!shouldInvert) return base
+      return base === 'even' ? 'odd' : 'even'
     }
 
     var isStaffEligibleForCivilDate = function (dateStr, parity) {
       if (!parity || (parity !== 'even' && parity !== 'odd')) return true
-      return civilParity(dateStr) === parity
+      if (!dateStr || typeof dateStr !== 'string') return true
+      var clean = dateStr.split('T')[0].split(' ')[0]
+      var parts = clean.split('-')
+      if (parts.length < 3) return true
+      var y = parseInt(parts[0], 10)
+      var m = parseInt(parts[1], 10)
+      var d = parseInt(parts[2], 10)
+      if (isNaN(y) || isNaN(m) || isNaN(d)) return true
+
+      var activeParity = resolveTeamWorkingParity(parity, y, m)
+      var dayParity = d % 2 === 0 ? 'even' : 'odd'
+      return activeParity === dayParity
+    }
+
+    var civilParity = function (dateStr) {
+      return dayOfMonth(dateStr) % 2 === 0 ? 'even' : 'odd'
     }
 
     var formatDateOnly = function (y, m, d) {
@@ -342,11 +384,11 @@ routerAdd(
 
           var reasons = []
           if (p.shift_parity === 'even' || p.shift_parity === 'odd') {
-            if (civilParity(dateKey) !== p.shift_parity) {
+            if (!isStaffEligibleForCivilDate(dateKey, p.shift_parity)) {
               reasons.push(
-                'paridade divergente (' +
-                  (p.shift_parity === 'even' ? 'Pares' : 'Ímpares') +
-                  ' vs dia civil ' +
+                'equipe divergente (' +
+                  (p.shift_parity === 'even' ? 'Equipe 1' : 'Equipe 2') +
+                  ' vs dia ' +
                   dayOfMonth(dateKey) +
                   ')',
               )
@@ -504,7 +546,7 @@ routerAdd(
       if (is12x36 && (parity === 'even' || parity === 'odd')) {
         var curDate = normStart
         while (curDate <= normEnd) {
-          if (civilParity(curDate) === parity) {
+          if (isStaffEligibleForCivilDate(curDate, parity)) {
             natDays[curDate] = true
           }
           curDate = addDaysDateOnly(curDate, 1)

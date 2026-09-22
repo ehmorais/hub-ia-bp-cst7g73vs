@@ -34,6 +34,7 @@ import {
 import { useToast } from '@/components/ui/use-toast'
 import { useRealtime } from '@/hooks/use-realtime'
 import { isVacationActive } from '@/lib/escala-vacation'
+import { canonicalLabel, TEAM_1_LABEL, TEAM_2_LABEL } from '@/lib/parity-labels'
 import { formatCorenLabel } from '@/lib/escala-calendar-formatter'
 import {
   getAllStaffProfilesPaginated,
@@ -201,13 +202,8 @@ export function StaffGeneralReport() {
           }`
         : '-'
 
-      // Paridade (rótulos civis v0.0.291)
-      let shiftParityLabel = '-'
-      if (p.shift_parity === 'even') {
-        shiftParityLabel = 'Dias pares'
-      } else if (p.shift_parity === 'odd') {
-        shiftParityLabel = 'Dias ímpares'
-      }
+      // Paridade (rótulos via canonicalLabel)
+      const shiftParityLabel = canonicalLabel(p.shift_parity)
 
       // Início no ciclo
       const cycleStartDate = formatIsoDateOnly(p.cycle_start_date)
@@ -526,16 +522,15 @@ export function StaffGeneralReport() {
               {/* Filtro: Paridade */}
               <Select value={selectedParity} onValueChange={setSelectedParity}>
                 <SelectTrigger className="bg-white">
-                  <SelectValue placeholder="Dias de Plantão" />
+                  <SelectValue placeholder="Equipe de Plantão" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="ALL">Todas as Paridades</SelectItem>
-                  <SelectItem value="Dias pares">Dias pares</SelectItem>
-                  <SelectItem value="Dias ímpares">Dias ímpares</SelectItem>
+                  <SelectItem value="ALL">Todas as Equipes</SelectItem>
+                  <SelectItem value={TEAM_1_LABEL}>{TEAM_1_LABEL}</SelectItem>
+                  <SelectItem value={TEAM_2_LABEL}>{TEAM_2_LABEL}</SelectItem>
                   <SelectItem value="-">Não Definido</SelectItem>
                 </SelectContent>
               </Select>
-
               {/* Filtro: Status */}
               <Select value={selectedStatus} onValueChange={setSelectedStatus}>
                 <SelectTrigger className="bg-white">
@@ -595,7 +590,9 @@ export function StaffGeneralReport() {
                     <TableHead className="min-w-[140px]">Função / Cargo</TableHead>
                     <TableHead className="min-w-[140px]">Setor Padrão</TableHead>
                     <TableHead className="min-w-[160px]">Regime / Turno</TableHead>
-                    <TableHead className="min-w-[130px] text-center">Dias de Plantão</TableHead>
+                    <TableHead className="min-w-[130px] text-center">
+                      Equipe de Plantão
+                    </TableHead>{' '}
                     <TableHead className="min-w-[110px] text-center">Início Ciclo</TableHead>
                     <TableHead className="min-w-[90px] text-center">Status</TableHead>
                     <TableHead className="min-w-[170px]">Férias</TableHead>
@@ -665,19 +662,19 @@ export function StaffGeneralReport() {
 
                         {/* Paridade */}
                         <TableCell className="text-center">
-                          {r.shiftParity === 'Dias pares' ? (
+                          {r.shiftParity === TEAM_1_LABEL ? (
                             <Badge
                               variant="outline"
                               className="bg-blue-50 text-blue-700 border-blue-200 text-xs font-medium"
                             >
-                              Dias pares
+                              {TEAM_1_LABEL}
                             </Badge>
-                          ) : r.shiftParity === 'Dias ímpares' ? (
+                          ) : r.shiftParity === TEAM_2_LABEL ? (
                             <Badge
                               variant="outline"
                               className="bg-purple-50 text-purple-700 border-purple-200 text-xs font-medium"
                             >
-                              Dias ímpares
+                              {TEAM_2_LABEL}
                             </Badge>
                           ) : (
                             <span className="text-xs text-slate-400">-</span>

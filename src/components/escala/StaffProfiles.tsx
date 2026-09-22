@@ -62,6 +62,7 @@ import {
   updateStaffProfile,
 } from '@/services/escala'
 import { parseDateOnly, civilParity, dayOfMonth } from '@/lib/escala-weekend-off'
+import { canonicalLabel, TEAM_1_LABEL, TEAM_2_LABEL } from '@/lib/parity-labels'
 import { useRealtime } from '@/hooks/use-realtime'
 
 export type ShiftParity = 'even' | 'odd'
@@ -255,8 +256,7 @@ export function StaffProfiles({ departmentId }: { departmentId?: string; project
     if (formData.shift_parity !== 'even' && formData.shift_parity !== 'odd') {
       toast({
         title: 'Dias de plantão obrigatórios',
-        description:
-          'Selecione os dias de plantão do colaborador ("Dias pares" ou "Dias ímpares").',
+        description: 'Selecione a equipe de alternância ("Equipe 1" ou "Equipe 2").',
         variant: 'destructive',
       })
       return
@@ -306,8 +306,8 @@ export function StaffProfiles({ departmentId }: { departmentId?: string; project
         if (formData.shift_parity !== datePar) {
           const expectedParityLabel =
             formData.shift_parity === 'even'
-              ? 'Dias pares (dias civis pares: 2, 4, 6, 8...)'
-              : 'Dias ímpares (dias civis ímpares: 1, 3, 5, 7...)'
+              ? `${TEAM_1_LABEL} (dias pares no ciclo âncora)`
+              : `${TEAM_2_LABEL} (dias ímpares no ciclo âncora)`
           const actualLabel =
             datePar === 'even' ? `dia civil par (${dom})` : `dia civil ímpar (${dom})`
 
@@ -622,21 +622,21 @@ export function StaffProfiles({ departmentId }: { departmentId?: string; project
                         variant="outline"
                         className="bg-blue-50 text-blue-700 border-blue-200 font-medium"
                       >
-                        Dias pares
+                        {canonicalLabel('even')}
                       </Badge>
                     ) : profile.shift_parity === 'odd' ? (
                       <Badge
                         variant="outline"
                         className="bg-purple-50 text-purple-700 border-purple-200 font-medium"
                       >
-                        Dias ímpares
+                        {canonicalLabel('odd')}
                       </Badge>
                     ) : (
                       <Badge
                         variant="outline"
                         className="text-amber-700 bg-amber-50 border-amber-200 font-normal"
                       >
-                        Não definido (Legado)
+                        {canonicalLabel(profile.shift_parity)}
                       </Badge>
                     )}
                   </TableCell>
@@ -922,8 +922,8 @@ export function StaffProfiles({ departmentId }: { departmentId?: string; project
                     <SelectValue placeholder="Selecione a paridade..." />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="even">Dias pares (dia civil par)</SelectItem>
-                    <SelectItem value="odd">Dias ímpares (dia civil ímpar)</SelectItem>
+                    <SelectItem value="even">{TEAM_1_LABEL}</SelectItem>
+                    <SelectItem value="odd">{TEAM_2_LABEL}</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="text-[11px] text-muted-foreground">

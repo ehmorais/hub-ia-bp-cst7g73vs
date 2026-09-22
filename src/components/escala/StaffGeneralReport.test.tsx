@@ -183,7 +183,7 @@ describe('StaffGeneralReport e Serviços de Relatório de Colaboradores', () => 
         contractType: 'CLT 180h',
         monthlyHourLimit: '180',
         shiftType: 'SD 12x36 (07:00-19:00)',
-        shiftParity: 'Dias pares',
+        shiftParity: 'Equipe 1',
         cycleStartDate: '01/01/2025',
         status: 'Ativo',
         vacationStatus: 'Sem férias',
@@ -202,7 +202,7 @@ describe('StaffGeneralReport e Serviços de Relatório de Colaboradores', () => 
         contractType: 'CLT 180h',
         monthlyHourLimit: '180',
         shiftType: 'SN 12x36 (19:00-07:00)',
-        shiftParity: 'Dias ímpares',
+        shiftParity: 'Equipe 2',
         cycleStartDate: '02/01/2025',
         status: 'Ativo',
         vacationStatus: 'Em férias',
@@ -304,13 +304,13 @@ describe('StaffGeneralReport e Serviços de Relatório de Colaboradores', () => 
       expect(byShift).toHaveLength(1)
       expect(byShift[0].name).toBe('Maria Helena Silva')
 
-      const byParityEven = applyFilters(sampleRows, { parity: 'Dias pares' })
+      const byParityEven = applyFilters(sampleRows, { parity: 'Equipe 1' })
       expect(byParityEven).toHaveLength(1)
-      expect(byParityEven[0].shiftParity).toBe('Dias pares')
+      expect(byParityEven[0].shiftParity).toBe('Equipe 1')
 
-      const byParityOdd = applyFilters(sampleRows, { parity: 'Dias ímpares' })
+      const byParityOdd = applyFilters(sampleRows, { parity: 'Equipe 2' })
       expect(byParityOdd).toHaveLength(1)
-      expect(byParityOdd[0].shiftParity).toBe('Dias ímpares')
+      expect(byParityOdd[0].shiftParity).toBe('Equipe 2')
 
       const byStatusInactive = applyFilters(sampleRows, { status: 'Inativo' })
       expect(byStatusInactive).toHaveLength(1)
@@ -329,7 +329,7 @@ describe('StaffGeneralReport e Serviços de Relatório de Colaboradores', () => 
         contractType: 'CLT 180h',
         monthlyHourLimit: '180',
         shiftType: 'SD 12x36 (07:00-19:00)',
-        shiftParity: 'Dias pares',
+        shiftParity: 'Equipe 1',
         cycleStartDate: '01/01/2025',
         status: 'Ativo',
         vacationStatus: 'Sem férias',
@@ -418,7 +418,7 @@ describe('StaffGeneralReport e Serviços de Relatório de Colaboradores', () => 
         'Função/Cargo',
         'Setor Padrão',
         'Regime/Turno',
-        'Dias de Plantão (Paridade)',
+        'Equipe de Plantão',
         'Início no Ciclo',
         'Status',
         'Férias (Status)',
@@ -517,7 +517,7 @@ describe('StaffGeneralReport e Serviços de Relatório de Colaboradores', () => 
       expect(screen.getByRole('columnheader', { name: /Função \/ Cargo/i })).toBeDefined()
       expect(screen.getByRole('columnheader', { name: /Setor Padrão/i })).toBeDefined()
       expect(screen.getByRole('columnheader', { name: /Regime \/ Turno/i })).toBeDefined()
-      expect(screen.getByRole('columnheader', { name: /Dias de Plantão/i })).toBeDefined()
+      expect(screen.getByRole('columnheader', { name: /Equipe de Plantão/i })).toBeDefined()
       expect(screen.getByRole('columnheader', { name: /Início Ciclo/i })).toBeDefined()
       expect(screen.getByRole('columnheader', { name: /Status/i })).toBeDefined()
       expect(screen.getByRole('columnheader', { name: /Férias/i })).toBeDefined()

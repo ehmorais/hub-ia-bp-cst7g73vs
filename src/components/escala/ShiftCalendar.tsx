@@ -50,6 +50,7 @@ import {
   dayOfMonth,
   civilParity,
 } from '@/lib/escala-weekend-off'
+import { isStaffEligibleForDateWithInversion } from '@/lib/parity-inversion'
 import { StaffFilter } from './StaffFilter'
 import { formatCorenLabel, formatShiftCalendarSecondLine } from '@/lib/escala-calendar-formatter'
 import { isVacationDateInclusive } from '@/lib/escala-vacation'
@@ -289,10 +290,10 @@ export function ShiftCalendar({
     }
 
     if (dayFilter === 'even') {
-      return items.filter((item) => civilParity(item.key) === 'even')
+      return items.filter((item) => isStaffEligibleForDateWithInversion(item.key, 'even'))
     }
     if (dayFilter === 'odd') {
-      return items.filter((item) => civilParity(item.key) === 'odd')
+      return items.filter((item) => isStaffEligibleForDateWithInversion(item.key, 'odd'))
     }
     return items
   }, [currentDate, view, cycleStartDateStr, cycleEndDateStr, cycleInterval, dayFilter])
