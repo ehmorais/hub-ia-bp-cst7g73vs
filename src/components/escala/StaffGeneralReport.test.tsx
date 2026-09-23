@@ -415,7 +415,7 @@ describe('StaffGeneralReport e Serviços de Relatório de Colaboradores', () => 
 
       expect(filename).toBe('teste-colaboradores.pdf')
       expect(saveSpy).toHaveBeenCalledWith('teste-colaboradores.pdf')
-      expect(addImageSpy).toHaveBeenCalledWith(BPSCS_LOGO_BASE64, 'JPEG', 263, 6, 24, 18)
+      expect(addImageSpy).toHaveBeenCalledWith(BPSCS_LOGO_BASE64, 'PNG', 263, 6, 24, 18)
     })
 
     it('exportCollaboratorsToPdf gera exatamente os 14 cabeçalhos exigidos na ordem oficial (sem Contrato e Limite)', () => {

@@ -133,7 +133,7 @@ describe('scalePdfExport Suite (ScalePlanner & AutoGenerate IA)', () => {
       expect(lastAutoTableArgs).toBeDefined()
       expect(mockAddImage).toHaveBeenCalledWith(
         BPSCS_LOGO_BASE64,
-        'JPEG',
+        'PNG',
         263,
         6,
         24,
@@ -279,7 +279,7 @@ describe('scalePdfExport Suite (ScalePlanner & AutoGenerate IA)', () => {
       // Validação da inclusão do logotipo do hospital no cabeçalho
       expect(mockAddImage).toHaveBeenCalledWith(
         BPSCS_LOGO_BASE64,
-        'JPEG',
+        'PNG',
         263,
         6,
         24,
@@ -392,7 +392,7 @@ describe('scalePdfExport Suite (ScalePlanner & AutoGenerate IA)', () => {
       // Validação da inclusão do logotipo do hospital no cabeçalho
       expect(mockAddImage).toHaveBeenCalledWith(
         BPSCS_LOGO_BASE64,
-        'JPEG',
+        'PNG',
         263,
         6,
         24,

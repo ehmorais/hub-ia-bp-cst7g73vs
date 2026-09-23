@@ -1,7 +1,7 @@
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
-import { BPSCS_LOGO_BASE64 } from './scalePdfExport'
+import { BPSCS_LOGO_BASE64 } from './bpscsLogo'
 import { canonicalLabel } from '@/lib/parity-labels'
 
 export interface CollaboratorReportRow {
@@ -266,7 +266,7 @@ export function exportCollaboratorsToPdf(
       // Logotipo no cabeçalho superior direito (proporção 4:3 ~ 24x18mm, padrão v0.0.282)
       try {
         if (typeof (doc as any).addImage === 'function') {
-          doc.addImage(BPSCS_LOGO_BASE64, 'JPEG', 263, 6, 24, 18)
+          doc.addImage(BPSCS_LOGO_BASE64, 'PNG', 263, 6, 24, 18)
         }
       } catch (imgErr) {
         console.warn('Falha ao renderizar logo no PDF do Relatório:', imgErr)
