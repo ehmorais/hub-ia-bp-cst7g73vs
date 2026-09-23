@@ -113,7 +113,7 @@ describe('scalePdfExport Suite (ScalePlanner & AutoGenerate IA)', () => {
       expect(currentName).toMatch(/^escala-\d{4}-\d{2}\.pdf$/)
     })
 
-    it('Chama exportScalePdf e invoca jsPDF.save com nome correto e propriedades', () => {
+    it('Chama exportScalePdf e invoca jsPDF.save com nome correto, propriedades e logotipo institucional', () => {
       const data: ExportScalePdfParams = {
         title: 'Escala de Plantões',
         sectorName: 'UTI Ficticia',
@@ -131,6 +131,14 @@ describe('scalePdfExport Suite (ScalePlanner & AutoGenerate IA)', () => {
       expect(filename).toBe('escala-2026-10.pdf')
       expect(mockSave).toHaveBeenCalledWith('escala-2026-10.pdf')
       expect(lastAutoTableArgs).toBeDefined()
+      expect(mockAddImage).toHaveBeenCalledWith(
+        BPSCS_LOGO_BASE64,
+        'JPEG',
+        263,
+        6,
+        24,
+        18,
+      )
     })
 
     it('exportScalePdf destaca "FOLGA" com cor laranja nas células de folga de fim de semana', () => {
@@ -272,10 +280,10 @@ describe('scalePdfExport Suite (ScalePlanner & AutoGenerate IA)', () => {
       expect(mockAddImage).toHaveBeenCalledWith(
         BPSCS_LOGO_BASE64,
         'JPEG',
-        expect.any(Number),
-        expect.any(Number),
-        expect.any(Number),
-        expect.any(Number),
+        263,
+        6,
+        24,
+        18,
       )
     })
   })
@@ -385,10 +393,10 @@ describe('scalePdfExport Suite (ScalePlanner & AutoGenerate IA)', () => {
       expect(mockAddImage).toHaveBeenCalledWith(
         BPSCS_LOGO_BASE64,
         'JPEG',
-        expect.any(Number),
-        expect.any(Number),
-        expect.any(Number),
-        expect.any(Number),
+        263,
+        6,
+        24,
+        18,
       )
     })
   })

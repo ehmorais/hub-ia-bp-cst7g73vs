@@ -6,6 +6,7 @@ import {
   COLLABORATOR_REPORT_COLUMNS,
   type CollaboratorReportRow,
 } from '@/utils/staffReportExport'
+import { BPSCS_LOGO_BASE64 } from '@/utils/scalePdfExport'
 import pb from '@/lib/pocketbase/client'
 import * as XLSX from 'xlsx'
 import { jsPDF } from 'jspdf'
@@ -396,12 +397,25 @@ describe('StaffGeneralReport e Serviços de Relatório de Colaboradores', () => 
       expect(worksheet['!printHeader']).toEqual([4, 4])
     })
 
-    it('exportCollaboratorsToPdf gera PDF Landscape com título, data/hora e total de colaboradores', () => {
+    it('exportCollaboratorsToPdf gera PDF Landscape com título, data/hora, total de colaboradores e logotipo institucional', () => {
       const saveSpy = vi.spyOn(jsPDF.prototype, 'save').mockImplementation(() => undefined as any)
+      const addImageSpy = vi
+        .spyOn(jsPDF.prototype, 'addImage')
+        .mockImplementation(() => undefined as any)
+
+      // Garante que didDrawPage é invocado pelo mock do autoTable se fornecido
+      vi.mocked(autoTable).mockImplementationOnce((doc, options: any) => {
+        if (options?.didDrawPage) {
+          options.didDrawPage()
+        }
+        return options
+      })
+
       const filename = exportCollaboratorsToPdf(rowsToExport, 'teste-colaboradores.pdf')
 
       expect(filename).toBe('teste-colaboradores.pdf')
       expect(saveSpy).toHaveBeenCalledWith('teste-colaboradores.pdf')
+      expect(addImageSpy).toHaveBeenCalledWith(BPSCS_LOGO_BASE64, 'JPEG', 263, 6, 24, 18)
     })
 
     it('exportCollaboratorsToPdf gera exatamente os 14 cabeçalhos exigidos na ordem oficial (sem Contrato e Limite)', () => {
