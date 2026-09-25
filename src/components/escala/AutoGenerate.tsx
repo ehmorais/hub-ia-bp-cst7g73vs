@@ -1234,7 +1234,7 @@ function AutoGenerateInner({
           vacationsByStaff,
         )
 
-        exportAutoGenerateCalendarPdf({
+        await exportAutoGenerateCalendarPdf({
           title: 'Escala de Plantões — Calendário',
           sectorName: sectorObj?.name,
           cycleName: cycleObj?.name,

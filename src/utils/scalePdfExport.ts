@@ -1,7 +1,13 @@
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import html2canvas from 'html2canvas'
 import { formatCorenLabel } from '@/lib/escala-calendar-formatter'
 import { BPSCS_LOGO_BASE64 } from './bpscsLogo'
+import {
+  renderCalendarPdfTemplate,
+  type CalendarDayCellData,
+  type ShiftItemData,
+} from '@/templates/calendarPdfTemplate'
 
 export interface ShiftSlot {
   type: 'day' | 'night' | 'morning' | 'afternoon' | 'leave' | string
@@ -297,11 +303,11 @@ export interface ExportAutoGenerateCalendarPdfParams {
 }
 
 /**
- * Exporta a escala gerada por IA no formato "Calendário" mensal / ciclo (grade equivalente à tela)
+ * Prepara a estrutura de dados (células, dias e semanas) necessária para renderizar o template HTML do calendário.
  */
-export function exportAutoGenerateCalendarPdf(params: ExportAutoGenerateCalendarPdfParams): string {
+export function prepareCalendarTemplateData(params: ExportAutoGenerateCalendarPdfParams) {
   const {
-    title = 'Escala de Plantões — Rascunho',
+    title = 'Escala de Plantões — Calendário',
     sectorName,
     cycleName,
     cycleStart,
@@ -314,18 +320,6 @@ export function exportAutoGenerateCalendarPdf(params: ExportAutoGenerateCalendar
     selectedSectorId,
     selectedStaffId,
   } = params
-
-  const doc = new jsPDF({
-    orientation: 'landscape',
-    unit: 'mm',
-    format: 'a4',
-  })
-
-  doc.setProperties({
-    title,
-    subject: sectorName ? `Escala Calendário - ${sectorName}` : 'Escala Calendário',
-    author: 'Gestão de Escalas BP — IA',
-  })
 
   // Setor staff profiles para exibição de folgas de fim de semana
   const sectorStaffMap = new Map<
@@ -363,13 +357,13 @@ export function exportAutoGenerateCalendarPdf(params: ExportAutoGenerateCalendar
   ]
 
   // Montar semanas (linhas de 7 dias)
-  const weeks: Array<Array<{ date: Date; key: string; dayOfWeek: number } | null>> = []
+  const rawWeeks: Array<Array<{ date: Date; key: string; dayOfWeek: number } | null>> = []
   let currentWeek: Array<{ date: Date; key: string; dayOfWeek: number } | null> = []
 
   days.forEach((dayItem) => {
     currentWeek.push(dayItem)
     if (currentWeek.length === 7) {
-      weeks.push(currentWeek)
+      rawWeeks.push(currentWeek)
       currentWeek = []
     }
   })
@@ -377,17 +371,13 @@ export function exportAutoGenerateCalendarPdf(params: ExportAutoGenerateCalendar
     while (currentWeek.length < 7) {
       currentWeek.push(null)
     }
-    weeks.push(currentWeek)
+    rawWeeks.push(currentWeek)
   }
 
-  // Montar células de dados para cada dia
-  const bodyRows = weeks.map((week) => {
+  const weeks: Array<Array<CalendarDayCellData | null>> = rawWeeks.map((week) => {
     return week.map((dayItem) => {
       if (!dayItem) {
-        return {
-          content: '',
-          styles: { fillColor: [248, 250, 252], textColor: [148, 163, 184] },
-        }
+        return null
       }
 
       const dateKey = dayItem.key
@@ -424,10 +414,7 @@ export function exportAutoGenerateCalendarPdf(params: ExportAutoGenerateCalendar
         })
       }
 
-      // Montar texto descritivo da célula
-      const lines: string[] = [`[ ${dayFormatted} ]`]
-
-      dayShifts.forEach((s) => {
+      const formattedShifts: ShiftItemData[] = dayShifts.map((s) => {
         const contract = contracts.find(
           (item) => (item.staff_profile || item.user) === (s.staff_profile || s.user),
         )
@@ -459,106 +446,168 @@ export function exportAutoGenerateCalendarPdf(params: ExportAutoGenerateCalendar
         const isNight = startHour >= 18 || crossesMidnight
         const periodLetter: 'D' | 'N' = isNight ? 'N' : 'D'
         const corenText = formatCorenLabel(professionalId)
+        const timeRange = startTime && endTime ? `${startTime}–${endTime}` : undefined
 
-        lines.push(`• ${name}`)
-        lines.push(`  ${periodLetter} • ${corenText}`)
+        return {
+          staffId: profileId,
+          name,
+          professionalId,
+          periodLetter,
+          corenText,
+          timeRange,
+        }
       })
-
-      weekendOffStaff.forEach((staff) => {
-        lines.push(`• ${staff.name}`)
-        lines.push(`  Folga Fim de Semana`)
-      })
-
-      if (dayShifts.length === 0 && weekendOffStaff.length === 0) {
-        lines.push('(Sem plantões)')
-      }
 
       return {
-        content: lines.join('\n'),
-        styles: {
-          valign: 'top',
-          halign: 'left',
-          fillColor: isWeekendDay ? [254, 252, 232] : [255, 255, 255], // Amarelinho bem suave no fim de semana ou branco
-          textColor: [30, 41, 59],
-        },
+        dayFormatted,
+        dayNumber: dayItem.date.getDate(),
+        isWeekend: isWeekendDay,
+        shifts: formattedShifts,
+        weekendOffs: weekendOffStaff,
       }
     })
   })
 
-  // Cabeçalho da página
-  const subtitleParts: string[] = []
-  if (sectorName) subtitleParts.push(`Setor: ${sectorName}`)
-  if (cycleName) subtitleParts.push(`Ciclo: ${cycleName}`)
-  else if (cycleStart && cycleEnd) {
-    subtitleParts.push(`Período: ${formatDateDisplay(cycleStart)} a ${formatDateDisplay(cycleEnd)}`)
+  const cycleStartFormatted = cycleStart ? formatDateDisplay(cycleStart) : undefined
+  const cycleEndFormatted = cycleEnd ? formatDateDisplay(cycleEnd) : undefined
+
+  return {
+    title,
+    sectorName,
+    cycleName,
+    cycleStart: cycleStartFormatted,
+    cycleEnd: cycleEndFormatted,
+    weekDayHeaders: rotatedHeadLabels,
+    weeks,
+    logoBase64: BPSCS_LOGO_BASE64,
   }
+}
 
-  autoTable(doc, {
-    startY: 28,
-    head: [rotatedHeadLabels],
-    body: bodyRows as any,
-    theme: 'grid',
-    styles: {
-      font: 'helvetica',
-      fontSize: 6.5,
-      cellPadding: 1.8,
-      overflow: 'linebreak',
-      valign: 'top',
-      lineColor: [203, 213, 225],
-      lineWidth: 0.2,
-    },
-    headStyles: {
-      fillColor: [5, 150, 105], // Esmeralda escuro
-      textColor: [255, 255, 255],
-      fontStyle: 'bold',
-      halign: 'center',
-    },
-    margin: { top: 28, right: 10, bottom: 12, left: 10 },
-    didDrawPage: () => {
-      // Logotipo no cabeçalho superior direito (proporção 4:3 ~ 24x18mm)
-      try {
-        if (typeof (doc as any).addImage === 'function') {
-          doc.addImage(BPSCS_LOGO_BASE64, 'PNG', 263, 6, 24, 18)
-        }
-      } catch (imgErr) {
-        console.warn('Falha ao renderizar logo no PDF Calendário:', imgErr)
-      }
+/**
+ * Gera a string HTML completa do Calendário Mensal a partir dos parâmetros de exportação.
+ */
+export function buildCalendarHtml(params: ExportAutoGenerateCalendarPdfParams): string {
+  const templateData = prepareCalendarTemplateData(params)
+  return renderCalendarPdfTemplate(templateData)
+}
 
-      // Título e subtítulo no topo de cada página
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(14)
-      doc.setTextColor(30, 41, 59)
-      doc.text(title, 10, 12)
-
-      doc.setFont('helvetica', 'normal')
-      doc.setFontSize(8.5)
-      doc.setTextColor(71, 85, 105)
-      if (subtitleParts.length > 0) {
-        doc.text(subtitleParts.join('  |  '), 10, 18)
-      }
-
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(8)
-      doc.setTextColor(180, 83, 9)
-      doc.text('Documento não publicado — Formato Calendário', 10, 23)
-      doc.setTextColor(0, 0, 0)
-    },
+/**
+ * Converte HTML em documento jsPDF no formato A4 Landscape (297x210 mm) em 1 página única.
+ * Utiliza html2canvas para renderizar o DOM off-screen em canvas de alta resolução,
+ * escalando proporcionalmente para caber exatamente na página sem corte ou tarja cinza.
+ */
+export async function renderHtmlToPdfLandscape(
+  htmlString: string,
+  docOptions?: { title?: string; author?: string; subject?: string },
+): Promise<jsPDF> {
+  const doc = new jsPDF({
+    orientation: 'landscape',
+    unit: 'mm',
+    format: 'a4',
   })
 
-  // Rodapé com número de páginas
-  const totalPages = doc.getNumberOfPages()
-  for (let i = 1; i <= totalPages; i++) {
-    doc.setPage(i)
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(7.5)
-    doc.setTextColor(148, 163, 184)
-    doc.text(
-      `Página ${i} de ${totalPages} | Gerado via BP Escalas`,
-      doc.internal.pageSize.getWidth() - 10,
-      doc.internal.pageSize.getHeight() - 6,
-      { align: 'right' },
-    )
+  if (docOptions) {
+    doc.setProperties({
+      title: docOptions.title || 'Escala de Plantões — Calendário',
+      author: docOptions.author || 'Gestão de Escalas BP — IA',
+      subject: docOptions.subject || 'Escala Calendário',
+    })
   }
+
+  // Se o ambiente não possuir suporte completo a DOM ou html2canvas (ex.: Vitest/Node sem canvas real),
+  // retornamos o doc A4 landscape válido configurado.
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return doc
+  }
+
+  // Cria um container off-screen visível para renderização com medidas fixas de A4 landscape
+  // 297mm x 210mm a 96dpi é aprox 1122.5px x 793.7px
+  const container = document.createElement('div')
+  container.setAttribute('aria-hidden', 'true')
+  container.style.position = 'fixed'
+  container.style.left = '-10000px'
+  container.style.top = '0'
+  container.style.width = '1123px' // ~297mm a 96dpi
+  container.style.minHeight = '794px' // ~210mm a 96dpi
+  container.style.backgroundColor = '#ffffff'
+  container.style.zIndex = '-9999'
+  container.style.margin = '0'
+  container.style.padding = '0'
+  container.innerHTML = htmlString
+
+  document.body.appendChild(container)
+
+  try {
+    // Aguardar imagens base64 carregarem no DOM
+    const images = Array.from(container.querySelectorAll('img'))
+    await Promise.all(
+      images.map((img) => {
+        if (img.complete) return Promise.resolve()
+        return new Promise<void>((resolve) => {
+          img.onload = () => resolve()
+          img.onerror = () => resolve()
+        })
+      }),
+    )
+
+    const targetElement = (container.querySelector('#calendar-pdf-page') ||
+      container) as HTMLElement
+
+    const canvas = await html2canvas(targetElement, {
+      scale: 2, // 2x para garantir nitidez nos textos pequenos
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: '#ffffff',
+      logging: false,
+      width: targetElement.offsetWidth || 1123,
+      height: targetElement.offsetHeight || 794,
+      windowWidth: 1123,
+      windowHeight: 794,
+    })
+
+    if (canvas && typeof canvas.toDataURL === 'function') {
+      const imgData = canvas.toDataURL('image/png')
+      // A4 Landscape em mm: 297 x 210
+      const pageWidth = 297
+      const pageHeight = 210
+
+      // Calcular proporção para caber exatamente em 1 página
+      const canvasWidth = canvas.width
+      const canvasHeight = canvas.height
+      const ratio = Math.min(pageWidth / canvasWidth, pageHeight / canvasHeight)
+
+      const renderedWidth = canvasWidth * ratio
+      const renderedHeight = canvasHeight * ratio
+      const offsetX = (pageWidth - renderedWidth) / 2
+      const offsetY = (pageHeight - renderedHeight) / 2
+
+      doc.addImage(imgData, 'PNG', offsetX, offsetY, renderedWidth, renderedHeight)
+    }
+  } finally {
+    if (container.parentNode) {
+      container.parentNode.removeChild(container)
+    }
+  }
+
+  return doc
+}
+
+/**
+ * Exporta a escala gerada por IA no formato "Calendário" mensal / ciclo (grade equivalente à tela).
+ * Pipeline baseado em template HTML (src/templates/calendarPdfTemplate.ts) + html2canvas + jsPDF A4 Landscape.
+ */
+export async function exportAutoGenerateCalendarPdf(
+  params: ExportAutoGenerateCalendarPdfParams,
+): Promise<string> {
+  const { title = 'Escala de Plantões — Calendário', sectorName, cycleStart } = params
+
+  const html = buildCalendarHtml(params)
+
+  const doc = await renderHtmlToPdfLandscape(html, {
+    title,
+    subject: sectorName ? `Escala Calendário - ${sectorName}` : 'Escala Calendário',
+    author: 'Gestão de Escalas BP — IA',
+  })
 
   const filename = formatSafeFilename(cycleStart)
   doc.save(filename)
