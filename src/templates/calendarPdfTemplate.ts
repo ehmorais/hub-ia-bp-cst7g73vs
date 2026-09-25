@@ -38,9 +38,17 @@ export interface CalendarPdfTemplateData {
 }
 
 /**
- * Template HTML padrão para o Calendário Mensal em PDF da Gestão de Escalas.
- * Arquivo próprio e de fácil manutenção para ajustes visuais futuros.
- * Utiliza placeholders no padrão {{PLACEHOLDER}}.
+ * Template HTML fiel ao padrão institucional Beneficência Portuguesa de São Caetano do Sul (BPSCS).
+ * Layout A4 Paisagem (297x210 mm) com proporções equilibradas:
+ * - Cabeçalho limpo com logotipo oficial BPSCS no canto superior direito (idêntico ao modelo)
+ * - Título e subtítulo organizados à esquerda com tipografia sóbria
+ * - Tabela do calendário com cabeçalho institucional em tom esmeralda (#047857)
+ * - Células de dias com número em destaque, badges para plantonistas (D verde, N azul escuro, COREN/CRM)
+ *   e folgas de fim de semana (FDS)
+ * - Rodapé com identificação institucional, data/hora de geração e numeração "Página X de Y"
+ *
+ * Utiliza placeholders {{TITLE}}, {{SUBTITLE}}, {{LOGO_BASE64}}, {{WEEK_HEADERS_HTML}},
+ * {{WEEKS_HTML}}, {{GENERATED_AT}}, {{PAGE_CURRENT}}, {{PAGE_TOTAL}}.
  */
 export const CALENDAR_PDF_HTML_TEMPLATE = `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -55,6 +63,10 @@ export const CALENDAR_PDF_HTML_TEMPLATE = `<!DOCTYPE html>
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }
+    @page {
+      size: 297mm 210mm landscape;
+      margin: 0;
+    }
     html, body {
       width: 297mm;
       height: 210mm;
@@ -64,6 +76,7 @@ export const CALENDAR_PDF_HTML_TEMPLATE = `<!DOCTYPE html>
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
       color: #1e293b;
       overflow: hidden;
+      -webkit-font-smoothing: antialiased;
     }
     .page-container {
       width: 297mm;
@@ -75,44 +88,58 @@ export const CALENDAR_PDF_HTML_TEMPLATE = `<!DOCTYPE html>
       position: relative;
       background: #ffffff;
     }
-    /* Header institucional */
+
+    /* Cabeçalho Institucional alinhado com o modelo BPSCS */
     .header {
       display: flex;
       justify-content: space-between;
-      align-items: flex-start;
+      align-items: center;
       border-bottom: 2px solid #047857;
-      padding-bottom: 6px;
+      padding-bottom: 8px;
       margin-bottom: 6px;
+      min-height: 48px;
     }
     .header-info {
       flex: 1;
-      padding-right: 12px;
+      padding-right: 16px;
+    }
+    .header-org {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: #047857;
+      margin-bottom: 2px;
+    }
+    .header-title-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
     }
     .header-title {
       font-size: 16px;
       font-weight: 700;
       color: #0f172a;
       line-height: 1.2;
-      display: flex;
-      align-items: center;
-      gap: 8px;
     }
     .header-badge {
       display: inline-block;
-      font-size: 9px;
+      font-size: 8.5px;
       font-weight: 600;
       text-transform: uppercase;
-      padding: 2px 6px;
-      border-radius: 4px;
-      background: #fef3c7;
-      color: #b45309;
-      border: 1px solid #fde68a;
+      letter-spacing: 0.4px;
+      padding: 2px 7px;
+      border-radius: 3px;
+      background: #ecfdf5;
+      color: #047857;
+      border: 1px solid #a7f3d0;
     }
     .header-subtitle {
-      font-size: 10px;
+      font-size: 9.5px;
       color: #475569;
       margin-top: 3px;
       line-height: 1.3;
+      font-weight: 500;
     }
     .header-logo {
       flex-shrink: 0;
@@ -121,13 +148,14 @@ export const CALENDAR_PDF_HTML_TEMPLATE = `<!DOCTYPE html>
       justify-content: flex-end;
     }
     .header-logo img {
-      height: 36px;
+      height: 40px;
       width: auto;
-      max-width: 130px;
+      max-width: 150px;
       object-fit: contain;
       display: block;
     }
-    /* Tabela do calendário */
+
+    /* Tabela do calendário A4 Paisagem */
     .calendar-wrapper {
       flex: 1;
       display: flex;
@@ -136,6 +164,7 @@ export const CALENDAR_PDF_HTML_TEMPLATE = `<!DOCTYPE html>
       border-radius: 4px;
       overflow: hidden;
       background: #ffffff;
+      min-height: 0;
     }
     .calendar-table {
       width: 100%;
@@ -149,11 +178,12 @@ export const CALENDAR_PDF_HTML_TEMPLATE = `<!DOCTYPE html>
       font-size: 10px;
       font-weight: 700;
       text-transform: uppercase;
-      letter-spacing: 0.5px;
+      letter-spacing: 0.6px;
       padding: 5px 4px;
       text-align: center;
       border-right: 1px solid #065f46;
       border-bottom: 1px solid #065f46;
+      height: 24px;
     }
     .calendar-table thead th:last-child {
       border-right: none;
@@ -162,8 +192,7 @@ export const CALENDAR_PDF_HTML_TEMPLATE = `<!DOCTYPE html>
       border-right: 1px solid #e2e8f0;
       border-bottom: 1px solid #e2e8f0;
       vertical-align: top;
-      padding: 2px 3px;
-      height: calc((100% - 24px) / 5);
+      padding: 3px 4px;
       background: #ffffff;
       position: relative;
     }
@@ -174,47 +203,53 @@ export const CALENDAR_PDF_HTML_TEMPLATE = `<!DOCTYPE html>
       border-bottom: none;
     }
     .calendar-table tbody td.weekend-day {
-      background: #fbfdff;
+      background: #fafcff;
     }
     .calendar-table tbody td.empty-day {
       background: #f8fafc;
     }
+
     /* Conteúdo do dia */
     .day-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 2px;
+      margin-bottom: 3px;
       padding-bottom: 2px;
       border-bottom: 1px solid #f1f5f9;
     }
     .day-number {
-      font-size: 10px;
+      font-size: 10.5px;
       font-weight: 700;
       color: #0f172a;
+      letter-spacing: -0.2px;
     }
     .day-badge-weekend {
-      font-size: 8px;
-      font-weight: 600;
+      font-size: 7.5px;
+      font-weight: 700;
       color: #047857;
       background: #ecfdf5;
-      padding: 0 3px;
+      padding: 1px 4px;
       border-radius: 2px;
+      border: 1px solid #d1fae5;
+      letter-spacing: 0.3px;
     }
     .day-shifts-list {
       display: flex;
       flex-direction: column;
-      gap: 1.5px;
+      gap: 2px;
       overflow: hidden;
     }
+
+    /* Fichas de plantonistas */
     .shift-chip {
       font-size: 7.5px;
-      line-height: 1.15;
-      padding: 1.5px 3px;
-      border-radius: 2px;
-      background: #f1f5f9;
+      line-height: 1.2;
+      padding: 2px 3.5px;
+      border-radius: 2.5px;
+      background: #f8fafc;
       color: #0f172a;
-      border-left: 2px solid #047857;
+      border-left: 2.5px solid #047857;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -222,7 +257,7 @@ export const CALENDAR_PDF_HTML_TEMPLATE = `<!DOCTYPE html>
     }
     .shift-chip.shift-night {
       border-left-color: #1e3a8a;
-      background: #eff6ff;
+      background: #f0f7ff;
     }
     .shift-chip.shift-day {
       border-left-color: #047857;
@@ -232,27 +267,55 @@ export const CALENDAR_PDF_HTML_TEMPLATE = `<!DOCTYPE html>
       border-left-color: #f59e0b;
       background: #fffbeb;
       color: #92400e;
-      font-style: italic;
+    }
+    .shift-chip-row {
+      display: flex;
+      align-items: baseline;
+      gap: 3px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .shift-period-tag {
+      font-weight: 800;
+      font-size: 7.5px;
+      letter-spacing: 0.2px;
+    }
+    .shift-night .shift-period-tag {
+      color: #1e3a8a;
+    }
+    .shift-day .shift-period-tag {
+      color: #047857;
+    }
+    .shift-off .shift-period-tag {
+      color: #b45309;
     }
     .shift-chip-name {
       font-weight: 600;
+      color: #1e293b;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
     .shift-chip-details {
       color: #64748b;
-      font-size: 7px;
+      font-size: 6.8px;
+      font-weight: 400;
     }
     .empty-notice {
-      font-size: 7px;
+      font-size: 7.5px;
       color: #94a3b8;
       font-style: italic;
-      padding-top: 2px;
+      padding-top: 3px;
+      text-align: center;
     }
-    /* Rodapé */
+
+    /* Rodapé Institucional */
     .footer {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-top: 5px;
+      margin-top: 6px;
       padding-top: 4px;
       border-top: 1px solid #e2e8f0;
       font-size: 8px;
@@ -260,10 +323,20 @@ export const CALENDAR_PDF_HTML_TEMPLATE = `<!DOCTYPE html>
     }
     .footer-left {
       display: flex;
-      gap: 12px;
+      align-items: center;
+      gap: 10px;
+    }
+    .footer-left strong {
+      color: #334155;
+      font-weight: 600;
+    }
+    .footer-divider {
+      color: #cbd5e1;
     }
     .footer-right {
-      font-weight: 500;
+      font-weight: 600;
+      color: #334155;
+      font-size: 8px;
     }
   </style>
 </head>
@@ -271,8 +344,9 @@ export const CALENDAR_PDF_HTML_TEMPLATE = `<!DOCTYPE html>
   <div class="page-container" id="calendar-pdf-page">
     <header class="header">
       <div class="header-info">
-        <div class="header-title">
-          <span>{{TITLE}}</span>
+        <div class="header-org">Beneficência Portuguesa de São Caetano do Sul</div>
+        <div class="header-title-row">
+          <h1 class="header-title">{{TITLE}}</h1>
           <span class="header-badge">Formato Calendário</span>
         </div>
         <div class="header-subtitle">
@@ -299,10 +373,10 @@ export const CALENDAR_PDF_HTML_TEMPLATE = `<!DOCTYPE html>
 
     <footer class="footer">
       <div class="footer-left">
-        <span>Beneficência Portuguesa de São Caetano do Sul</span>
-        <span>|</span>
+        <strong>Beneficência Portuguesa de São Caetano do Sul</strong>
+        <span class="footer-divider">|</span>
         <span>Gerado em: {{GENERATED_AT}}</span>
-        <span>|</span>
+        <span class="footer-divider">|</span>
         <span>Documento confidencial / Uso interno</span>
       </div>
       <div class="footer-right">
@@ -390,8 +464,11 @@ export function renderCalendarPdfTemplate(data: {
             const corenInfo = s.corenText ? ` • ${escapeHtml(s.corenText)}` : ''
             chipsHtml.push(
               `<div class="shift-chip ${shiftClass}" title="${escapeHtml(s.name)} - ${s.periodLetter} ${corenInfo}">
-                <span class="shift-chip-name">• ${escapeHtml(s.name)}</span>
-                <span class="shift-chip-details">(${s.periodLetter}${corenInfo}${timeInfo})</span>
+                <div class="shift-chip-row">
+                  <span class="shift-period-tag">${s.periodLetter}</span>
+                  <span class="shift-chip-name">${escapeHtml(s.name)}</span>
+                </div>
+                <div class="shift-chip-details">${escapeHtml(s.corenText || '')}${timeInfo}</div>
               </div>`,
             )
           })
@@ -399,8 +476,11 @@ export function renderCalendarPdfTemplate(data: {
           cell.weekendOffs.forEach((off) => {
             chipsHtml.push(
               `<div class="shift-chip shift-off" title="Folga: ${escapeHtml(off.name)}">
-                <span class="shift-chip-name">• ${escapeHtml(off.name)}</span>
-                <span class="shift-chip-details">(Folga FDS)</span>
+                <div class="shift-chip-row">
+                  <span class="shift-period-tag">FDS</span>
+                  <span class="shift-chip-name">${escapeHtml(off.name)}</span>
+                </div>
+                <div class="shift-chip-details">Folga FDS</div>
               </div>`,
             )
           })

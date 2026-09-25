@@ -6,7 +6,6 @@ import {
 } from '@/templates/calendarPdfTemplate'
 import {
   buildCalendarHtml,
-  prepareCalendarTemplateData,
   exportAutoGenerateCalendarPdf,
   renderHtmlToPdfLandscape,
 } from '@/utils/scalePdfExport'
@@ -28,7 +27,7 @@ vi.mock('html2canvas', () => {
   }
 })
 
-describe('Pipeline de Template HTML para Exportação de Calendário PDF', () => {
+describe('Pipeline de Template HTML para Exportação de Calendário PDF (BPSCS)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
@@ -94,7 +93,7 @@ describe('Pipeline de Template HTML para Exportação de Calendário PDF', () =>
       expect(escapeHtml(null)).toBe('')
     })
 
-    it('preenche corretamente mês, dias da semana e plantonistas nos dias certos', () => {
+    it('preenche corretamente mês, dias da semana e plantonistas nos dias certos com layout novo', () => {
       const html = buildCalendarHtml({
         title: 'Escala Mensal UTI Adulto',
         sectorName: 'UTI Geral',
@@ -119,6 +118,10 @@ describe('Pipeline de Template HTML para Exportação de Calendário PDF', () =>
       expect(html).toContain('02/05')
       expect(html).toContain('03/05')
       expect(html).toContain('Folga FDS')
+      // Verifica classes de estilo institucional do novo layout
+      expect(html).toContain('shift-chip-row')
+      expect(html).toContain('shift-period-tag')
+      expect(html).toContain('header-org')
     })
   })
 
@@ -157,7 +160,7 @@ describe('Pipeline de Template HTML para Exportação de Calendário PDF', () =>
     })
   })
 
-  describe('Requisito (c): O template inclui a tag <img> do logotipo com a constante BPSCS_LOGO_BASE64', () => {
+  describe('Requisito (c): O template inclui a tag <img> do logotipo com a constante BPSCS_LOGO_BASE64 no cabeçalho superior direito', () => {
     it('o HTML gerado contém a tag img com src preenchido exatamente por BPSCS_LOGO_BASE64', () => {
       const html = buildCalendarHtml({
         days: mockDays,
@@ -170,10 +173,11 @@ describe('Pipeline de Template HTML para Exportação de Calendário PDF', () =>
       expect(html).toContain('<img src="data:image/png;base64,')
       expect(html).toContain(BPSCS_LOGO_BASE64)
       expect(html).toContain('alt="Logo Institucional BPSCS"')
+      expect(html).toContain('header-logo')
     })
   })
 
-  describe('Requisito (d): Rodapé com Página X de Y e data/hora', () => {
+  describe('Requisito (d): Rodapé com Página X de Y, data/hora e identificação institucional', () => {
     it('renderCalendarPdfTemplate insere paginação e data/hora no rodapé', () => {
       const html = renderCalendarPdfTemplate({
         title: 'Teste Rodapé',
@@ -187,6 +191,7 @@ describe('Pipeline de Template HTML para Exportação de Calendário PDF', () =>
       expect(html).toContain('Gerado em: 15/05/2025 às 14:30')
       expect(html).toContain('Página 1 de 1')
       expect(html).toContain('Beneficência Portuguesa de São Caetano do Sul')
+      expect(html).toContain('Documento confidencial / Uso interno')
     })
   })
 })
