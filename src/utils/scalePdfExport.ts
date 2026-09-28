@@ -5,8 +5,11 @@ import { formatCorenLabel } from '@/lib/escala-calendar-formatter'
 import { BPSCS_LOGO_BASE64 } from './bpscsLogo'
 import {
   renderCalendarPdfTemplate,
+  renderMultiPageCalendarHtml,
   type CalendarDayCellData,
   type ShiftItemData,
+  type DayOverflowItem,
+  type CalendarPageData,
 } from '@/templates/calendarPdfTemplate'
 
 export interface ShiftSlot {
@@ -348,17 +351,28 @@ export function prepareCalendarTemplateData(params: ExportAutoGenerateCalendarPd
   })
   const sectorStaffProfiles = Array.from(sectorStaffMap.values())
 
-  // Dias da semana rotacionados conforme o primeiro dia da lista (idêntico à tela do ShiftCalendar)
-  const baseWeekLabels = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
-  const firstDayDow = days.length > 0 ? days[0].dayOfWeek : 0
-  const rotatedHeadLabels = [
-    ...baseWeekLabels.slice(firstDayDow),
-    ...baseWeekLabels.slice(0, firstDayDow),
+  // Cabeçalhos dos 7 dias da semana (sempre calendário padrão: Domingo a Sábado)
+  const standardWeekLabels = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+  const dayNamesFull = [
+    'Domingo',
+    'Segunda-feira',
+    'Terça-feira',
+    'Quarta-feira',
+    'Quinta-feira',
+    'Sexta-feira',
+    'Sábado',
   ]
 
-  // Montar semanas (linhas de 7 dias)
+  // Montar semanas estruturadas rigorosamente de Domingo (0) a Sábado (6)
   const rawWeeks: Array<Array<{ date: Date; key: string; dayOfWeek: number } | null>> = []
   let currentWeek: Array<{ date: Date; key: string; dayOfWeek: number } | null> = []
+
+  // Preencher com nulls os dias anteriores ao primeiro dia da grade até o domingo correspondente
+  const firstDay = days.length > 0 ? days[0] : null
+  const initialEmptyDaysCount = firstDay ? firstDay.dayOfWeek : 0
+  for (let i = 0; i < initialEmptyDaysCount; i++) {
+    currentWeek.push(null)
+  }
 
   days.forEach((dayItem) => {
     currentWeek.push(dayItem)
@@ -461,6 +475,8 @@ export function prepareCalendarTemplateData(params: ExportAutoGenerateCalendarPd
       return {
         dayFormatted,
         dayNumber: dayItem.date.getDate(),
+        dateKey,
+        dayOfWeekName: dayNamesFull[dayItem.dayOfWeek],
         isWeekend: isWeekendDay,
         shifts: formattedShifts,
         weekendOffs: weekendOffStaff,
@@ -477,24 +493,124 @@ export function prepareCalendarTemplateData(params: ExportAutoGenerateCalendarPd
     cycleName,
     cycleStart: cycleStartFormatted,
     cycleEnd: cycleEndFormatted,
-    weekDayHeaders: rotatedHeadLabels,
+    weekDayHeaders: standardWeekLabels,
     weeks,
     logoBase64: BPSCS_LOGO_BASE64,
   }
 }
 
 /**
- * Gera a string HTML completa do Calendário Mensal a partir dos parâmetros de exportação.
+ * Prepara páginas do documento de calendário com paginação/continuação determinística.
+ * Quando o número de semanas for 6, cada célula da grade principal comporta 2 chips.
+ * Quando for 5 semanas comporta 3 chips; quando for 4 semanas comporta 4 chips.
+ * Plantonistas excedentes são agrupados em páginas de continuação adicionais legíveis.
  */
-export function buildCalendarHtml(params: ExportAutoGenerateCalendarPdfParams): string {
+export function prepareCalendarMultiPageData(params: ExportAutoGenerateCalendarPdfParams): {
+  pages: CalendarPageData[]
+  maxChipsPerCell: number
+  templateData: ReturnType<typeof prepareCalendarTemplateData>
+} {
   const templateData = prepareCalendarTemplateData(params)
-  return renderCalendarPdfTemplate(templateData)
+  const numWeeks = templateData.weeks.length
+  const maxChipsPerCell = numWeeks >= 6 ? 2 : numWeeks === 5 ? 3 : 4
+
+  const overflowDays: DayOverflowItem[] = []
+
+  templateData.weeks.forEach((week) => {
+    week.forEach((cell) => {
+      if (!cell) return
+      const totalItems = cell.shifts.length + cell.weekendOffs.length
+      if (totalItems > maxChipsPerCell) {
+        // Separa itens excedentes mantendo ordem
+        const allItems: Array<{ type: 'shift' | 'off'; data: any }> = []
+        cell.shifts.forEach((s) => allItems.push({ type: 'shift', data: s }))
+        cell.weekendOffs.forEach((off) => allItems.push({ type: 'off', data: off }))
+
+        const overflowItems = allItems.slice(maxChipsPerCell)
+        const remainingShifts: ShiftItemData[] = overflowItems
+          .filter((i) => i.type === 'shift')
+          .map((i) => i.data)
+        const remainingWeekendOffs: Array<{ id: string; name: string }> = overflowItems
+          .filter((i) => i.type === 'off')
+          .map((i) => i.data)
+
+        overflowDays.push({
+          dayFormatted: cell.dayFormatted,
+          dateKey: cell.dateKey || cell.dayFormatted,
+          dayOfWeekName: cell.dayOfWeekName || '',
+          isWeekend: cell.isWeekend,
+          remainingShifts,
+          remainingWeekendOffs,
+        })
+      }
+    })
+  })
+
+  const pages: CalendarPageData[] = [
+    {
+      pageType: 'grid',
+      pageIndex: 0,
+      weeks: templateData.weeks,
+    },
+  ]
+
+  // Se houver overflow, agrupa os dias em páginas de continuação (até 6 dias por página de continuação)
+  if (overflowDays.length > 0) {
+    const ITEMS_PER_CONTINUATION_PAGE = 6
+    for (let i = 0; i < overflowDays.length; i += ITEMS_PER_CONTINUATION_PAGE) {
+      const chunk = overflowDays.slice(i, i + ITEMS_PER_CONTINUATION_PAGE)
+      pages.push({
+        pageType: 'continuation',
+        pageIndex: pages.length,
+        overflowDays: chunk,
+      })
+    }
+  }
+
+  return {
+    pages,
+    maxChipsPerCell,
+    templateData,
+  }
 }
 
 /**
- * Converte HTML em documento jsPDF no formato A4 Landscape (297x210 mm) em 1 página única.
- * Utiliza html2canvas para renderizar o DOM off-screen em canvas de alta resolução,
- * escalando proporcionalmente para caber exatamente na página sem corte ou tarja cinza.
+ * Gera a string HTML completa do Calendário Mensal a partir dos parâmetros de exportação,
+ * gerando documento multi-página com páginas de continuação quando necessário.
+ */
+export function buildCalendarHtml(params: ExportAutoGenerateCalendarPdfParams): string {
+  const { pages, maxChipsPerCell, templateData } = prepareCalendarMultiPageData(params)
+
+  const subtitleParts: string[] = []
+  if (templateData.sectorName) subtitleParts.push(`Setor: ${templateData.sectorName}`)
+  if (templateData.cycleName) subtitleParts.push(`Ciclo: ${templateData.cycleName}`)
+  else if (templateData.cycleStart && templateData.cycleEnd) {
+    subtitleParts.push(`Período: ${templateData.cycleStart} a ${templateData.cycleEnd}`)
+  } else if (templateData.cycleStart) {
+    subtitleParts.push(`Início: ${templateData.cycleStart}`)
+  }
+  const subtitle = subtitleParts.join(' &nbsp;|&nbsp; ')
+
+  const now = new Date()
+  const generatedAt = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()} às ${String(
+    now.getHours(),
+  ).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+
+  return renderMultiPageCalendarHtml({
+    title: templateData.title,
+    subtitle,
+    logoBase64: templateData.logoBase64,
+    generatedAt,
+    weekDayHeaders: templateData.weekDayHeaders,
+    pages,
+    maxChipsPerCell,
+  })
+}
+
+/**
+ * Converte HTML em documento jsPDF no formato A4 Landscape (297x210 mm).
+ * Suporta múltiplas páginas com renderização off-screen de cada `.page-container`
+ * com html2canvas de alta resolução (scale: 2), sem sobreposição e sem corte.
  */
 export async function renderHtmlToPdfLandscape(
   htmlString: string,
@@ -550,38 +666,49 @@ export async function renderHtmlToPdfLandscape(
       }),
     )
 
-    const targetElement = (container.querySelector('#calendar-pdf-page') ||
-      container) as HTMLElement
+    const pageElements = Array.from(container.querySelectorAll('.page-container')) as HTMLElement[]
 
-    const canvas = await html2canvas(targetElement, {
-      scale: 2, // 2x para garantir nitidez nos textos pequenos
-      useCORS: true,
-      allowTaint: true,
-      backgroundColor: '#ffffff',
-      logging: false,
-      width: targetElement.offsetWidth || 1123,
-      height: targetElement.offsetHeight || 794,
-      windowWidth: 1123,
-      windowHeight: 794,
-    })
+    const elementsToRender =
+      pageElements.length > 0
+        ? pageElements
+        : [(container.firstElementChild || container) as HTMLElement]
 
-    if (canvas && typeof canvas.toDataURL === 'function') {
-      const imgData = canvas.toDataURL('image/png')
-      // A4 Landscape em mm: 297 x 210
-      const pageWidth = 297
-      const pageHeight = 210
+    for (let pageIdx = 0; pageIdx < elementsToRender.length; pageIdx++) {
+      if (pageIdx > 0) {
+        doc.addPage('a4', 'landscape')
+      }
 
-      // Calcular proporção para caber exatamente em 1 página
-      const canvasWidth = canvas.width
-      const canvasHeight = canvas.height
-      const ratio = Math.min(pageWidth / canvasWidth, pageHeight / canvasHeight)
+      const pageEl = elementsToRender[pageIdx]
+      const canvas = await html2canvas(pageEl, {
+        scale: 2, // 2x para garantir nitidez nos textos pequenos
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+        width: pageEl.offsetWidth || 1123,
+        height: pageEl.offsetHeight || 794,
+        windowWidth: 1123,
+        windowHeight: 794,
+      })
 
-      const renderedWidth = canvasWidth * ratio
-      const renderedHeight = canvasHeight * ratio
-      const offsetX = (pageWidth - renderedWidth) / 2
-      const offsetY = (pageHeight - renderedHeight) / 2
+      if (canvas && typeof canvas.toDataURL === 'function') {
+        const imgData = canvas.toDataURL('image/png')
+        // A4 Landscape em mm: 297 x 210
+        const pageWidth = 297
+        const pageHeight = 210
 
-      doc.addImage(imgData, 'PNG', offsetX, offsetY, renderedWidth, renderedHeight)
+        // Calcular proporção para caber exatamente na página
+        const canvasWidth = canvas.width
+        const canvasHeight = canvas.height
+        const ratio = Math.min(pageWidth / canvasWidth, pageHeight / canvasHeight)
+
+        const renderedWidth = canvasWidth * ratio
+        const renderedHeight = canvasHeight * ratio
+        const offsetX = (pageWidth - renderedWidth) / 2
+        const offsetY = (pageHeight - renderedHeight) / 2
+
+        doc.addImage(imgData, 'PNG', offsetX, offsetY, renderedWidth, renderedHeight)
+      }
     }
   } finally {
     if (container.parentNode) {
