@@ -161,10 +161,14 @@ routerAdd(
         return { action: 'set', label: 'BERÇÁRIO', sectorName: 'UTI PED / BERÇARIO' }
       }
       if (text.indexOf('AMBULATORIO RIO') >= 0) {
-        return { action: 'clear', label: 'AMBULATÓRIO RIO / ENDOSCOPIA', unmapped: true }
+        return {
+          action: 'set',
+          label: 'AMBULATÓRIO RIO / ENDOSCOPIA',
+          sectorName: 'AMBULATÓRIO RIO JANEIRO - ENDOSCOPIA',
+        }
       }
       if (text.indexOf('PRE FATURAMENTO') >= 0) {
-        return { action: 'clear', label: 'PRÉ-FATURAMENTO', unmapped: true }
+        return { action: 'set', label: 'PRÉ-FATURAMENTO', sectorName: 'PRÉ-FATURAMENTO' }
       }
       if (
         normalizedSheet.indexOf('IMAGENS') >= 0 &&
