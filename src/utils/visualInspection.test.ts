@@ -410,5 +410,25 @@ describe('Inspeção e Verificação Estrutural do HTML do PDF Renderizado — C
     expect(html).toMatch(/\.badge-shift-type\s*\{\s*font-size:\s*8\.5pt/)
     expect(html).toMatch(/\.calendar-table\s*colgroup\s*col\s*\{\s*width:\s*14\.285714%/)
     expect(html).toMatch(/@page\s*\{\s*size:\s*297mm\s*210mm\s*landscape/)
+
+    // 4.9. Inspeção visual minuciosa dos dias 17/10, 18/10 e 19/10 (anteriormente esmagados na pág 2 do exportador antigo)
+    // No ciclo 26/09/2026 a 25/10/2026:
+    // 17/10 (sábado) está na Semana 4 (dias 11/10 a 17/10, Página 4 de 7)
+    // 18/10 (domingo) e 19/10 (segunda) estão na Semana 5 (dias 18/10 a 24/10, Página 5 de 7)
+    // Verifica ausência de colunas residuais, compressão, sobreposição ou texto cortado nestas semanas
+    const week4Html = pageHtmlBlocks[3] // Página 4 = Semana 4
+    const week5Html = pageHtmlBlocks[4] // Página 5 = Semana 5
+
+    expect(week4Html).toContain('17/10')
+    expect(week4Html).toContain('Sábado')
+    expect(week4Html).not.toContain('transform: scale')
+    expect(week4Html).not.toContain('zoom:')
+
+    expect(week5Html).toContain('18/10')
+    expect(week5Html).toContain('19/10')
+    expect(week5Html).toContain('Domingo')
+    expect(week5Html).toContain('Segunda-feira')
+    expect(week5Html).not.toContain('transform: scale')
+    expect(week5Html).not.toContain('zoom:')
   })
 })

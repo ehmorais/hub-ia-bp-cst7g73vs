@@ -34,7 +34,7 @@ import {
   Move,
   Wand2,
 } from 'lucide-react'
-import { exportScalePdf, type ShiftSlot } from '@/utils/scalePdfExport'
+import { exportAutoGenerateCalendarPdf } from '@/utils/scalePdfExport'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { useRealtime } from '@/hooks/use-realtime'
@@ -113,6 +113,7 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
     targetDate: '',
   })
   const [isGenerating, setIsGenerating] = useState(false)
+  const [isExportingPdf, setIsExportingPdf] = useState(false)
   const [generationError, setGenerationError] = useState<string | null>(null)
   const [activeDraftRecord, setActiveDraftRecord] = useState<any>(null)
 
@@ -1130,69 +1131,104 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
               days.length > 0 &&
               Object.keys(draft).some((uid) => Object.keys(draft[uid] || {}).length > 0)
 
-            const handleExportToPdf = () => {
-              const allStaffSorted = [...draftUsers].sort((a, b) =>
-                (a.name || '').localeCompare(b.name || '', 'pt-BR'),
-              )
-              const staffNames: Record<string, string> = {}
-              const staffRows: string[] = []
-              allStaffSorted.forEach((u) => {
-                staffNames[u.id] = u.name || `Colaborador ${u.id}`
-                staffRows.push(u.id)
-              })
+            const handleExportCalendarPdf = async () => {
+              if (!hasScaleData || isExportingPdf) return
 
-              const dateHeaders = days.map((d) => d.key)
+              setIsExportingPdf(true)
+              try {
+                const cycleStart = (selectedCycle?.start_date || '').split(' ')[0].split('T')[0]
+                const cycleEnd = (selectedCycle?.end_date || '').split(' ')[0].split('T')[0]
 
-              const cellMap: Record<string, Record<string, ShiftSlot>> = {}
-              allStaffSorted.forEach((u) => {
-                cellMap[u.id] = {}
-                dateHeaders.forEach((ds) => {
-                  const val = draft[u.id]?.[ds]
-                  if (val && val !== 'F') {
-                    if (val === 'D') {
-                      cellMap[u.id][ds] = { type: 'day', start: '07:00', end: '19:00' }
-                    } else if (val === 'N') {
-                      cellMap[u.id][ds] = { type: 'night', start: '19:00', end: '07:00' }
-                    } else if (val === 'M') {
-                      cellMap[u.id][ds] = { type: 'day', start: '07:00', end: '13:00' }
-                    } else if (val === 'T') {
-                      cellMap[u.id][ds] = { type: 'day', start: '13:00', end: '19:00' }
-                    } else {
-                      cellMap[u.id][ds] = { type: String(val) }
+                const shiftsForPdf: any[] = []
+                draftUsers.forEach((u) => {
+                  days.forEach((d) => {
+                    const dateStr = d.key
+                    const cell = draft[u.id]?.[dateStr]
+                    if (cell && cell !== 'F') {
+                      let st = '07:00:00'
+                      let duration = 12
+
+                      const contract = contracts.find((c) => (c.staff_profile || c.user) === u.id)
+                      const wh = contract?.expand?.shift_type?.work_hours
+
+                      if (cell === 'D') {
+                        st = '07:00:00'
+                        duration = wh || 12
+                      } else if (cell === 'N') {
+                        st = '19:00:00'
+                        duration = wh || 12
+                      } else if (cell === 'M') {
+                        st = '07:00:00'
+                        duration = wh || 6
+                      } else if (cell === 'T') {
+                        st = '13:00:00'
+                        duration = wh || 6
+                      }
+
+                      const startDate = new Date(`${dateStr}T${st}.000Z`)
+                      const endDate = new Date(startDate.getTime() + duration * 3600000)
+                      const formattedEnd =
+                        endDate.toISOString().replace('T', ' ').substring(0, 23) + 'Z'
+
+                      shiftsForPdf.push({
+                        staff_profile: u.id,
+                        sector: selectedSectorId,
+                        cycle: selectedCycleId,
+                        start_time: `${dateStr} ${st}.000Z`,
+                        end_time: formattedEnd,
+                        expand: {
+                          staff_profile: u,
+                          user: u,
+                        },
+                      })
                     }
-                  }
+                  })
                 })
-              })
 
-              const cycleStart = (selectedCycle?.start_date || '').split(' ')[0].split('T')[0]
-              const cycleEnd = (selectedCycle?.end_date || '').split(' ')[0].split('T')[0]
+                await exportAutoGenerateCalendarPdf({
+                  title: 'Escala de Plantões — Calendário',
+                  sectorName: selectedSector?.name,
+                  cycleName: selectedCycle?.name,
+                  cycleStart: cycleStart || undefined,
+                  cycleEnd: cycleEnd || undefined,
+                  days,
+                  shifts: shiftsForPdf,
+                  contracts,
+                  staffProfiles: draftUsers,
+                  draft: activeDraftRecord,
+                  weekendOffMap,
+                  selectedSectorId,
+                  selectedStaffId: selectedStaffId || undefined,
+                })
 
-              exportScalePdf({
-                title: 'Escala de Plantões',
-                sectorName: selectedSector?.name,
-                cycleStart: cycleStart || undefined,
-                cycleEnd: cycleEnd || undefined,
-                staffNames,
-                staffRows,
-                dateHeaders,
-                cellMap,
-                weekendOffMap,
-              })
-
-              toast({
-                title: 'PDF Gerado',
-                description: 'O arquivo PDF da escala foi exportado com sucesso.',
-              })
+                toast({
+                  title: 'PDF Gerado',
+                  description: 'O arquivo PDF da escala foi exportado com sucesso.',
+                })
+              } catch (error: any) {
+                toast({
+                  title: 'Erro ao exportar PDF',
+                  description: error?.message || 'Não foi possível gerar o PDF da escala.',
+                  variant: 'destructive',
+                })
+              } finally {
+                setIsExportingPdf(false)
+              }
             }
 
             const exportPdfButton = (
               <Button
                 variant="outline"
-                disabled={!hasScaleData}
-                onClick={handleExportToPdf}
+                disabled={!hasScaleData || isExportingPdf}
+                onClick={handleExportCalendarPdf}
                 className="gap-2 bg-white flex-1 xl:flex-none border-blue-200 hover:bg-blue-50 text-blue-800 disabled:opacity-50"
               >
-                <FileDown className="h-4 w-4" /> Exportar para PDF
+                {isExportingPdf ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <FileDown className="h-4 w-4" />
+                )}
+                Exportar para PDF
               </Button>
             )
 
