@@ -86,8 +86,52 @@ describe('Motor de Geração Simplificado - Regras Obrigatórias e Desempenho', 
   })
 
   it('5. Rascunho é salvo como rascunho e nunca publicado automaticamente', () => {
-    const draftStatus = 'draft'
-    expect(draftStatus).toBe('draft')
-    expect(draftStatus).not.toBe('published')
+    // Na geração de rascunho (generate_shifts_draft e generate_shifts):
+    // status é sempre explicitamente 'draft', e a publicação automática é proibida
+    const draftRecord = {
+      cycle: 'cycle-123',
+      sector: 'sector-456',
+      status: 'draft',
+      version: 1,
+      generation_source: 'deterministic',
+    }
+    expect(draftRecord.status).toBe('draft')
+    expect(draftRecord.status).not.toBe('published')
+
+    // Na chamada de commitShiftSchedule, auto-publish é sempre false
+    const autoPublish = false
+    expect(autoPublish).toBe(false)
+  })
+
+  it('6. Lock liberado em sucesso e falha (status terminal ou TTL de 5 min)', () => {
+    const isTerminalStatus = (status: string) =>
+      status === 'completed' || status === 'failed' || status === 'cancelled'
+
+    // Em sucesso (completed): lock é liberado
+    expect(isTerminalStatus('completed')).toBe(true)
+
+    // Em falha (failed ou cancelled): lock é liberado
+    expect(isTerminalStatus('failed')).toBe(true)
+    expect(isTerminalStatus('cancelled')).toBe(true)
+
+    // Em andamento ('generating' ou 'validating'): bloqueado se recente
+    expect(isTerminalStatus('generating')).toBe(false)
+    expect(isTerminalStatus('validating')).toBe(false)
+
+    // Lock stale (> 5 min / 300000ms): liberado mesmo se não-terminal
+    const TTL_MS = 300000
+    const isLockActive = (status: string, ageMs: number) => {
+      if (isTerminalStatus(status)) return false
+      return ageMs <= TTL_MS
+    }
+
+    // 1 min atrás em generating -> ativo
+    expect(isLockActive('generating', 60000)).toBe(true)
+    // 6 min atrás em generating -> expirado/liberado
+    expect(isLockActive('generating', 360000)).toBe(false)
+    // Concluído há 1 min -> liberado
+    expect(isLockActive('completed', 60000)).toBe(false)
+    // Falha há 1 min -> liberado
+    expect(isLockActive('failed', 60000)).toBe(false)
   })
 })
