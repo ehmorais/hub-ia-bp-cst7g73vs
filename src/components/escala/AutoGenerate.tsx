@@ -672,15 +672,10 @@ function AutoGenerateInner({
     })
 
     try {
-      const aiSettings = {
-        priority: localStorage.getItem('escala_ai_priority') || 'timeoff',
-        strictness: parseInt(localStorage.getItem('escala_ai_strictness') || '50', 10),
-      }
-
       const res: any = await generateDraftShifts(
         selectedCycle,
         selectedSector,
-        { ai_settings: aiSettings },
+        undefined,
         isRefinement ? refinementPrompt : undefined,
         isRefinement ? rawDraft : undefined,
         replace,
@@ -1284,9 +1279,8 @@ function AutoGenerateInner({
             <CardTitle>Geração Inteligente de Escalas</CardTitle>
           </div>
           <CardDescription>
-            O motor de IA analisará os contratos, regras, disponibilidade e setorização para gerar
-            um rascunho de escala para revisão. O resultado é salvo como rascunho e nunca publicado
-            automaticamente.
+            O gerador considera somente o regime 12x36 e exatamente 1 folga em fim de semana por mês
+            por colaborador. O resultado é salvo como rascunho e nunca publicado automaticamente.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">

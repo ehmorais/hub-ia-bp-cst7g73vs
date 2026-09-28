@@ -1,3 +1,9 @@
+// Simplified individual staff schedule generator for HUB IA BP
+// Only TWO mandatory generation rules:
+// 1. 12x36 alternation for 12x36 staff respecting parity/team ("Equipe 1" = even, "Equipe 2" = odd) and parity-inversion
+// 2. Exactly ONE weekend day off (Saturday or Sunday) per month in cycle. If no safe date, register warning and proceed (non-blocking).
+// No staffing minimum/ideal blocking, no timeoffs/vacations blocking, no hour limit blocking.
+
 routerAdd(
   'POST',
   '/backend/v1/generate-staff-schedule',
@@ -74,7 +80,6 @@ routerAdd(
     }
 
     const targetSector = sectorId || user.getString('default_sector')
-
     if (!targetSector) {
       logAudit('AI_STAFF_SCHEDULE_GENERATION', {
         status: 'error',
@@ -86,70 +91,6 @@ routerAdd(
       return e.json(400, {
         error: 'MISSING_SECTOR',
         message: 'Nenhum setor selecionado e o colaborador não possui setor padrão.',
-      })
-    }
-
-    // Pre-check: verify the target sector has users with both staff_role and staff_contract
-    var sectorUsers = $app.findRecordsByFilter(
-      'staff_profiles',
-      "default_sector='" + targetSector + "'",
-      '',
-      10000,
-      0,
-    )
-
-    var eligibleStaffCount = 0
-    sectorUsers.forEach(function (su) {
-      var hasRole = !!su.getString('staff_role')
-      var hasContract = false
-      if (hasRole) {
-        try {
-          $app.findFirstRecordByFilter('staff_contracts', "staff_profile='" + su.id + "'")
-          hasContract = true
-        } catch (_) {}
-      }
-      if (hasRole && hasContract) eligibleStaffCount++
-    })
-
-    // Also check the target user specifically
-    var targetHasRole = !!user.getString('staff_role')
-    var targetHasContract = false
-    if (targetHasRole) {
-      try {
-        $app.findFirstRecordByFilter('staff_contracts', "staff_profile='" + profileId + "'")
-        targetHasContract = true
-      } catch (_) {}
-    }
-
-    if (!targetHasRole || !targetHasContract) {
-      logAudit('AI_STAFF_SCHEDULE_GENERATION', {
-        status: 'error',
-        target_user: profileId,
-        cycle_id: cycleId,
-        sector_id: targetSector,
-        error: 'MISSING_STAFF_DATA',
-        target_has_role: targetHasRole,
-        target_has_contract: targetHasContract,
-        staff_processed: 0,
-      })
-      return e.json(400, {
-        error: 'MISSING_STAFF_DATA',
-        message: 'Nenhum colaborador com contrato e cargo ativo encontrado para este setor.',
-      })
-    }
-
-    if (eligibleStaffCount === 0) {
-      logAudit('AI_STAFF_SCHEDULE_GENERATION', {
-        status: 'error',
-        target_user: profileId,
-        cycle_id: cycleId,
-        sector_id: targetSector,
-        error: 'MISSING_STAFF_DATA',
-        staff_processed: 0,
-      })
-      return e.json(400, {
-        error: 'MISSING_STAFF_DATA',
-        message: 'Nenhum colaborador com contrato e cargo ativo encontrado para este setor.',
       })
     }
 
@@ -166,7 +107,7 @@ routerAdd(
         cycle_id: cycleId,
         sector_id: targetSector,
         error: 'Staff profile has no contract',
-        staff_processed: eligibleStaffCount,
+        staff_processed: 0,
       })
       return e.json(400, {
         error: 'MISSING_STAFF_DATA',
@@ -184,113 +125,180 @@ routerAdd(
     const restHours = shiftType ? shiftType.getInt('rest_hours') || 36 : 36
     let startTimeStr = shiftType ? shiftType.getString('start_time') : '07:00'
     if (!startTimeStr) startTimeStr = '07:00'
+    if (startTimeStr.length === 5) startTimeStr += ':00'
 
     const startDateRaw = cycle.getString('start_date').split(' ')[0]
     const endDateRaw = cycle.getString('end_date').split(' ')[0]
 
-    const timeoffs = $app.findRecordsByFilter(
-      'timeoff_requests',
-      "staff_profile='" +
-        profileId +
-        "' && cycle='" +
-        cycleId +
-        "' && (status='fulfilled' || status='pending')",
-      'date',
-      1000,
-      0,
-    )
-    const timeoffDays = []
-    timeoffs.forEach(function (request) {
-      var start = (request.getString('date') || '').split(' ')[0]
-      var end = (request.getString('end_date') || request.getString('date') || '').split(' ')[0]
-      if (!start) return
-      var cursor = new Date(start + 'T00:00:00Z')
-      var last = new Date((end || start) + 'T00:00:00Z')
-      while (cursor <= last) {
-        timeoffDays.push(cursor.toISOString().split('T')[0])
-        cursor = new Date(cursor.getTime() + 86400000)
-      }
-    })
-
-    const monthlyLimit = contract.getInt('monthly_hour_limit') || 180
-
-    const existingUserShifts = $app.findRecordsByFilter(
-      'shifts',
-      "staff_profile='" + profileId + "' && cycle='" + cycleId + "'",
-      '',
-      10000,
-      0,
-    )
-    const allSectorShifts = $app.findRecordsByFilter(
-      'shifts',
-      "sector='" + targetSector + "' && cycle='" + cycleId + "'",
-      '',
-      10000,
-      0,
-    )
-
-    const staffingCount = {}
-    let current = new Date(startDateRaw + 'T00:00:00Z')
-    const endObj = new Date(endDateRaw + 'T23:59:59Z')
-    while (current <= endObj) {
-      staffingCount[current.toISOString().split('T')[0]] = 0
-      current = new Date(current.getTime() + 24 * 3600000)
+    // Pure date-only and parity helpers
+    var parseDateOnly = function (s) {
+      var clean = (s || '').split('T')[0].split(' ')[0]
+      var parts = clean.split('-')
+      return { y: +parts[0], m: +parts[1], d: +parts[2] }
     }
 
-    allSectorShifts.forEach(function (s) {
-      if (s.getString('staff_profile') === profileId) return
-      var d = s.getString('start_time').split(' ')[0]
-      if (staffingCount[d] !== undefined) staffingCount[d]++
-    })
-
-    const createdShifts = []
-
-    let bestStartOffset = 0
-    let minScore = 999999
-    const stepHours = workHours + restHours
-    const stepDays = Math.max(1, Math.round(stepHours / 24))
-
-    for (let offset = 0; offset < stepDays; offset++) {
-      let score = 0
-      let c = new Date(startDateRaw + 'T00:00:00Z')
-      c = new Date(c.getTime() + offset * 24 * 3600000)
-      while (c <= endObj) {
-        const dStr = c.toISOString().split('T')[0]
-        score += staffingCount[dStr] || 0
-        c = new Date(c.getTime() + stepDays * 24 * 3600000)
-      }
-      if (score < minScore) {
-        minScore = score
-        bestStartOffset = offset
-      }
+    var formatDateOnly = function (y, m, d) {
+      var utc = new Date(Date.UTC(y, m - 1, d))
+      var fY = utc.getUTCFullYear()
+      var fM = utc.getUTCMonth() + 1
+      var fD = utc.getUTCDate()
+      return fY + '-' + (fM < 10 ? '0' + fM : '' + fM) + '-' + (fD < 10 ? '0' + fD : '' + fD)
     }
 
-    current = new Date(startDateRaw + 'T00:00:00Z')
-    current = new Date(current.getTime() + bestStartOffset * 24 * 3600000)
-    let totalHours = 0
-    let skippedTimeoff = 0
+    var addDaysDateOnly = function (dateStr, days) {
+      var parsed = parseDateOnly(dateStr)
+      var utc = new Date(Date.UTC(parsed.y, parsed.m - 1, parsed.d + days))
+      return formatDateOnly(utc.getUTCFullYear(), utc.getUTCMonth() + 1, utc.getUTCDate())
+    }
 
-    while (current <= endObj && totalHours + workHours <= monthlyLimit) {
-      const dateStr = current.toISOString().split('T')[0]
+    var dayOfWeekDateOnly = function (dateStr) {
+      var parsed = parseDateOnly(dateStr)
+      return new Date(Date.UTC(parsed.y, parsed.m - 1, parsed.d)).getUTCDay()
+    }
 
-      if (timeoffDays.indexOf(dateStr) === -1) {
-        let st = startTimeStr
-        if (st.length === 5) st += ':00'
+    var ANCHOR_YEAR = 2026
+    var ANCHOR_MONTH = 10
 
-        const shiftStart = new Date(dateStr + 'T' + st + '.000Z')
-        const shiftEnd = new Date(shiftStart.getTime() + workHours * 3600000)
+    var getDaysInMonth = function (y, m) {
+      return new Date(Date.UTC(y, m, 0)).getUTCDate()
+    }
 
-        createdShifts.push({
-          start_time: shiftStart.toISOString().replace('T', ' ').substring(0, 23) + 'Z',
-          end_time: shiftEnd.toISOString().replace('T', ' ').substring(0, 23) + 'Z',
-        })
-        totalHours += workHours
+    var resolveTeamWorkingParity = function (base, year, month) {
+      if (!base || (base !== 'even' && base !== 'odd')) return base
+      var targetTotalMonths = year * 12 + (month - 1)
+      var anchorTotalMonths = ANCHOR_YEAR * 12 + (ANCHOR_MONTH - 1)
+      if (targetTotalMonths === anchorTotalMonths) return base
+
+      var count31 = 0
+      if (targetTotalMonths > anchorTotalMonths) {
+        for (var mi = anchorTotalMonths; mi < targetTotalMonths; mi++) {
+          var cy = Math.floor(mi / 12)
+          var cm = (mi % 12) + 1
+          if (getDaysInMonth(cy, cm) === 31) count31++
+        }
       } else {
-        skippedTimeoff++
+        for (var mj = targetTotalMonths; mj < anchorTotalMonths; mj++) {
+          var cby = Math.floor(mj / 12)
+          var cbm = (mj % 12) + 1
+          if (getDaysInMonth(cby, cbm) === 31) count31++
+        }
       }
-
-      current = new Date(current.getTime() + stepDays * 24 * 3600000)
+      var shouldInvert = count31 % 2 !== 0
+      if (!shouldInvert) return base
+      return base === 'even' ? 'odd' : 'even'
     }
+
+    var isStaffEligibleForCivilDate = function (dateStr, parity) {
+      if (!parity || (parity !== 'even' && parity !== 'odd')) return true
+      if (!dateStr || typeof dateStr !== 'string') return true
+      var clean = dateStr.split('T')[0].split(' ')[0]
+      var parts = clean.split('-')
+      if (parts.length < 3) return true
+      var y = parseInt(parts[0], 10)
+      var m = parseInt(parts[1], 10)
+      var d = parseInt(parts[2], 10)
+      if (isNaN(y) || isNaN(m) || isNaN(d)) return true
+
+      var activeParity = resolveTeamWorkingParity(parity, y, m)
+      var dayParity = d % 2 === 0 ? 'even' : 'odd'
+      return activeParity === dayParity
+    }
+
+    var getMonthsInCycle = function (startStr, endStr) {
+      var s = parseDateOnly(startStr)
+      var e = parseDateOnly(endStr)
+      var months = []
+      var curY = s.y
+      var curM = s.m
+      while (curY < e.y || (curY === e.y && curM <= e.m)) {
+        var key = curY + '-' + (curM < 10 ? '0' + curM : '' + curM)
+        months.push({ key: key, year: curY, month: curM })
+        curM++
+        if (curM > 12) {
+          curM = 1
+          curY++
+        }
+      }
+      return months
+    }
+
+    var cycleMonths = getMonthsInCycle(startDateRaw, endDateRaw)
+
+    // Rule 1: 12x36 sequence across the cycle
+    var parity = user.getString('shift_parity') || ''
+    var cycleStartDate = (user.getString('cycle_start_date') || '').split(' ')[0].split('T')[0]
+    var is12x36 = workHours === 12 && restHours >= 36
+
+    var shiftDays = []
+    if (is12x36 && (parity === 'even' || parity === 'odd')) {
+      var curD = startDateRaw
+      while (curD <= endDateRaw) {
+        if (isStaffEligibleForCivilDate(curD, parity)) {
+          shiftDays.push(curD)
+        }
+        curD = addDaysDateOnly(curD, 1)
+      }
+    } else {
+      var stepDays = Math.max(2, Math.round((workHours + restHours) / 24))
+      var offset = 0
+      if (cycleStartDate && cycleStartDate >= startDateRaw && cycleStartDate <= endDateRaw) {
+        var pA = parseDateOnly(cycleStartDate)
+        var pS = parseDateOnly(startDateRaw)
+        var diff = Math.round(
+          (Date.UTC(pA.y, pA.m - 1, pA.d) - Date.UTC(pS.y, pS.m - 1, pS.d)) / 86400000,
+        )
+        offset = ((diff % stepDays) + stepDays) % stepDays
+      }
+      var cD = addDaysDateOnly(startDateRaw, offset)
+      while (cD <= endDateRaw) {
+        shiftDays.push(cD)
+        cD = addDaysDateOnly(cD, stepDays)
+      }
+    }
+
+    // Rule 2: exactly ONE weekend day off (Saturday or Sunday) per month in cycle
+    var shiftDaysSet = {}
+    shiftDays.forEach(function (d) {
+      shiftDaysSet[d] = true
+    })
+
+    var assignedWeekendOffs = []
+    var warnings = []
+
+    cycleMonths.forEach(function (mInfo) {
+      var monthPrefix = mInfo.key
+      var candidates = []
+      shiftDays.forEach(function (d) {
+        if (d.startsWith(monthPrefix)) {
+          var dow = dayOfWeekDateOnly(d)
+          if (dow === 6 || dow === 0) {
+            candidates.push(d)
+          }
+        }
+      })
+
+      if (candidates.length > 0) {
+        var chosen = candidates[0]
+        assignedWeekendOffs.push(chosen)
+        delete shiftDaysSet[chosen]
+      } else {
+        warnings.push(
+          'Sem plantão de fim de semana na paridade no mês ' + mInfo.key + ' para folga.',
+        )
+      }
+    })
+
+    var finalDates = Object.keys(shiftDaysSet).sort()
+    var createdShifts = []
+
+    finalDates.forEach(function (dateStr) {
+      const shiftStart = new Date(dateStr + 'T' + startTimeStr + '.000Z')
+      const shiftEnd = new Date(shiftStart.getTime() + workHours * 3600000)
+      createdShifts.push({
+        start_time: shiftStart.toISOString().replace('T', ' ').substring(0, 23) + 'Z',
+        end_time: shiftEnd.toISOString().replace('T', ' ').substring(0, 23) + 'Z',
+      })
+    })
 
     $app.runInTransaction((txApp) => {
       var previous = txApp.findRecordsByFilter(
@@ -322,12 +330,16 @@ routerAdd(
       cycle_id: cycleId,
       sector_id: targetSector,
       shifts_created: createdShifts.length,
-      total_hours: totalHours,
-      skipped_timeoff_days: skippedTimeoff,
-      staff_processed: eligibleStaffCount,
+      total_hours: createdShifts.length * workHours,
+      staff_processed: 1,
     })
 
-    return e.json(200, { success: true, count: createdShifts.length })
+    return e.json(200, {
+      success: true,
+      count: createdShifts.length,
+      weekend_off_assignments: assignedWeekendOffs,
+      warnings: warnings.length > 0 ? warnings : undefined,
+    })
   },
   $apis.requireAuth(),
 )
