@@ -53,6 +53,7 @@ routerAdd(
       'ENFERMEIROS',
       'TEC/AUX',
       'AG REPOSIÇÃO',
+      'REPOSIÇÃO',
       'JULHO',
       'AGOSTO',
     ]
@@ -128,7 +129,11 @@ routerAdd(
       var text = normalizeSectorText(rawText)
       var normalizedSheet = normalizeSectorText(sheetName)
 
-      if (text.indexOf('GERENCIA') >= 0 || text.indexOf('SUPERVISAO') >= 0) {
+      if (
+        text.indexOf('GERENCIA') >= 0 ||
+        text.indexOf('SUPERVISAO') >= 0 ||
+        text.indexOf('SUPERVISOR') >= 0
+      ) {
         return { action: 'clear', label: 'GERÊNCIA / SUPERVISÃO' }
       }
       if (text.indexOf('PRONTO SOCORRO ADULTO') >= 0) {
@@ -137,6 +142,14 @@ routerAdd(
           label: 'PRONTO SOCORRO ADULTO (RIO / RESPIRATÓRIO)',
           sectorName: 'PS ADULTO',
           note: 'A escala agrupa Rio e Respiratório; foi usada a categoria principal PS ADULTO.',
+        }
+      }
+      if (text.indexOf('RESPIRATORIO') >= 0) {
+        return {
+          action: 'set',
+          label: 'PS RESPIRATÓRIO / RIO',
+          sectorName: 'PS RESPIRATÓRIO',
+          note: 'A escala agrupa Respiratório e Rio; foi usada a categoria PS RESPIRATÓRIO.',
         }
       }
       if (text.indexOf('PRONTO SOCORRO INFANTIL') >= 0) {
@@ -167,12 +180,14 @@ routerAdd(
           sectorName: 'AMBULATÓRIO RIO JANEIRO - ENDOSCOPIA',
         }
       }
-      if (text.indexOf('PRE FATURAMENTO') >= 0) {
+      if (text.indexOf('FATURAMENTO') >= 0) {
         return { action: 'set', label: 'PRÉ-FATURAMENTO', sectorName: 'PRÉ-FATURAMENTO' }
       }
       if (
         normalizedSheet.indexOf('IMAGENS') >= 0 &&
-        (text.indexOf('ENFERMEIROS') >= 0 || text.indexOf('SETOR IMAGEM') >= 0)
+        (text.indexOf('ENFERMEIROS') >= 0 ||
+          text.indexOf('SETOR IMAGEM') >= 0 ||
+          text.indexOf('IMAGEM') >= 0)
       ) {
         return { action: 'set', label: 'SETOR DE IMAGENS', sectorName: 'SETOR DE IMAGENS' }
       }
