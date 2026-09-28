@@ -542,7 +542,7 @@ export const CALENDAR_PDF_COMMON_STYLES = `
       gap: 4px;
     }
     .legend-chip {
-      font-size: 8pt;
+      font-size: 8.5pt;
       font-weight: 900;
       padding: 1px 4px;
       border-radius: 2px;

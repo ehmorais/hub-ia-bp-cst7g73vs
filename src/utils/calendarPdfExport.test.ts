@@ -88,9 +88,10 @@ describe('Pipeline de Calendário Semanal Paginado em PDF (BPSCS)', () => {
       expect(CALENDAR_PDF_COMMON_STYLES).toContain('font-size: 9.5pt')
       expect(CALENDAR_PDF_COMMON_STYLES).toContain('font-size: 8.5pt')
 
-      // Garante que não existem fontes minúsculas (tipo 6px ou 7px do layout anterior comprimido)
+      // Garante que não existem fontes minúsculas (tipo 6px, 7px ou < 8.5pt)
       expect(CALENDAR_PDF_COMMON_STYLES).not.toContain('font-size: 6.')
       expect(CALENDAR_PDF_COMMON_STYLES).not.toContain('font-size: 7.')
+      expect(CALENDAR_PDF_COMMON_STYLES).not.toContain('font-size: 8pt')
       expect(CALENDAR_PDF_COMMON_STYLES).not.toContain('font-size: 6px')
       expect(CALENDAR_PDF_COMMON_STYLES).not.toContain('font-size: 7px')
 
