@@ -500,10 +500,14 @@ export function prepareCalendarTemplateData(params: ExportAutoGenerateCalendarPd
 }
 
 /**
- * Prepara páginas do documento de calendário com paginação/continuação determinística.
- * Quando o número de semanas for 6, cada célula da grade principal comporta 2 chips.
- * Quando for 5 semanas comporta 3 chips; quando for 4 semanas comporta 4 chips.
- * Plantonistas excedentes são agrupados em páginas de continuação adicionais legíveis.
+ * Prepara páginas do documento de calendário com paginação SEMANAL (exatamente 1 semana por página)
+ * e continuações dedicadas para dias com excesso de plantonistas (alta densidade).
+ *
+ * Cada semana (domingo a sábado, 7 colunas iguais) ganha sua própria página A4 Paisagem,
+ * com células espaçosas e fontes legíveis (mínimo 9.5pt para nomes, 8.5pt para COREN/metadados).
+ * Dias com mais de 4 profissionais mantêm os 4 primeiros na grade semanal e desdobram
+ * o dia completo em páginas adicionais de continuação, garantindo que nenhum nome seja cortado
+ * ou comprimido.
  */
 export function prepareCalendarMultiPageData(params: ExportAutoGenerateCalendarPdfParams): {
   pages: CalendarPageData[]
@@ -511,61 +515,59 @@ export function prepareCalendarMultiPageData(params: ExportAutoGenerateCalendarP
   templateData: ReturnType<typeof prepareCalendarTemplateData>
 } {
   const templateData = prepareCalendarTemplateData(params)
-  const numWeeks = templateData.weeks.length
-  const maxChipsPerCell = numWeeks >= 6 ? 2 : numWeeks === 5 ? 3 : 4
+  const maxChipsPerCell = 4 // Em A4 landscape com 1 semana por página, 4 cards por célula cabem confortavelmente
 
-  const overflowDays: DayOverflowItem[] = []
+  const pages: CalendarPageData[] = []
+  const totalWeeks = templateData.weeks.length
 
-  templateData.weeks.forEach((week) => {
-    week.forEach((cell) => {
+  templateData.weeks.forEach((weekDays, weekIdx) => {
+    // Acha primeiro e último dia não nulo desta semana
+    const validDays = weekDays.filter((d): d is CalendarDayCellData => d !== null)
+    const startDateFormatted = validDays.length > 0 ? validDays[0].dayFormatted : ''
+    const endDateFormatted =
+      validDays.length > 0 ? validDays[validDays.length - 1].dayFormatted : ''
+
+    // 1. Adiciona a página principal da semana
+    pages.push({
+      pageType: 'week',
+      pageIndex: pages.length,
+      weekData: {
+        weekIndex: weekIdx + 1,
+        weekTotal: totalWeeks,
+        startDateFormatted,
+        endDateFormatted,
+        days: weekDays,
+      },
+    })
+
+    // 2. Se algum dia dessa semana exceder maxChipsPerCell, gera páginas de continuação para aquele dia
+    weekDays.forEach((cell) => {
       if (!cell) return
       const totalItems = cell.shifts.length + cell.weekendOffs.length
       if (totalItems > maxChipsPerCell) {
-        // Separa itens excedentes mantendo ordem
-        const allItems: Array<{ type: 'shift' | 'off'; data: any }> = []
-        cell.shifts.forEach((s) => allItems.push({ type: 'shift', data: s }))
-        cell.weekendOffs.forEach((off) => allItems.push({ type: 'off', data: off }))
+        // Divide os itens daquele dia em lotes de até 12 plantonistas por página de continuação
+        const SHIFTS_PER_CONTINUATION_PAGE = 12
+        const totalBatches = Math.ceil(totalItems / SHIFTS_PER_CONTINUATION_PAGE)
 
-        const overflowItems = allItems.slice(maxChipsPerCell)
-        const remainingShifts: ShiftItemData[] = overflowItems
-          .filter((i) => i.type === 'shift')
-          .map((i) => i.data)
-        const remainingWeekendOffs: Array<{ id: string; name: string }> = overflowItems
-          .filter((i) => i.type === 'off')
-          .map((i) => i.data)
+        for (let b = 0; b < totalBatches; b++) {
+          const startIdx = b * SHIFTS_PER_CONTINUATION_PAGE
+          const batchItems = cell.shifts.slice(startIdx, startIdx + SHIFTS_PER_CONTINUATION_PAGE)
 
-        overflowDays.push({
-          dayFormatted: cell.dayFormatted,
-          dateKey: cell.dateKey || cell.dayFormatted,
-          dayOfWeekName: cell.dayOfWeekName || '',
-          isWeekend: cell.isWeekend,
-          remainingShifts,
-          remainingWeekendOffs,
-        })
+          pages.push({
+            pageType: 'day_continuation',
+            pageIndex: pages.length,
+            continuationDay: {
+              ...cell,
+              shifts: batchItems,
+              weekendOffs: b === 0 ? cell.weekendOffs : [],
+            },
+            continuationBatchIndex: totalBatches > 1 ? b + 1 : undefined,
+            continuationBatchTotal: totalBatches > 1 ? totalBatches : undefined,
+          })
+        }
       }
     })
   })
-
-  const pages: CalendarPageData[] = [
-    {
-      pageType: 'grid',
-      pageIndex: 0,
-      weeks: templateData.weeks,
-    },
-  ]
-
-  // Se houver overflow, agrupa os dias em páginas de continuação (até 6 dias por página de continuação)
-  if (overflowDays.length > 0) {
-    const ITEMS_PER_CONTINUATION_PAGE = 6
-    for (let i = 0; i < overflowDays.length; i += ITEMS_PER_CONTINUATION_PAGE) {
-      const chunk = overflowDays.slice(i, i + ITEMS_PER_CONTINUATION_PAGE)
-      pages.push({
-        pageType: 'continuation',
-        pageIndex: pages.length,
-        overflowDays: chunk,
-      })
-    }
-  }
 
   return {
     pages,
@@ -603,7 +605,6 @@ export function buildCalendarHtml(params: ExportAutoGenerateCalendarPdfParams): 
     generatedAt,
     weekDayHeaders: templateData.weekDayHeaders,
     pages,
-    maxChipsPerCell,
   })
 }
 

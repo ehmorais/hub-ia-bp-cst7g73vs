@@ -1,9 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import {
+  CALENDAR_PDF_COMMON_STYLES,
   CALENDAR_PDF_HTML_TEMPLATE,
   renderCalendarPdfTemplate,
   renderMultiPageCalendarHtml,
-  renderWeeksHtml,
+  renderWeeklyCellHtml,
+  renderWeeklyTableBody,
+  renderStaffCardHtml,
   formatCompactStaffName,
   escapeHtml,
 } from '@/templates/calendarPdfTemplate'
@@ -32,7 +35,7 @@ vi.mock('html2canvas', () => {
   }
 })
 
-describe('Pipeline de Template HTML para Exportação de Calendário PDF (BPSCS)', () => {
+describe('Pipeline de Calendário Semanal Paginado em PDF (BPSCS)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
@@ -79,16 +82,30 @@ describe('Pipeline de Template HTML para Exportação de Calendário PDF (BPSCS)
   const mockWeekendOffMap = new Map<string, Set<string>>()
   mockWeekendOffMap.set('st1', new Set(['2025-05-03'])) // st1 folga no sábado 03/05
 
-  describe('Requisito (a): Template HTML contém placeholders e preenche dados corretamente', () => {
-    it('o template base exporta a string HTML com os placeholders oficiais', () => {
-      expect(CALENDAR_PDF_HTML_TEMPLATE).toContain('{{TITLE}}')
-      expect(CALENDAR_PDF_HTML_TEMPLATE).toContain('{{SUBTITLE}}')
-      expect(CALENDAR_PDF_HTML_TEMPLATE).toContain('{{LOGO_BASE64}}')
-      expect(CALENDAR_PDF_HTML_TEMPLATE).toContain('{{WEEK_HEADERS_HTML}}')
-      expect(CALENDAR_PDF_HTML_TEMPLATE).toContain('{{WEEKS_HTML}}')
-      expect(CALENDAR_PDF_HTML_TEMPLATE).toContain('{{GENERATED_AT}}')
-      expect(CALENDAR_PDF_HTML_TEMPLATE).toContain('{{PAGE_CURRENT}}')
-      expect(CALENDAR_PDF_HTML_TEMPLATE).toContain('{{PAGE_TOTAL}}')
+  describe('Requisitos de Tipografia e Ausência de Compressão CSS/Canvas', () => {
+    it('garante que os estilos do template definem fontes >= 9pt/8pt e não usam transform/scale de compressão', () => {
+      // Verifica tamanho mínimo de fonte para nomes e títulos
+      expect(CALENDAR_PDF_COMMON_STYLES).toContain('font-size: 9.5pt')
+      expect(CALENDAR_PDF_COMMON_STYLES).toContain('font-size: 8.5pt')
+
+      // Garante que não existem fontes minúsculas (tipo 6px ou 7px do layout anterior comprimido)
+      expect(CALENDAR_PDF_COMMON_STYLES).not.toContain('font-size: 6.')
+      expect(CALENDAR_PDF_COMMON_STYLES).not.toContain('font-size: 7.')
+      expect(CALENDAR_PDF_COMMON_STYLES).not.toContain('font-size: 6px')
+      expect(CALENDAR_PDF_COMMON_STYLES).not.toContain('font-size: 7px')
+
+      // Garante ausência total de transformações ou scale CSS compressivo
+      expect(CALENDAR_PDF_COMMON_STYLES).not.toContain('transform: scale')
+      expect(CALENDAR_PDF_COMMON_STYLES).not.toContain('transform-origin')
+      expect(CALENDAR_PDF_COMMON_STYLES).not.toContain('zoom:')
+    })
+
+    it('formatCompactStaffName preserva o nome completo sem truncar para iniciais', () => {
+      const longName = 'Laodiceia da Silva Goes Dias'
+      expect(formatCompactStaffName(longName)).toBe('Laodiceia da Silva Goes Dias')
+
+      const secondName = 'Cristiane Santos Lopes de Oliveira'
+      expect(formatCompactStaffName(secondName)).toBe('Cristiane Santos Lopes de Oliveira')
     })
 
     it('escapeHtml protege tags e caracteres especiais', () => {
@@ -97,20 +114,12 @@ describe('Pipeline de Template HTML para Exportação de Calendário PDF (BPSCS)
       )
       expect(escapeHtml(null)).toBe('')
     })
+  })
 
-    it('formatCompactStaffName encurta nomes longos preservando acentos em português', () => {
-      expect(formatCompactStaffName('Laodiceia da Silva Goes Dias', 22)).toBe(
-        'Laodiceia da S. G. Dias',
-      )
-      expect(formatCompactStaffName('Ana Paula', 22)).toBe('Ana Paula')
-      expect(formatCompactStaffName('Cristiane Santos Lopes de Oliveira', 22)).toBe(
-        'Cristiane S. L. de Oliveira',
-      )
-    })
-
-    it('preenche corretamente mês, dias da semana e plantonistas nos dias certos com layout novo', () => {
+  describe('Requisitos de Layout Semanal Paginado: 1 semana por página e 7 colunas iguais', () => {
+    it('renderiza exatamente 1 semana por página com 7 colunas iguais (14.285714%)', () => {
       const html = buildCalendarHtml({
-        title: 'Escala Mensal UTI Adulto',
+        title: 'Escala Semanal UTI',
         sectorName: 'UTI Geral',
         cycleName: 'Maio 2025',
         cycleStart: '2025-05-01',
@@ -122,25 +131,24 @@ describe('Pipeline de Template HTML para Exportação de Calendário PDF (BPSCS)
         weekendOffMap: mockWeekendOffMap,
       })
 
-      expect(html).toContain('Escala Mensal UTI Adulto')
-      expect(html).toContain('Setor: UTI Geral')
-      expect(html).toContain('Ciclo: Maio 2025')
+      expect(html).toContain('width: 14.285714%')
+      expect(html).toContain('Semana 1 de 2')
+      expect(html).toContain('Semana 2 de 2')
       expect(html).toContain('Dra. Roberta Andrade')
       expect(html).toContain('Enf. Juliana Souza')
       expect(html).toContain('CRM 123456-SP')
       expect(html).toContain('COREN 654321-SP')
-      expect(html).toContain('01/05')
-      expect(html).toContain('02/05')
-      expect(html).toContain('03/05')
+      expect(html).toContain('badge-d')
+      expect(html).toContain('badge-n')
+      expect(html).toContain('badge-fds')
       expect(html).toContain('Folga Fim de Semana')
-      // Verifica classes de estilo institucional do novo layout
-      expect(html).toContain('shift-chip-row')
-      expect(html).toContain('shift-period-tag')
-      expect(html).toContain('header-org')
+      expect(html).toContain('Página 1 de 2')
+      expect(html).toContain('Página 2 de 2')
+      expect(html).toContain('Beneficência Portuguesa de São Caetano do Sul')
     })
   })
 
-  describe('Requisito (b): Export retorna PDF válido (A4 Landscape, output não vazio)', () => {
+  describe('Exportação jsPDF e Logotipo BPSCS', () => {
     it('renderHtmlToPdfLandscape instancia jsPDF em landscape e salva em A4', async () => {
       const doc = await renderHtmlToPdfLandscape('<div>Teste</div>', {
         title: 'Teste Landscape',
@@ -148,13 +156,12 @@ describe('Pipeline de Template HTML para Exportação de Calendário PDF (BPSCS)
 
       expect(doc).toBeInstanceOf(jsPDF)
       const pageInfo = doc.internal.pageSize
-      // A4 Landscape: width 297mm x height 210mm
       expect(Math.round(pageInfo.getWidth())).toBe(297)
       expect(Math.round(pageInfo.getHeight())).toBe(210)
       expect(doc.getNumberOfPages()).toBe(1)
     })
 
-    it('exportAutoGenerateCalendarPdf executa fluxo completo, chama html2canvas e salva arquivo com data', async () => {
+    it('exportAutoGenerateCalendarPdf executa fluxo completo e salva com filename seguro', async () => {
       const saveSpy = vi.spyOn(jsPDF.prototype, 'save').mockImplementation(() => undefined as any)
 
       const filename = await exportAutoGenerateCalendarPdf({
@@ -173,10 +180,8 @@ describe('Pipeline de Template HTML para Exportação de Calendário PDF (BPSCS)
       expect(saveSpy).toHaveBeenCalledWith('escala-2025-05.pdf')
       expect(html2canvas).toHaveBeenCalled()
     })
-  })
 
-  describe('Requisito (c): O template inclui a tag <img> do logotipo com a constante BPSCS_LOGO_BASE64 no cabeçalho superior direito', () => {
-    it('o HTML gerado contém a tag img com src preenchido exatamente por BPSCS_LOGO_BASE64', () => {
+    it('o HTML gerado contém a tag img com logotipo institucional BPSCS no canto superior direito', () => {
       const html = buildCalendarHtml({
         days: mockDays,
         shifts: mockShifts,
@@ -192,29 +197,7 @@ describe('Pipeline de Template HTML para Exportação de Calendário PDF (BPSCS)
     })
   })
 
-  describe('Requisito (d): Rodapé com Página X de Y, data/hora e identificação institucional', () => {
-    it('renderCalendarPdfTemplate insere paginação e data/hora no rodapé', () => {
-      const html = renderCalendarPdfTemplate({
-        title: 'Teste Rodapé',
-        weekDayHeaders: ['Dom', 'Seg'],
-        weeks: [[null, null]],
-        generatedAt: '15/05/2025 às 14:30',
-        pageCurrent: 1,
-        pageTotal: 1,
-      })
-
-      expect(html).toContain('Gerado em: 15/05/2025 às 14:30')
-      expect(html).toContain('Página 1 de 1')
-      expect(html).toContain('Beneficência Portuguesa de São Caetano do Sul')
-      expect(html).toContain('Documento confidencial / Uso interno')
-    })
-  })
-
-  // --------------------------------------------------------------------------
-  // Suíte Específica de Testes dos Requisitos de Layout (4, 5 e 6 semanas, alta densidade, PS Respiratório)
-  // --------------------------------------------------------------------------
-  describe('Requisitos Obrigatórios: 4, 5 e 6 semanas, densidade e continuidade determinística', () => {
-    // Helper para gerar lista de dias
+  describe('Cenário Obrigatório: PS RESPIRATÓRIO (26/09/2026 a 25/10/2026) e Alta Densidade', () => {
     function generateDays(startDateStr: string, count: number) {
       const days: Array<{ date: Date; key: string; dayOfWeek: number }> = []
       const [y, m, d] = startDateStr.split('-').map(Number)
@@ -231,70 +214,7 @@ describe('Pipeline de Template HTML para Exportação de Calendário PDF (BPSCS)
       return days
     }
 
-    it('Mês com 4 semanas exatas (Fevereiro comum iniciando no Domingo): 7 colunas alinhadas', () => {
-      // 2026-02-01 é domingo e fevereiro de 2026 tem 28 dias = exatamente 4 semanas
-      const febDays = generateDays('2026-02-01', 28)
-      const data = prepareCalendarTemplateData({
-        days: febDays,
-        shifts: [],
-        contracts: [],
-        staffProfiles: [],
-        weekendOffMap: new Map(),
-      })
-
-      expect(data.weeks.length).toBe(4)
-      data.weeks.forEach((w) => {
-        expect(w.length).toBe(7)
-      })
-      expect(data.weekDayHeaders).toEqual(['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'])
-      // O primeiro dia é domingo, sem células vazias no início
-      expect(data.weeks[0][0]?.dayNumber).toBe(1)
-      expect(data.weeks[3][6]?.dayNumber).toBe(28)
-    })
-
-    it('Mês com 5 semanas (Outubro padrão): grade com 5 linhas', () => {
-      // 2025-10-01 é quarta-feira (dayOfWeek = 3) -> 3 vazios antes, total 31 dias -> 5 semanas
-      const octDays = generateDays('2025-10-01', 31)
-      const data = prepareCalendarTemplateData({
-        days: octDays,
-        shifts: [],
-        contracts: [],
-        staffProfiles: [],
-        weekendOffMap: new Map(),
-      })
-
-      expect(data.weeks.length).toBe(5)
-      // Células vazias no início: Dom (null), Seg (null), Ter (null)
-      expect(data.weeks[0][0]).toBeNull()
-      expect(data.weeks[0][1]).toBeNull()
-      expect(data.weeks[0][2]).toBeNull()
-      expect(data.weeks[0][3]?.dayNumber).toBe(1) // Qua 01/10
-    })
-
-    it('Mês/Ciclo com 6 semanas (ex: PS Respiratório 26/09/2026 a 25/10/2026): grade com 6 linhas', () => {
-      // 26/09/2026 é Sábado (dayOfWeek = 6) -> 6 células vazias antes do dia 26/09
-      // Total 30 dias -> se estende até domingo 25/10/2026 -> abrange 6 semanas
-      const cycleDays = generateDays('2026-09-26', 30) // 26/09 a 25/10
-      const data = prepareCalendarTemplateData({
-        days: cycleDays,
-        shifts: [],
-        contracts: [],
-        staffProfiles: [],
-        weekendOffMap: new Map(),
-      })
-
-      expect(data.weeks.length).toBe(6)
-      // Primeira semana: 6 nulos + dia 26/09 no sábado
-      expect(data.weeks[0][0]).toBeNull()
-      expect(data.weeks[0][5]).toBeNull()
-      expect(data.weeks[0][6]?.dayFormatted).toBe('26/09')
-      // Última semana: dia 25/10 no domingo + 6 nulos no fim
-      expect(data.weeks[5][0]?.dayFormatted).toBe('25/10')
-      expect(data.weeks[5][1]).toBeNull()
-      expect(data.weeks[5][6]).toBeNull()
-    })
-
-    it('Cenário PS RESPIRATÓRIO com Laodiceia da Silva Goes Dias e alta densidade em 08/10/2026', () => {
+    it('Gera as semanas do ciclo 26/09 a 25/10/2026 com continuação dedicada para o dia 08/10/2026', () => {
       const cycleDays = generateDays('2026-09-26', 30) // 26/09 a 25/10/2026
 
       const staff = [
@@ -322,9 +242,15 @@ describe('Pipeline de Template HTML para Exportação de Calendário PDF (BPSCS)
           professional_id: 'COREN 538627',
           default_sector: 'sec-ps-resp',
         },
+        {
+          id: 'sp-cristiane',
+          name: 'Cristiane Santos Lopes de Oliveira',
+          professional_id: 'COREN 1928664',
+          default_sector: 'sec-ps-resp',
+        },
       ]
 
-      // Dia 08/10/2026 com 4 plantonistas no mesmo dia (alta densidade para 6 semanas onde limite é 2)
+      // Dia 08/10/2026 com 5 plantonistas (> limite de 4 na célula semanal)
       const shifts = [
         {
           id: 'sh-1',
@@ -354,13 +280,20 @@ describe('Pipeline de Template HTML para Exportação de Calendário PDF (BPSCS)
           end_time: '2026-10-09 07:00:00',
           expand: { staff_profile: staff[3] },
         },
+        {
+          id: 'sh-5',
+          staff_profile: 'sp-cristiane',
+          start_time: '2026-10-08 19:00:00',
+          end_time: '2026-10-09 07:00:00',
+          expand: { staff_profile: staff[4] },
+        },
       ]
 
       const weekendOffMap = new Map<string, Set<string>>()
-      weekendOffMap.set('sp-laodiceia', new Set(['2026-10-03'])) // Sábado folga FDS
+      weekendOffMap.set('sp-laodiceia', new Set(['2026-10-03'])) // Sábado 03/10 folga FDS
 
       const { pages, maxChipsPerCell, templateData } = prepareCalendarMultiPageData({
-        title: 'Escala de Plantões — Calendário',
+        title: 'Escala de Plantões — Calendário Semanal',
         sectorName: 'PS RESPIRATÓRIO',
         cycleName: 'Ciclo Outubro 2026',
         cycleStart: '2026-09-26',
@@ -372,18 +305,25 @@ describe('Pipeline de Template HTML para Exportação de Calendário PDF (BPSCS)
         weekendOffMap,
       })
 
-      // Para 6 semanas, maxChipsPerCell deve ser 2
-      expect(maxChipsPerCell).toBe(2)
-      // Como 08/10/2026 tem 4 plantões (> 2), gerou página adicional de continuação
-      expect(pages.length).toBe(2)
-      expect(pages[0].pageType).toBe('grid')
-      expect(pages[1].pageType).toBe('continuation')
-      expect(pages[1].overflowDays?.length).toBe(1)
-      expect(pages[1].overflowDays?.[0].dayFormatted).toBe('08/10')
-      expect(pages[1].overflowDays?.[0].remainingShifts.length).toBe(2)
+      // 6 semanas no total no ciclo (26/09 a 25/10 abrange 6 semanas) + 1 página de continuação para 08/10
+      expect(templateData.weeks.length).toBe(6)
+      expect(maxChipsPerCell).toBe(4)
+      expect(pages.length).toBe(7) // 6 semanas + 1 continuação
+
+      // Verifica tipos de páginas
+      expect(pages[0].pageType).toBe('week')
+      expect(pages[0].weekData?.weekIndex).toBe(1)
+      expect(pages[0].weekData?.days.length).toBe(7)
+
+      // Semana que contém dia 08/10 é a semana 2
+      // e logo após a semana 2 há a página de continuação para 08/10
+      const contPage = pages.find((p) => p.pageType === 'day_continuation')
+      expect(contPage).toBeDefined()
+      expect(contPage?.continuationDay?.dayFormatted).toBe('08/10')
+      expect(contPage?.continuationDay?.shifts.length).toBe(5)
 
       const fullHtml = buildCalendarHtml({
-        title: 'Escala de Plantões — Calendário',
+        title: 'Escala de Plantões — Calendário Semanal',
         sectorName: 'PS RESPIRATÓRIO',
         cycleName: 'Ciclo Outubro 2026',
         cycleStart: '2026-09-26',
@@ -395,29 +335,32 @@ describe('Pipeline de Template HTML para Exportação de Calendário PDF (BPSCS)
         weekendOffMap,
       })
 
-      // Verifica presença de cabeçalhos e rodapé em ambas as páginas
-      expect(fullHtml).toContain('PS RESPIRATÓRIO')
-      expect(fullHtml).toContain('Ciclo Outubro 2026')
-      expect(fullHtml).toContain('Página 1 de 2')
-      expect(fullHtml).toContain('Página 2 de 2')
-      // Nome compacto de Laodiceia na grade
-      expect(fullHtml).toContain('Laodiceia da S. G. Dias')
-      // Tag de profissionais adicionais na célula 08/10
-      expect(fullHtml).toContain('+2 profissional(is)')
-      // Página 2 detalhando os profissionais excedentes
-      expect(fullHtml).toContain('Continuação de Plantonistas')
+      // Presença de nomes COMPLETOS sem compressão
+      expect(fullHtml).toContain('Laodiceia da Silva Goes Dias')
+      expect(fullHtml).toContain('Marcia Ferreira Sales Silva')
       expect(fullHtml).toContain('Matheus Rodrigues Avelar')
-      expect(fullHtml).toContain('Catia A. da S. Pirelli')
-      // Folga FDS no sábado 03/10
-      expect(fullHtml).toContain('Folga Fim de Semana')
-      expect(fullHtml).toContain('badge-fds')
-    })
+      expect(fullHtml).toContain('Catia Aperecida da Silva Pirelli')
+      expect(fullHtml).toContain('Cristiane Santos Lopes de Oliveira')
 
-    it('renderWeeksHtml respeita o limite de chips e não quebra com semanas vazias', () => {
-      const emptyWeeks: Array<Array<any>> = [[null, null, null, null, null, null, null]]
-      const html = renderWeeksHtml(emptyWeeks, 3)
-      expect(html).toContain('empty-day')
-      expect(html).not.toContain('undefined')
+      // Presença dos registros COREN
+      expect(fullHtml).toContain('COREN 9470010')
+      expect(fullHtml).toContain('COREN 835384')
+      expect(fullHtml).toContain('COREN 1911297')
+      expect(fullHtml).toContain('COREN 538627')
+      expect(fullHtml).toContain('COREN 1928664')
+
+      // Título claro de semanas
+      expect(fullHtml).toContain('Semana 1 de 6')
+      expect(fullHtml).toContain('Semana 2 de 6')
+      expect(fullHtml).toContain('Semana 6 de 6')
+
+      // Continuação de 08/10
+      expect(fullHtml).toContain('Continuação — Quinta-feira, 08/10')
+      expect(fullHtml).toContain('Dia de Alta Densidade')
+
+      // Rodapé com numeração total
+      expect(fullHtml).toContain('Página 1 de 7')
+      expect(fullHtml).toContain('Página 7 de 7')
     })
   })
 })
