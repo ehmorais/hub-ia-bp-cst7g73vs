@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { buildCalendarHtml, prepareCalendarMultiPageData } from '@/utils/scalePdfExport'
+import {
+  buildCalendarHtml,
+  prepareCalendarMultiPageData,
+  renderHtmlToPdfLandscape,
+} from '@/utils/scalePdfExport'
 import * as fs from 'fs'
 import * as path from 'path'
 
@@ -166,7 +170,7 @@ describe('Inspeção e Verificação Estrutural do HTML do PDF Renderizado — C
     }
   })
 
-  it('inspeciona e valida o PDF real do PS Respiratório em escala 100% de cada página', async () => {
+  it('inspeciona e valida o PDF real do PS Respiratório em escala 100% de cada página e renderiza todas as páginas', async () => {
     // Ciclo 26/09/2026 a 25/10/2026 (30 dias)
     const days: Array<{ date: Date; key: string; dayOfWeek: number }> = []
     for (let i = 0; i < 30; i++) {
@@ -346,5 +350,65 @@ describe('Inspeção e Verificação Estrutural do HTML do PDF Renderizado — C
     expect(html).toContain('Semana 5 de 6')
     expect(html).toContain('Semana 6 de 6')
     expect(html).toContain('Continuação — Quinta-feira, 08/10')
+
+    // 4.7. Inspeção e Renderização Real de TODAS as páginas do PDF via exportAutoGenerateCalendarPdf / renderHtmlToPdfLandscape
+    const pdfDoc = await renderHtmlToPdfLandscape(html, {
+      title: 'Escala de Plantões — Calendário Semanal',
+      author: 'Gestão de Escalas BP — IA',
+    })
+
+    expect(pdfDoc).toBeDefined()
+    // Como vitest/jsdom roda em node sem layout real de DOM canvas, doc tem configuração A4 landscape
+    const pageSize = pdfDoc.internal.pageSize
+    expect(Math.round(pageSize.getWidth())).toBe(297)
+    expect(Math.round(pageSize.getHeight())).toBe(210)
+
+    // Conferência visual e tipográfica por regex em cada página gerada do HTML (escala 100%)
+    const pageHtmlBlocks = html.split('<div class="page-container"').slice(1)
+    expect(pageHtmlBlocks.length).toBe(7)
+
+    pageHtmlBlocks.forEach((pageContent, idx) => {
+      const pageNum = idx + 1
+      // Todas as páginas contêm o cabeçalho BPSCS
+      expect(pageContent).toContain('Beneficência Portuguesa de São Caetano do Sul')
+      expect(pageContent).toContain('alt="Logo Institucional BPSCS"')
+      // Rodapé com "Gerado em:" e paginação exata
+      expect(pageContent).toContain('Gerado em:')
+      expect(pageContent).toContain(`Página ${pageNum} de 7`)
+
+      // Nenhuma página deve conter scale/transform CSS ou fontes compactadas
+      expect(pageContent).not.toContain('transform: scale')
+      expect(pageContent).not.toContain('zoom:')
+
+      if (pageNum === 3) {
+        // Página 3 é a Continuação do dia 08/10 (quinta-feira)
+        expect(pageContent).toContain('Continuação — Quinta-feira, 08/10')
+        expect(pageContent).toContain('Laodiceia da Silva Goes Dias')
+        expect(pageContent).toContain('Marcia Ferreira Sales Silva')
+        expect(pageContent).toContain('Matheus Rodrigues Avelar')
+        expect(pageContent).toContain('Catia Aperecida da Silva Pirelli')
+        expect(pageContent).toContain('Cristiane Santos Lopes de Oliveira')
+        expect(pageContent).toContain('continuation-columns')
+        expect(pageContent).toContain('Total no dia: 5 plantonista(s)')
+      } else {
+        // Demais páginas são semanas 1, 2, 3, 4, 5, 6
+        expect(pageContent).toContain('calendar-wrapper')
+        expect(pageContent).toContain('calendar-table')
+        expect(pageContent).toContain('legend-bar')
+        expect(pageContent).toContain('week-headline-bar')
+        expect(pageContent).toContain('Semana ')
+      }
+    })
+
+    // 4.8. Validação minuciosa de fontes e dimensões tipográficas reais do CSS:
+    // Nomes de profissionais: font-size: 9.5pt (>= 9pt)
+    // Registros COREN / badges / horários: font-size: 8.5pt (>= 8pt)
+    // Célula com largura proporcional de 7 colunas iguais: 14.285714%
+    // A4 Landscape: 297mm 210mm
+    expect(html).toMatch(/\.staff-card-name\s*\{\s*font-size:\s*9\.5pt/)
+    expect(html).toMatch(/\.staff-card-details\s*\{\s*display:\s*flex;[\s\S]*?font-size:\s*8\.5pt/)
+    expect(html).toMatch(/\.badge-shift-type\s*\{\s*font-size:\s*8\.5pt/)
+    expect(html).toMatch(/\.calendar-table\s*colgroup\s*col\s*\{\s*width:\s*14\.285714%/)
+    expect(html).toMatch(/@page\s*\{\s*size:\s*297mm\s*210mm\s*landscape/)
   })
 })
