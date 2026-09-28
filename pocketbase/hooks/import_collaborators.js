@@ -71,6 +71,9 @@ routerAdd(
       if (u === 'AE' || u === 'AUXILIARDEENFERMAGEM') return 'Auxiliar de Enfermagem'
       if (u === 'GERENF' || u === 'GERENTEDEENFERMAGEM') return 'Gerente de Enfermagem'
       if (u === 'SUPENF' || u === 'SUPERVISORDEENFERMAGEM') return 'Supervisor de Enfermagem'
+      if (u === 'SUP' || u === 'SUPERV' || u === 'SUPERVISOR') return 'Supervisor de Enfermagem'
+      if (u === 'GR' || u === 'GER' || u === 'GEREN' || u === 'GERENTE')
+        return 'Gerente de Enfermagem'
 
       return funcName.trim()
     }
