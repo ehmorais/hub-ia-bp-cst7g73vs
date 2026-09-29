@@ -29,6 +29,7 @@ import { useRealtime } from '@/hooks/use-realtime'
 import { useAuth } from '@/hooks/use-auth'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { SIDEBAR_HOSPITAL_LOGO } from '@/utils/sidebarHospitalLogo'
 
 function CollapsibleSection({
   title,
@@ -181,9 +182,15 @@ export function AppSidebar() {
       <SidebarHeader className="p-6 min-h-[5rem] flex items-center justify-center border-b border-[#06402B]/10 bg-transparent mb-6">
         <Link
           to="/"
-          className="flex w-full items-center justify-center transition-opacity hover:opacity-80"
+          className="flex w-full items-center justify-center gap-3 transition-opacity hover:opacity-80"
+          aria-label="HUB IA BPSCS - Página inicial"
         >
-          <span className="font-extrabold text-2xl tracking-tighter text-[#06402B]">
+          <img
+            src={SIDEBAR_HOSPITAL_LOGO}
+            alt="Logo da Beneficência Portuguesa de São Caetano do Sul"
+            className="h-12 w-12 shrink-0 object-contain"
+          />
+          <span className="font-extrabold text-xl leading-tight tracking-tighter text-[#06402B]">
             HUB IA BPSCS
           </span>
         </Link>
