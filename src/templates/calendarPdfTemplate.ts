@@ -161,6 +161,26 @@ export const CALENDAR_PDF_COMMON_STYLES = `
       padding-right: 14px;
       min-width: 0;
     }
+    .header-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+    .header-logo-left {
+      flex: 0 0 auto;
+      width: 38px;
+      height: 38px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .header-logo-left img {
+      width: 38px;
+      height: 38px;
+      object-fit: contain;
+      display: block;
+    }
     .header-org {
       font-size: 9.5pt;
       font-weight: 800;
@@ -714,6 +734,7 @@ export function renderSinglePdfPageHtml(options: {
   title: string
   subtitle: string
   logoBase64: string
+  logoOnLeft?: boolean
   generatedAt: string
   weekDayHeaders: string[]
   weekData?: CalendarWeekData
@@ -730,6 +751,7 @@ export function renderSinglePdfPageHtml(options: {
     title,
     subtitle,
     logoBase64,
+    logoOnLeft = false,
     generatedAt,
     weekDayHeaders,
     weekData,
@@ -849,8 +871,25 @@ export function renderSinglePdfPageHtml(options: {
     `
   }
 
-  return `
-    <div class="page-container" id="calendar-pdf-page-${pageNumber}">
+  const headerHtml = logoOnLeft
+    ? `
+      <header class="header">
+        <div class="header-brand">
+          <div class="header-logo-left">
+            <img src="${logoBase64}" alt="Logo Institucional BPSCS" />
+          </div>
+          <div class="header-info">
+            <div class="header-org">Beneficência Portuguesa de São Caetano do Sul</div>
+            <div class="header-title-row">
+              <h1 class="header-title">${escapeHtml(title)}</h1>
+              ${pageBadge}
+            </div>
+            <div class="header-subtitle">${subtitle}</div>
+          </div>
+        </div>
+      </header>
+    `
+    : `
       <header class="header">
         <div class="header-info">
           <div class="header-org">Beneficência Portuguesa de São Caetano do Sul</div>
@@ -858,14 +897,17 @@ export function renderSinglePdfPageHtml(options: {
             <h1 class="header-title">${escapeHtml(title)}</h1>
             ${pageBadge}
           </div>
-          <div class="header-subtitle">
-            ${subtitle}
-          </div>
+          <div class="header-subtitle">${subtitle}</div>
         </div>
         <div class="header-logo">
           <img src="${logoBase64}" alt="Logo Institucional BPSCS" />
         </div>
       </header>
+    `
+
+  return `
+    <div class="page-container" id="calendar-pdf-page-${pageNumber}">
+      ${headerHtml}
 
       ${headlineBarHtml}
 
@@ -894,11 +936,20 @@ export function renderMultiPageCalendarHtml(options: {
   title: string
   subtitle: string
   logoBase64: string
+  logoOnLeft?: boolean
   generatedAt: string
   weekDayHeaders: string[]
   pages: CalendarPageData[]
 }): string {
-  const { title, subtitle, logoBase64, generatedAt, weekDayHeaders, pages } = options
+  const {
+    title,
+    subtitle,
+    logoBase64,
+    logoOnLeft = false,
+    generatedAt,
+    weekDayHeaders,
+    pages,
+  } = options
   const totalPages = pages.length
 
   const pagesHtml = pages
@@ -911,6 +962,7 @@ export function renderMultiPageCalendarHtml(options: {
         title,
         subtitle,
         logoBase64,
+        logoOnLeft,
         generatedAt,
         weekDayHeaders,
         weekData: page.weekData,

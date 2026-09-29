@@ -303,6 +303,8 @@ export interface ExportAutoGenerateCalendarPdfParams {
   weekendOffMap: Map<string, Set<string>>
   selectedSectorId?: string
   selectedStaffId?: string
+  logoBase64?: string
+  logoOnLeft?: boolean
 }
 
 /**
@@ -322,6 +324,8 @@ export function prepareCalendarTemplateData(params: ExportAutoGenerateCalendarPd
     weekendOffMap,
     selectedSectorId,
     selectedStaffId,
+    logoBase64,
+    logoOnLeft = false,
   } = params
 
   // Setor staff profiles para exibição de folgas de fim de semana
@@ -495,7 +499,8 @@ export function prepareCalendarTemplateData(params: ExportAutoGenerateCalendarPd
     cycleEnd: cycleEndFormatted,
     weekDayHeaders: standardWeekLabels,
     weeks,
-    logoBase64: BPSCS_LOGO_BASE64,
+    logoBase64: logoBase64 || BPSCS_LOGO_BASE64,
+    logoOnLeft,
   }
 }
 
@@ -602,6 +607,7 @@ export function buildCalendarHtml(params: ExportAutoGenerateCalendarPdfParams): 
     title: templateData.title,
     subtitle,
     logoBase64: templateData.logoBase64,
+    logoOnLeft: templateData.logoOnLeft,
     generatedAt,
     weekDayHeaders: templateData.weekDayHeaders,
     pages,

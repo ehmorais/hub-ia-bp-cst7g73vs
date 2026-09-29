@@ -66,6 +66,7 @@ import { Badge } from '@/components/ui/badge'
 import { StaffFilter } from './StaffFilter'
 import { formatCorenLabel, formatShiftCalendarSecondLine } from '@/lib/escala-calendar-formatter'
 import { isVacationDateInclusive } from '@/lib/escala-vacation'
+import { SIDEBAR_HOSPITAL_LOGO } from '@/utils/sidebarHospitalLogo'
 import { Palmtree } from 'lucide-react'
 
 type DraftCell = 'D' | 'N' | 'M' | 'T' | 'F' | ''
@@ -1199,6 +1200,8 @@ export function ScalePlanner(_props: { departmentId?: string; projectId?: string
                   weekendOffMap,
                   selectedSectorId,
                   selectedStaffId: selectedStaffId || undefined,
+                  logoBase64: SIDEBAR_HOSPITAL_LOGO,
+                  logoOnLeft: true,
                 })
 
                 toast({
