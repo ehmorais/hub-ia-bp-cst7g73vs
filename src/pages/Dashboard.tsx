@@ -7,6 +7,7 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '@/hooks/use-auth'
 import { getIcon } from '@/lib/icons'
 import { ToolUsageChart } from '@/components/ToolUsageChart'
+import { SIDEBAR_HOSPITAL_LOGO } from '@/utils/sidebarHospitalLogo'
 
 export default function Dashboard() {
   const { user, isAuthenticated } = useAuth()
@@ -67,9 +68,9 @@ export default function Dashboard() {
       <div className="flex flex-col gap-4 pb-4 border-b border-slate-100">
         <div className="flex items-center gap-3.5 sm:gap-4">
           <img
-            src="/assets/logo-hospital-bpscs.jpg"
-            alt="Beneficência Portuguesa São Caetano do Sul"
-            className="h-11 sm:h-14 md:h-16 w-auto object-contain shrink-0"
+            src={SIDEBAR_HOSPITAL_LOGO}
+            alt="Logo da Beneficência Portuguesa de São Caetano do Sul"
+            className="h-11 w-11 sm:h-14 sm:w-14 md:h-16 md:w-16 object-contain shrink-0"
           />
           <span className="font-extrabold text-2xl sm:text-3xl md:text-4xl text-[#06402B] tracking-tighter">
             HUB IA BPSCS
