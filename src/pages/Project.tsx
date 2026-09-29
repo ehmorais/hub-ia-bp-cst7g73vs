@@ -92,7 +92,8 @@ function ProjectContent() {
 
       {project.name === 'Gestão de Escalas' ? (
         <EscalasManagement projectId={id} departmentId={project.department} />
-      ) : project.name === 'Questionários de Exames' ? (
+      ) : project.name === 'Questionário de Exames' ||
+        project.name === 'Questionários de Exames' ? (
         <div className="p-8 text-center border rounded-lg bg-white shadow-sm flex flex-col items-center justify-center min-h-[300px] animate-fade-in-up">
           <div className="p-4 rounded-2xl bg-blue-100 text-blue-700 mb-4">
             <FileText className="h-12 w-12" />
@@ -104,7 +105,7 @@ function ProjectContent() {
           </p>
           <Button asChild size="lg" className="gap-2">
             <a
-              href="https://questionario-exames.goskip.app/login"
+              href="https://questionario-exames.goskip.app/"
               target="_blank"
               rel="noopener noreferrer"
             >
