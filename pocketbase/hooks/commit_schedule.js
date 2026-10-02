@@ -513,6 +513,20 @@ routerAdd(
     }
 
     var sortedProfileIds = Object.keys(profileMap).slice().sort()
+    var sectorRequiredWeekendCoverage = Math.max(1, sector.getInt('min_staffing') || 0)
+    var sectorBedCapacity = sector.getInt('bed_capacity') || 0
+    var sectorStaffingRatio = sector.getInt('staffing_ratio') || 0
+    if (
+      !sector.getBool('is_critical') &&
+      sectorBedCapacity > 0 &&
+      sectorStaffingRatio > 0
+    ) {
+      sectorRequiredWeekendCoverage = Math.max(
+        sectorRequiredWeekendCoverage,
+        Math.ceil(sectorBedCapacity / sectorStaffingRatio),
+        2,
+      )
+    }
 
     // Helper determinístico de paridade alinhado à paridade civil
     var computeNaturalPatternByStaffCommit = function (staffId, contractObj, cStart, cEnd) {
@@ -646,8 +660,11 @@ routerAdd(
         cCur = addDaysDateOnly(cCur, 1)
       }
 
-      // Se não veio do draft (ou coincidia com férias), remaneja para outro dia de fim de semana elegível
-      if (!weekendOffDate && wCandidates.length > 0) {
+      // Sem assignment no rascunho significa que a geração bloqueou esta folga para preservar cobertura.
+      // Só use fallback para rascunhos antigos que não tenham o mapa de folgas salvo.
+      var hasWeekendAssignment =
+        weekendOffAssignments && Object.prototype.hasOwnProperty.call(weekendOffAssignments, profileId)
+      if (!hasWeekendOffDate && !hasWeekendAssignment && wCandidates.length > 0) {
         var pIdx = sortedProfileIds.indexOf(profileId)
         weekendOffDate = wCandidates[(pIdx !== -1 ? pIdx : 0) % wCandidates.length]
       }

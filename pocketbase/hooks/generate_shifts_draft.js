@@ -1,8 +1,8 @@
 // Simplified schedule draft generator for HUB IA BP
-// Only TWO mandatory generation rules:
-// 1. 12x36 alternation for 12x36 staff respecting parity/team ("Equipe 1" = even, "Equipe 2" = odd) and parity-inversion
-// 2. Exactly ONE weekend day off (Saturday or Sunday) per month in cycle. If no safe date, register warning and proceed (non-blocking).
-// No secondary AI call ($ai.agent), no shift_rules, no timeoff/vacation/limits/staffing blocking the draft.
+// 1. 12x36 alternation respecting civil parity and parity-inversion.
+// 2. One Saturday OR Sunday off per cycle, distributed across dates without reducing daily coverage below the sector minimum (at least one).
+// If no safe weekend date exists, keep the shift and report a warning.
+// No secondary AI call ($ai.agent), shift_rules, timeoff/vacation/hours blocking the draft.
 
 routerAdd(
   'POST',
@@ -492,63 +492,99 @@ routerAdd(
     }
 
     // --- DETERMINISTIC 12x36 GENERATOR (FAST & STABLE) ---
-    // If AI is called, we do a single fast pass. If it fails or if not needed, we use the deterministic core.
+    // Weekend off days are allocated across the full cycle, with a coverage floor.
     updateRun({
       status: 'generating',
-      stage: 'Gerando escala (Regras: 12x36 e 1 folga FDS por mês)...',
+      stage: 'Gerando escala (12x36 e folgas de fim de semana distribuídas no ciclo)...',
       progress: 50,
     })
 
     var initialShiftsByStaff = {}
+    var weekendCandidatesByStaff = {}
+    var naturalWeekendCoverage = {}
     eligible.forEach(function (u) {
-      initialShiftsByStaff[u.id] = computeStaffNaturalDays(u)
-    })
-
-    // Rule 2: Exactly ONE weekend day off (Saturday or Sunday) per month in cycle for each collaborator.
-    // If no safe date, register a warning and continue (non-blocking).
-    var weekendOffAssignments = {}
-    var warnings = []
-
-    eligible.forEach(function (u) {
-      var staffDays = initialShiftsByStaff[u.id] || []
-      var staffDaysSet = {}
-      staffDays.forEach(function (d) {
-        staffDaysSet[d] = true
-      })
-
-      var assignedWeekendOffs = []
-
-      cycleMonths.forEach(function (mInfo) {
-        var monthPrefix = mInfo.key
-        // Find weekend days (Sat or Sun) that fall in this month and in the natural work sequence
-        var candidateWeekendDays = []
-        staffDays.forEach(function (d) {
-          if (d.startsWith(monthPrefix)) {
-            var dow = dayOfWeekDateOnly(d)
-            if (dow === 6 || dow === 0) {
-              candidateWeekendDays.push(d)
-            }
-          }
-        })
-
-        if (candidateWeekendDays.length > 0) {
-          // Choose one weekend day to be the weekend-off for this month
-          var chosenWeekendOff = candidateWeekendDays[0]
-          assignedWeekendOffs.push(chosenWeekendOff)
-          // Remove shift on this date from the collaborator's shifts
-          delete staffDaysSet[chosenWeekendOff]
-        } else {
-          warnings.push(
-            'Colaborador ' +
-              u.name +
-              ' não possui plantão de fim de semana na paridade para o mês ' +
-              mInfo.key +
-              '; folga de fim de semana não pôde ser alocada.',
-          )
+      var staffDays = computeStaffNaturalDays(u)
+      initialShiftsByStaff[u.id] = staffDays
+      var candidates = []
+      staffDays.forEach(function (date) {
+        var dow = dayOfWeekDateOnly(date)
+        if (dow === 6 || dow === 0) {
+          candidates.push(date)
+          naturalWeekendCoverage[date] = (naturalWeekendCoverage[date] || 0) + 1
         }
       })
+      weekendCandidatesByStaff[u.id] = candidates
+    })
 
-      weekendOffAssignments[u.id] = assignedWeekendOffs
+    // One weekend day off in the entire cycle. Reserve the sector's required
+    // minimum (at least one person) on every naturally staffed Saturday/Sunday.
+    var requiredWeekendCoverage = Math.max(1, sector.getInt('min_staffing') || 0)
+    var bedCapacity = sector.getInt('bed_capacity') || 0
+    var staffingRatio = sector.getInt('staffing_ratio') || 0
+    if (!sector.getBool('is_critical') && bedCapacity > 0 && staffingRatio > 0) {
+      requiredWeekendCoverage = Math.max(
+        requiredWeekendCoverage,
+        Math.ceil(bedCapacity / staffingRatio),
+        2,
+      )
+    }
+
+    var weekendOffAssignments = {}
+    var weekendOffBlockedStaff = []
+    var assignedWeekendOffByDate = {}
+    var warnings = []
+    var allocationOrder = eligible.slice().sort(function (a, b) {
+      var aCount = (weekendCandidatesByStaff[a.id] || []).length
+      var bCount = (weekendCandidatesByStaff[b.id] || []).length
+      return aCount - bCount || a.id.localeCompare(b.id)
+    })
+
+    allocationOrder.forEach(function (u, staffIndex) {
+      var candidates = weekendCandidatesByStaff[u.id] || []
+      var safeCandidates = candidates.filter(function (date) {
+        var naturalCount = naturalWeekendCoverage[date] || 0
+        var minimum = requiredWeekendCoverage
+        return naturalCount - (assignedWeekendOffByDate[date] || 0) - 1 >= minimum
+      })
+
+      safeCandidates.sort(function (a, b) {
+        var capacityA = Math.max(0, (naturalWeekendCoverage[a] || 0) - requiredWeekendCoverage)
+        var capacityB = Math.max(0, (naturalWeekendCoverage[b] || 0) - requiredWeekendCoverage)
+        var loadA = capacityA > 0 ? ((assignedWeekendOffByDate[a] || 0) + 1) / capacityA : 1
+        var loadB = capacityB > 0 ? ((assignedWeekendOffByDate[b] || 0) + 1) / capacityB : 1
+        if (loadA !== loadB) return loadA - loadB
+        if ((assignedWeekendOffByDate[a] || 0) !== (assignedWeekendOffByDate[b] || 0)) {
+          return (assignedWeekendOffByDate[a] || 0) - (assignedWeekendOffByDate[b] || 0)
+        }
+        var rotation = candidates.length > 0 ? staffIndex % candidates.length : 0
+        var indexA = (candidates.indexOf(a) - rotation + candidates.length) % candidates.length
+        var indexB = (candidates.indexOf(b) - rotation + candidates.length) % candidates.length
+        return indexA - indexB
+      })
+
+      var staffDaysSet = {}
+      ;(initialShiftsByStaff[u.id] || []).forEach(function (date) {
+        staffDaysSet[date] = true
+      })
+
+      if (safeCandidates.length === 0) {
+        weekendOffAssignments[u.id] = []
+        weekendOffBlockedStaff.push(u.id)
+        warnings.push(
+          'Folga de fim de semana não alocada para ' +
+            u.name +
+            ': nenhuma data do ciclo permite preservar o efetivo mínimo (' +
+            requiredWeekendCoverage +
+            '). Os plantões foram mantidos para não deixar a data descoberta.',
+        )
+      } else {
+        var chosenWeekendOff = safeCandidates[0]
+        weekendOffAssignments[u.id] = [chosenWeekendOff]
+        assignedWeekendOffByDate[chosenWeekendOff] =
+          (assignedWeekendOffByDate[chosenWeekendOff] || 0) + 1
+        delete staffDaysSet[chosenWeekendOff]
+      }
+
       initialShiftsByStaff[u.id] = Object.keys(staffDaysSet).sort()
     })
 
@@ -587,6 +623,8 @@ routerAdd(
         hard_violations: [],
         warnings: warnings.slice(0, 20),
         weekend_off_assignments: weekendOffAssignments,
+        weekend_off_blocked_staff: weekendOffBlockedStaff,
+        weekend_off_coverage_minimum: requiredWeekendCoverage,
         additional_off_assignments: {},
       })
       $app.saveNoValidate(draftRec)

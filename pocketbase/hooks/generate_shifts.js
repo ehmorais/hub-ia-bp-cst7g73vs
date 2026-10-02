@@ -1,8 +1,7 @@
 // Simplified multi-sector schedule generator for HUB IA BP
-// Only TWO mandatory generation rules:
-// 1. 12x36 alternation for 12x36 staff respecting parity/team ("Equipe 1" = even, "Equipe 2" = odd) and parity-inversion
-// 2. Exactly ONE weekend day off (Saturday or Sunday) per month in cycle. If no safe date, register warning and proceed (non-blocking).
-// No secondary AI call ($ai.agent), no shift_rules, no timeoff/vacation/limits/staffing blocking the schedule generation.
+// 1. 12x36 alternation respecting civil parity and parity-inversion.
+// 2. One Saturday OR Sunday off per collaborator per cycle, allocated by date without reducing coverage below the sector minimum (at least one).
+// If no safe weekend date exists, keep the shift and return a warning.
 
 routerAdd(
   'POST',
@@ -252,52 +251,105 @@ routerAdd(
       return days
     }
 
-    var initialShiftsByStaff = {}
-    usersWithContracts.forEach(function (u) {
-      initialShiftsByStaff[u.id] = computeStaffNaturalDays(u)
+    var requiredWeekendCoverageBySector = {}
+    var sectorById = {}
+    sectors.forEach(function (sector) {
+      var required = Math.max(1, sector.getInt('min_staffing') || 0)
+      var beds = sector.getInt('bed_capacity') || 0
+      var ratio = sector.getInt('staffing_ratio') || 0
+      if (!sector.getBool('is_critical') && beds > 0 && ratio > 0) {
+        required = Math.max(required, Math.ceil(beds / ratio), 2)
+      }
+      requiredWeekendCoverageBySector[sector.id] = required
+      sectorById[sector.id] = sector
     })
 
-    // Rule 2: exactly ONE weekend day off (Saturday or Sunday) per month
-    var weekendOffAssignments = {}
-    var warnings = []
-
+    var initialShiftsByStaff = {}
+    var weekendCandidatesByStaff = {}
+    var naturalWeekendCoverage = {}
     usersWithContracts.forEach(function (u) {
-      var staffDays = initialShiftsByStaff[u.id] || []
-      var staffDaysSet = {}
-      staffDays.forEach(function (d) {
-        staffDaysSet[d] = true
-      })
-
-      var assignedWeekendOffs = []
-
-      cycleMonths.forEach(function (mInfo) {
-        var monthPrefix = mInfo.key
-        var candidateWeekendDays = []
-        staffDays.forEach(function (d) {
-          if (d.startsWith(monthPrefix)) {
-            var dow = dayOfWeekDateOnly(d)
-            if (dow === 6 || dow === 0) {
-              candidateWeekendDays.push(d)
-            }
-          }
-        })
-
-        if (candidateWeekendDays.length > 0) {
-          var chosenWeekendOff = candidateWeekendDays[0]
-          assignedWeekendOffs.push(chosenWeekendOff)
-          delete staffDaysSet[chosenWeekendOff]
-        } else {
-          warnings.push(
-            'Colaborador ' +
-              u.name +
-              ' não possui plantão de fim de semana na paridade para o mês ' +
-              mInfo.key +
-              '; folga de fim de semana não pôde ser alocada.',
-          )
+      var staffDays = computeStaffNaturalDays(u)
+      initialShiftsByStaff[u.id] = staffDays
+      var candidates = []
+      staffDays.forEach(function (date) {
+        var dow = dayOfWeekDateOnly(date)
+        if (dow === 6 || dow === 0) {
+          candidates.push(date)
+          var coverageKey = u.sector_id + '|' + date
+          naturalWeekendCoverage[coverageKey] = (naturalWeekendCoverage[coverageKey] || 0) + 1
         }
       })
+      weekendCandidatesByStaff[u.id] = candidates
+    })
 
-      weekendOffAssignments[u.id] = assignedWeekendOffs
+    var weekendOffAssignments = {}
+    var weekendOffBlockedBySector = {}
+    var assignedWeekendOffByDate = {}
+    var warnings = []
+    var warningsBySector = {}
+    var allocationOrder = usersWithContracts.slice().sort(function (a, b) {
+      return (
+        (weekendCandidatesByStaff[a.id] || []).length -
+          (weekendCandidatesByStaff[b.id] || []).length ||
+        a.sector_id.localeCompare(b.sector_id) ||
+        a.id.localeCompare(b.id)
+      )
+    })
+
+    allocationOrder.forEach(function (u, staffIndex) {
+      var candidates = weekendCandidatesByStaff[u.id] || []
+      var requiredWeekendCoverage = requiredWeekendCoverageBySector[u.sector_id] || 1
+      var safeCandidates = candidates.filter(function (date) {
+        var coverageKey = u.sector_id + '|' + date
+        return (
+          (naturalWeekendCoverage[coverageKey] || 0) -
+            (assignedWeekendOffByDate[coverageKey] || 0) -
+            1 >=
+          requiredWeekendCoverage
+        )
+      })
+      safeCandidates.sort(function (a, b) {
+        var keyA = u.sector_id + '|' + a
+        var keyB = u.sector_id + '|' + b
+        var capA = Math.max(0, (naturalWeekendCoverage[keyA] || 0) - requiredWeekendCoverage)
+        var capB = Math.max(0, (naturalWeekendCoverage[keyB] || 0) - requiredWeekendCoverage)
+        var loadA = capA > 0 ? ((assignedWeekendOffByDate[keyA] || 0) + 1) / capA : 1
+        var loadB = capB > 0 ? ((assignedWeekendOffByDate[keyB] || 0) + 1) / capB : 1
+        if (loadA !== loadB) return loadA - loadB
+        if ((assignedWeekendOffByDate[keyA] || 0) !== (assignedWeekendOffByDate[keyB] || 0)) {
+          return (assignedWeekendOffByDate[keyA] || 0) - (assignedWeekendOffByDate[keyB] || 0)
+        }
+        var originalCandidates = weekendCandidatesByStaff[u.id] || []
+        var rotation = originalCandidates.length > 0 ? staffIndex % originalCandidates.length : 0
+        var indexA = (originalCandidates.indexOf(a) - rotation + originalCandidates.length) % originalCandidates.length
+        var indexB = (originalCandidates.indexOf(b) - rotation + originalCandidates.length) % originalCandidates.length
+        return indexA - indexB
+      })
+
+      var staffDaysSet = {}
+      ;(initialShiftsByStaff[u.id] || []).forEach(function (date) {
+        staffDaysSet[date] = true
+      })
+      if (safeCandidates.length === 0) {
+        weekendOffAssignments[u.id] = []
+        if (!weekendOffBlockedBySector[u.sector_id]) weekendOffBlockedBySector[u.sector_id] = []
+        weekendOffBlockedBySector[u.sector_id].push(u.id)
+        var warning =
+          'Folga de fim de semana não alocada para ' +
+          u.name +
+          ': nenhuma data segura preserva o efetivo mínimo (' +
+          requiredWeekendCoverage +
+          '). Plantões mantidos.'
+        warnings.push(warning)
+        if (!warningsBySector[u.sector_id]) warningsBySector[u.sector_id] = []
+        warningsBySector[u.sector_id].push(warning)
+      } else {
+        var chosenWeekendOff = safeCandidates[0]
+        var chosenKey = u.sector_id + '|' + chosenWeekendOff
+        weekendOffAssignments[u.id] = [chosenWeekendOff]
+        assignedWeekendOffByDate[chosenKey] = (assignedWeekendOffByDate[chosenKey] || 0) + 1
+        delete staffDaysSet[chosenWeekendOff]
+      }
       initialShiftsByStaff[u.id] = Object.keys(staffDaysSet).sort()
     })
 
@@ -351,12 +403,21 @@ routerAdd(
           draftRec.set('generation_source', 'deterministic')
           draftRec.set('generated_by', e.auth ? e.auth.id : '')
           draftRec.set('created_by', e.auth ? e.auth.id : '')
+          var sectorWeekendOffAssignments = {}
+          usersWithContracts.forEach(function (u) {
+            if (u.sector_id === sId && weekendOffAssignments[u.id]) {
+              sectorWeekendOffAssignments[u.id] = weekendOffAssignments[u.id]
+            }
+          })
+          var sectorWarnings = warningsBySector[sId] || []
           draftRec.set('validation_summary', {
             violations_count: 0,
-            warnings_count: warnings.length,
+            warnings_count: sectorWarnings.length,
             hard_violations: [],
-            warnings: warnings.slice(0, 20),
-            weekend_off_assignments: weekendOffAssignments,
+            warnings: sectorWarnings.slice(0, 20),
+            weekend_off_assignments: sectorWeekendOffAssignments,
+            weekend_off_blocked_staff: weekendOffBlockedBySector[sId] || [],
+            weekend_off_coverage_minimum: requiredWeekendCoverageBySector[sId] || 1,
             additional_off_assignments: {},
             cycle_start: cycleStart,
             cycle_end: cycleEnd,

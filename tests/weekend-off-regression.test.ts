@@ -7,6 +7,7 @@ import {
   assertWeekendPair,
   getSaturdaysInRange,
   getCycleWeekendCandidates,
+  allocateBalancedWeekendOffDays,
   buildWeekendOffMap,
   computeNaturalPatternByStaff,
   formatLocalDateKeySafe,
@@ -62,38 +63,62 @@ describe('Weekend Off Regression & Invariants Suite (Per-Cycle Model)', () => {
     })
   })
 
-  it('distribuição per-cycle para 6 colaboradores 12x36: exatamente 6 assignments (1 par por staff)', () => {
-    const staffIds = ['user_1', 'user_2', 'user_3', 'user_4', 'user_5', 'user_6']
-    const candidates = getCycleWeekendCandidates(cycleStart, cycleEnd)
+  it('distribui 1 dia de folga de fim de semana por ciclo entre pessoas da mesma paridade sem zerar cobertura', () => {
+    const staffIds = Array.from({ length: 10 }, (_, i) => `user_${i + 1}`)
+    const candidatesByStaff: Record<string, string[]> = {}
+    const naturalCoverage: Record<string, number> = {}
 
-    // Simula a lógica de round-robin per-cycle dos hooks
-    const assignments: Record<string, string[]> = {}
-    staffIds.forEach((sid, idx) => {
-      const naturalDays = computeNaturalPatternByStaff(sid, staffIds, cycleStart, cycleEnd, 12, 36)
-      // Filtra candidatos cujo domingo seria trabalhado no padrão natural
-      let userCandidates = candidates.filter((c) => naturalDays[c.sun])
-      if (userCandidates.length === 0) userCandidates = candidates.slice()
-
-      const assignedPair = userCandidates[idx % userCandidates.length]
-      expect(assertWeekendPair(assignedPair.sat, assignedPair.sun)).toBe(true)
-      assignments[sid] = [assignedPair.sat, assignedPair.sun]
+    staffIds.forEach((staffId) => {
+      const naturalDays = computeNaturalPatternByStaff(
+        staffId,
+        staffIds,
+        cycleStart,
+        cycleEnd,
+        12,
+        36,
+        { shift_parity: 'odd' },
+      )
+      candidatesByStaff[staffId] = Object.keys(naturalDays).filter((date) => {
+        const dow = dayOfWeekDateOnly(date)
+        if (dow !== 6 && dow !== 0) return false
+        naturalCoverage[date] = (naturalCoverage[date] || 0) + 1
+        return true
+      })
     })
 
-    // Exatamente 6 colaboradores, cada um com 1 par (2 datas) = 6 assignments
-    expect(Object.keys(assignments).length).toBe(6)
-    staffIds.forEach((sid) => {
-      const pair = assignments[sid]
-      expect(pair).toBeDefined()
-      expect(pair.length).toBe(2)
-      expect(assertWeekendPair(pair[0], pair[1])).toBe(true)
-      expect(dayOfWeekDateOnly(pair[0])).toBe(6)
-      expect(dayOfWeekDateOnly(pair[1])).toBe(0)
-      // Segunda NUNCA aparece em assignments
-      expect(dayOfWeekDateOnly(pair[0])).not.toBe(1)
-      expect(dayOfWeekDateOnly(pair[1])).not.toBe(1)
-      expect(pair[0]).not.toBe('2026-10-05')
-      expect(pair[1]).not.toBe('2026-10-05')
-    })
+    const result = allocateBalancedWeekendOffDays(candidatesByStaff, naturalCoverage, 1)
+    const assignedDates = Object.values(result.assignments).flat()
+
+    expect(assignedDates).toHaveLength(staffIds.length)
+    expect(result.blockedStaffIds).toEqual([])
+    expect(new Set(assignedDates).size).toBeGreaterThan(1)
+    assignedDates.forEach((date) => expect(dayOfWeekDateOnly(date) === 6 || dayOfWeekDateOnly(date) === 0).toBe(true))
+    Object.values(result.coverageAfter).forEach((coverage) => expect(coverage).toBeGreaterThanOrEqual(1))
+
+    // Ninguém perde os dois dias do mesmo fim de semana; somente um dia por ciclo.
+    Object.values(result.assignments).forEach((dates) => expect(dates).toHaveLength(1))
+  })
+
+  it('não concede a última folga possível quando isso deixa o plantão sem cobertura', () => {
+    const result = allocateBalancedWeekendOffDays(
+      { only_staff: ['2026-09-27', '2026-10-04'] },
+      { '2026-09-27': 1, '2026-10-04': 2 },
+      1,
+    )
+
+    expect(result.assignments.only_staff).toEqual(['2026-10-04'])
+    expect(result.blockedStaffIds).toEqual([])
+    expect(result.coverageAfter['2026-09-27']).toBe(1)
+    expect(result.coverageAfter['2026-10-04']).toBe(1)
+
+    const impossible = allocateBalancedWeekendOffDays(
+      { only_staff: ['2026-09-27'] },
+      { '2026-09-27': 1 },
+      1,
+    )
+    expect(impossible.assignments.only_staff).toEqual([])
+    expect(impossible.blockedStaffIds).toEqual(['only_staff'])
+    expect(impossible.coverageAfter['2026-09-27']).toBe(1)
   })
 
   it('buildWeekendOffMap consome assignments persistidos de validation_summary', () => {

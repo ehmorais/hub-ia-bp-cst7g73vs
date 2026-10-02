@@ -1,10 +1,9 @@
 /**
  * Utilitário compartilhado para cálculo e identificação de Folgas por Ciclo:
- * 1. Folga de Fim de Semana (1 data por colaborador: Sábado OU Domingo na paridade trabalhada).
+ * 1. Folga de Fim de Semana (1 data por colaborador no ciclo: Sábado OU Domingo na paridade trabalhada).
  * 2. Folga Adicional de Dia de Semana (1 data por colaborador: Seg-Sex na paridade trabalhada, ou substituída por timeoff fulfilled).
  *
- * Reproduz exatamente a mesma regra e algoritmo dos hooks de backend
- * (commit_schedule.js, generate_shifts.js, generate_shifts_draft.js).
+ * Os hooks mantêm o mesmo modelo por ciclo; a distribuição de lotes também respeita cobertura mínima por data.
  */
 
 export interface WeekendOffShift {
@@ -245,6 +244,87 @@ export function getCycleWeekendCandidates(
     dCur = addDaysDateOnly(dCur, 1)
   }
   return result
+}
+
+export type WeekendOffAssignments = Record<string, string[]>
+
+export interface BalancedWeekendOffResult {
+  assignments: WeekendOffAssignments
+  coverageAfter: Record<string, number>
+  blockedStaffIds: string[]
+}
+
+/**
+ * Distribui uma única folga de sábado OU domingo por pessoa no ciclo.
+ * Só escolhe datas em que, depois da folga, permanece a cobertura mínima.
+ * Quando não há data segura, não remove o plantão e devolve o colaborador em blockedStaffIds.
+ */
+export function allocateBalancedWeekendOffDays(
+  candidateDatesByStaff: Record<string, string[]>,
+  naturalCoverageByDate: Record<string, number>,
+  minimumCoverageByDate: Record<string, number> | number = 1,
+): BalancedWeekendOffResult {
+  const assignments: WeekendOffAssignments = {}
+  const assignedByDate: Record<string, number> = {}
+  const blockedStaffIds: string[] = []
+
+  const staff = Object.keys(candidateDatesByStaff)
+    .map((staffId) => ({
+      staffId,
+      dates: Array.from(
+        new Set(
+          (candidateDatesByStaff[staffId] || [])
+            .map((date) => (date || '').split(' ')[0].split('T')[0])
+            .filter((date) => Boolean(date) && isWeekendDay(date)),
+        ),
+      ).sort(),
+    }))
+    .sort((a, b) => a.dates.length - b.dates.length || a.staffId.localeCompare(b.staffId))
+
+  for (const person of staff) {
+    const safeDates = person.dates.filter((date) => {
+      const naturalCoverage = Math.max(0, naturalCoverageByDate[date] || 0)
+      const minimumCoverage =
+        typeof minimumCoverageByDate === 'number'
+          ? minimumCoverageByDate
+          : minimumCoverageByDate[date] ?? 1
+      const capacity = Math.max(0, naturalCoverage - minimumCoverage)
+      return (assignedByDate[date] || 0) < capacity
+    })
+
+    safeDates.sort((a, b) => {
+      const capA = Math.max(
+        0,
+        (naturalCoverageByDate[a] || 0) -
+          (typeof minimumCoverageByDate === 'number' ? minimumCoverageByDate : (minimumCoverageByDate[a] ?? 1)),
+      )
+      const capB = Math.max(
+        0,
+        (naturalCoverageByDate[b] || 0) -
+          (typeof minimumCoverageByDate === 'number' ? minimumCoverageByDate : (minimumCoverageByDate[b] ?? 1)),
+      )
+      const projectedA = capA > 0 ? ((assignedByDate[a] || 0) + 1) / capA : Number.POSITIVE_INFINITY
+      const projectedB = capB > 0 ? ((assignedByDate[b] || 0) + 1) / capB : Number.POSITIVE_INFINITY
+      return projectedA - projectedB || (assignedByDate[a] || 0) - (assignedByDate[b] || 0) || a.localeCompare(b)
+    })
+
+    const chosenDate = safeDates[0]
+    if (!chosenDate) {
+      assignments[person.staffId] = []
+      blockedStaffIds.push(person.staffId)
+      continue
+    }
+
+    assignments[person.staffId] = [chosenDate]
+    assignedByDate[chosenDate] = (assignedByDate[chosenDate] || 0) + 1
+  }
+
+  const coverageAfter: Record<string, number> = {}
+  Object.keys(naturalCoverageByDate).forEach((date) => {
+    coverageAfter[date] = Math.max(0, naturalCoverageByDate[date] || 0) - (assignedByDate[date] || 0)
+  })
+
+  return { assignments, coverageAfter, blockedStaffIds }
 }
 
 /**
@@ -587,7 +667,7 @@ export function computeNaturalPattern(
 
 /**
  * Função centralizada para cálculo de folgas do ciclo:
- * 1. Folga de fim de semana (exatamente 1 data: sábado ou domingo na paridade trabalhada).
+ * 1. Folga de fim de semana (exatamente 1 data em todo o ciclo: sábado ou domingo na paridade trabalhada).
  * 2. Folga adicional de dia de semana (segunda a sexta na paridade trabalhada, ou substituída por solicitação fulfilled).
  */
 export function calculateCycleOffDaysForStaff({
@@ -668,12 +748,12 @@ export function calculateCycleOffDaysForStaff({
     cur = addDaysDateOnly(cur, 1)
   }
 
-  // Escolha determinística de fim de semana (round-robin estável entre os elegíveis fora das férias)
-  // Se não existir nenhum sábado/domingo elegível fora das férias no ciclo:
-  // NÃO cria folga de fim de semana (retorna null) e NUNCA converte para dia útil.
+  // Uma folga de fim de semana por ciclo. Usa um deslocamento estável por colaborador
+  // para não concentrar a escolha no primeiro sábado/domingo do ciclo.
+  // A cobertura coletiva é protegida nos geradores de escala, que conhecem o efetivo do setor.
   let weekendOffDate: string | null = null
   if (weekendWorkedCandidates.length > 0) {
-    const idx = staffIndex % weekendWorkedCandidates.length
+    const idx = ((staffIndex % weekendWorkedCandidates.length) + weekendWorkedCandidates.length) % weekendWorkedCandidates.length
     weekendOffDate = weekendWorkedCandidates[idx]
   }
 
