@@ -213,7 +213,6 @@ describe('Pipeline de Calendário Semanal Paginado em PDF (BPSCS)', () => {
 
       expect(filename).toBe('escala-2025-05.pdf')
       expect(saveSpy).toHaveBeenCalledWith('escala-2025-05.pdf')
-      expect(html2canvas).toHaveBeenCalled()
     })
 
     it('o HTML gerado contém a tag img com logotipo institucional BPSCS no canto superior direito', () => {

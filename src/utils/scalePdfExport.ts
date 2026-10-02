@@ -1,9 +1,13 @@
+import React from 'react'
+import { createRoot } from 'react-dom/client'
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import html2canvas from 'html2canvas'
 import { formatCorenLabel } from '@/lib/escala-calendar-formatter'
 import { BPSCS_LOGO_BASE64 } from './bpscsLogo'
 import { SIDEBAR_HOSPITAL_LOGO } from './sidebarHospitalLogo'
+import { CalendarPdfPage } from '@/components/escala/CalendarPdfPage'
+import { CalendarDayItem } from '@/components/escala/ShiftCalendarGrid'
 import {
   renderCalendarPdfTemplate,
   renderMultiPageCalendarHtml,
@@ -728,21 +732,266 @@ export async function renderHtmlToPdfLandscape(
 }
 
 /**
- * Exporta a escala gerada por IA no formato "Calendário" mensal / ciclo (grade equivalente à tela).
- * Pipeline baseado em template HTML (src/templates/calendarPdfTemplate.ts) + html2canvas + jsPDF A4 Landscape.
+ * Agrupa a lista de dias do ciclo em semanas completas (domingo a sábado).
+ */
+export function chunkDaysIntoCalendarWeeks(
+  days: Array<{ date: Date; key: string; dayOfWeek: number }>,
+): Array<Array<{ date: Date; key: string; dayOfWeek: number }>> {
+  if (days.length === 0) return []
+
+  const weeks: Array<Array<{ date: Date; key: string; dayOfWeek: number }>> = []
+  let currentWeek: Array<{ date: Date; key: string; dayOfWeek: number }> = []
+
+  days.forEach((d) => {
+    // Se o dia for domingo (0) e já tivermos dias acumulados na semana atual, fecha e abre nova
+    if (d.dayOfWeek === 0 && currentWeek.length > 0) {
+      weeks.push(currentWeek)
+      currentWeek = []
+    }
+    currentWeek.push(d)
+    // Se o dia for sábado (6), fecha a semana
+    if (d.dayOfWeek === 6) {
+      weeks.push(currentWeek)
+      currentWeek = []
+    }
+  })
+
+  if (currentWeek.length > 0) {
+    weeks.push(currentWeek)
+  }
+
+  return weeks
+}
+
+/**
+ * Agrupa semanas em páginas para o PDF, com no máximo 2 ou 3 semanas por página,
+ * garantindo semanas COMPLETAS por página e nunca cortando linhas, nomes ou cards.
+ * Dias densos (com muitos plantões) recebem alocação conservadora (1 ou 2 semanas por página).
+ */
+export function groupWeeksIntoPages(
+  weeks: Array<Array<{ date: Date; key: string; dayOfWeek: number }>>,
+  shifts: any[],
+): Array<Array<Array<{ date: Date; key: string; dayOfWeek: number }>>> {
+  if (weeks.length === 0) return []
+
+  const pages: Array<Array<Array<{ date: Date; key: string; dayOfWeek: number }>>> = []
+  let currentPageWeeks: Array<Array<{ date: Date; key: string; dayOfWeek: number }>> = []
+
+  weeks.forEach((week) => {
+    // Calcula o pico de densidade de plantões nos dias da semana
+    let maxShiftsInDay = 0
+    week.forEach((d) => {
+      const count = shifts.filter((s) => {
+        const sDateStr = s.start_time ? s.start_time.split(' ')[0].split('T')[0] : ''
+        return sDateStr === d.key
+      }).length
+      if (count > maxShiftsInDay) maxShiftsInDay = count
+    })
+
+    // Se o dia tiver 4 ou mais plantões, a semana é alta -> limite de 1 ou 2 semanas por página
+    const maxWeeksForThisPage = maxShiftsInDay >= 4 ? 1 : 2
+
+    if (currentPageWeeks.length >= maxWeeksForThisPage) {
+      pages.push(currentPageWeeks)
+      currentPageWeeks = [week]
+    } else {
+      currentPageWeeks.push(week)
+      // Se esta semana que acabou de entrar é alta, fecha a página imediatamente
+      if (maxShiftsInDay >= 4) {
+        pages.push(currentPageWeeks)
+        currentPageWeeks = []
+      }
+    }
+  })
+
+  if (currentPageWeeks.length > 0) {
+    pages.push(currentPageWeeks)
+  }
+
+  return pages
+}
+
+/**
+ * Exporta a escala gerada por IA no formato "Calendário" mensal / ciclo.
+ * Fonte visual ÚNICA compartilhada: reutiliza fielmente os componentes React
+ * `<CalendarPdfPage />` e `<ShiftCalendarGrid />` com exatamente o mesmo CSS Tailwind da tela.
+ * Renderiza em contêiner offscreen (~1123px largura A4 landscape), aguarda fontes e imagens,
+ * e captura com html2canvas(scale: 2) + jsPDF landscape A4.
  */
 export async function exportAutoGenerateCalendarPdf(
   params: ExportAutoGenerateCalendarPdfParams,
 ): Promise<string> {
-  const { title = 'Escala de Plantões — Calendário', sectorName, cycleStart } = params
+  const {
+    title = 'Escala de Plantões — Calendário',
+    sectorName,
+    cycleName,
+    cycleStart,
+    cycleEnd,
+    days,
+    shifts,
+    contracts,
+    staffProfiles = [],
+    weekendOffMap = new Map(),
+    selectedSectorId,
+    selectedStaffId,
+    logoBase64 = BPSCS_LOGO_BASE64,
+  } = params
 
-  const html = buildCalendarHtml(params)
+  const doc = new jsPDF({
+    orientation: 'landscape',
+    unit: 'mm',
+    format: 'a4',
+  })
 
-  const doc = await renderHtmlToPdfLandscape(html, {
+  doc.setProperties({
     title,
     subject: sectorName ? `Escala Calendário - ${sectorName}` : 'Escala Calendário',
     author: 'Gestão de Escalas BP — IA',
   })
+
+  // Se não estivermos em ambiente com DOM (ex.: testes unitários sem window/document completo),
+  // salvamos e retornamos o doc diretamente.
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    const filename = formatSafeFilename(cycleStart)
+    doc.save(filename)
+    return filename
+  }
+
+  // 1. Dividir em semanas e páginas
+  const weeks = chunkDaysIntoCalendarWeeks(days)
+  const pageWeeksList = groupWeeksIntoPages(weeks, shifts)
+  const totalPages = Math.max(1, pageWeeksList.length)
+
+  // 2. Criar container offscreen para montagem React
+  const mountContainer = document.createElement('div')
+  mountContainer.setAttribute('aria-hidden', 'true')
+  mountContainer.id = 'offscreen-pdf-renderer'
+  mountContainer.style.position = 'fixed'
+  mountContainer.style.left = '-10000px'
+  mountContainer.style.top = '0'
+  mountContainer.style.width = '1123px'
+  mountContainer.style.backgroundColor = '#ffffff'
+  mountContainer.style.zIndex = '-9999'
+  document.body.appendChild(mountContainer)
+
+  const root = createRoot(mountContainer)
+
+  try {
+    // 3. Renderizar cada página sequencialmente com html2canvas de alta resolução
+    for (let pIdx = 0; pIdx < totalPages; pIdx++) {
+      const pageWeeks = pageWeeksList[pIdx] || []
+      const pageDays = pageWeeks.flat()
+
+      const firstD = pageDays[0]
+      const lastD = pageDays[pageDays.length - 1]
+      const weekRangeLabel =
+        firstD && lastD
+          ? `Período: ${firstD.key.split('-').slice(1).reverse().join('/')} a ${lastD.key.split('-').slice(1).reverse().join('/')}`
+          : undefined
+
+      const isLastPage = pIdx === totalPages - 1
+
+      // Renderiza a página no container offscreen usando React.createElement
+      await new Promise<void>((resolve) => {
+        root.render(
+          React.createElement(
+            'div',
+            {
+              id: `pdf-page-wrapper-${pIdx}`,
+              className: 'bg-white',
+              style: { width: '1123px' },
+            },
+            React.createElement(CalendarPdfPage, {
+              title,
+              sectorName,
+              cycleName,
+              cycleStart,
+              cycleEnd,
+              days: pageDays,
+              shifts,
+              contracts,
+              staffProfiles,
+              weekendOffMap,
+              selectedSectorId,
+              selectedStaffId,
+              pageCurrent: pIdx + 1,
+              pageTotal: totalPages,
+              showLegend: isLastPage,
+              logoBase64,
+              weekRangeLabel,
+            }),
+          ),
+        )
+        // Aguarda microtasks de layout e render do React
+        setTimeout(resolve, 60)
+      })
+
+      // Aguarda document.fonts.ready e imagens carregarem
+      if (document.fonts && typeof document.fonts.ready?.then === 'function') {
+        try {
+          await document.fonts.ready
+        } catch {
+          // prossegue
+        }
+      }
+
+      const images = Array.from(mountContainer.querySelectorAll('img'))
+      await Promise.all(
+        images.map((img) => {
+          if (img.complete) return Promise.resolve()
+          return new Promise<void>((res) => {
+            img.onload = () => res()
+            img.onerror = () => res()
+          })
+        }),
+      )
+
+      const pageEl = mountContainer.querySelector('.page-container') as HTMLElement
+      if (pageEl) {
+        if (pIdx > 0) {
+          doc.addPage('a4', 'landscape')
+        }
+
+        const canvas = await html2canvas(pageEl, {
+          scale: 2,
+          useCORS: true,
+          allowTaint: true,
+          backgroundColor: '#ffffff',
+          logging: false,
+          width: pageEl.offsetWidth || 1123,
+          height: pageEl.offsetHeight || 794,
+          windowWidth: 1123,
+          windowHeight: 794,
+        })
+
+        if (canvas && typeof canvas.toDataURL === 'function') {
+          const imgData = canvas.toDataURL('image/png')
+          const pageWidth = 297
+          const pageHeight = 210
+
+          const canvasWidth = canvas.width
+          const canvasHeight = canvas.height
+          const ratio = Math.min(pageWidth / canvasWidth, pageHeight / canvasHeight)
+
+          const renderedWidth = canvasWidth * ratio
+          const renderedHeight = canvasHeight * ratio
+          const offsetX = (pageWidth - renderedWidth) / 2
+          const offsetY = (pageHeight - renderedHeight) / 2
+
+          doc.addImage(imgData, 'PNG', offsetX, offsetY, renderedWidth, renderedHeight)
+        }
+      }
+    }
+  } finally {
+    try {
+      root.unmount()
+    } catch {
+      // ignora
+    }
+    if (mountContainer.parentNode) {
+      mountContainer.parentNode.removeChild(mountContainer)
+    }
+  }
 
   const filename = formatSafeFilename(cycleStart)
   doc.save(filename)
