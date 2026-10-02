@@ -1282,8 +1282,8 @@ function AutoGenerateInner({
             <CardTitle>Geração Inteligente de Escalas</CardTitle>
           </div>
           <CardDescription>
-            O gerador considera somente o regime 12x36 e exatamente 1 folga em fim de semana por mês
-            por colaborador. O resultado é salvo como rascunho e nunca publicado automaticamente.
+            O gerador considera o regime 12x36 e pelo menos 1 dia de sábado ou domingo de folga por
+            colaborador em cada ciclo, quando factível sem violar a cobertura mínima.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">

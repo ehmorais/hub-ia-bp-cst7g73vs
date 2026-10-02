@@ -263,6 +263,7 @@ export function allocateBalancedWeekendOffDays(
   candidateDatesByStaff: Record<string, string[]>,
   naturalCoverageByDate: Record<string, number>,
   minimumCoverageByDate: Record<string, number> | number = 1,
+  existingOverrides?: WeekendOffOverridesMap,
 ): BalancedWeekendOffResult {
   const assignments: WeekendOffAssignments = {}
   const assignedByDate: Record<string, number> = {}
@@ -281,31 +282,80 @@ export function allocateBalancedWeekendOffDays(
     }))
     .sort((a, b) => a.dates.length - b.dates.length || a.staffId.localeCompare(b.staffId))
 
+  // Passo 1: Respeitar overrides manuais existentes como primeira prioridade (nunca sobrescrever)
   for (const person of staff) {
+    const staffOverrides = existingOverrides?.[person.staffId]
+    if (staffOverrides) {
+      const overrideDates: string[] = []
+      if (
+        staffOverrides.saturday?.target_date &&
+        isWeekendDay(staffOverrides.saturday.target_date)
+      ) {
+        overrideDates.push(staffOverrides.saturday.target_date.split(' ')[0].split('T')[0])
+      }
+      if (staffOverrides.sunday?.target_date && isWeekendDay(staffOverrides.sunday.target_date)) {
+        overrideDates.push(staffOverrides.sunday.target_date.split(' ')[0].split('T')[0])
+      }
+      if (overrideDates.length > 0) {
+        assignments[person.staffId] = overrideDates
+        overrideDates.forEach((d) => {
+          assignedByDate[d] = (assignedByDate[d] || 0) + 1
+        })
+      }
+    }
+  }
+
+  // Passo 2: Alocar folga para quem não possui override manual
+  for (const person of staff) {
+    if (assignments[person.staffId] && assignments[person.staffId].length > 0) {
+      continue
+    }
+
     const safeDates = person.dates.filter((date) => {
       const naturalCoverage = Math.max(0, naturalCoverageByDate[date] || 0)
       const minimumCoverage =
         typeof minimumCoverageByDate === 'number'
           ? minimumCoverageByDate
-          : minimumCoverageByDate[date] ?? 1
+          : (minimumCoverageByDate[date] ?? 1)
       const capacity = Math.max(0, naturalCoverage - minimumCoverage)
       return (assignedByDate[date] || 0) < capacity
     })
 
     safeDates.sort((a, b) => {
-      const capA = Math.max(
-        0,
-        (naturalCoverageByDate[a] || 0) -
-          (typeof minimumCoverageByDate === 'number' ? minimumCoverageByDate : (minimumCoverageByDate[a] ?? 1)),
-      )
-      const capB = Math.max(
-        0,
-        (naturalCoverageByDate[b] || 0) -
-          (typeof minimumCoverageByDate === 'number' ? minimumCoverageByDate : (minimumCoverageByDate[b] ?? 1)),
-      )
+      const minA =
+        typeof minimumCoverageByDate === 'number'
+          ? minimumCoverageByDate
+          : (minimumCoverageByDate[a] ?? 1)
+      const minB =
+        typeof minimumCoverageByDate === 'number'
+          ? minimumCoverageByDate
+          : (minimumCoverageByDate[b] ?? 1)
+      const natA = naturalCoverageByDate[a] || 0
+      const natB = naturalCoverageByDate[b] || 0
+      const capA = Math.max(0, natA - minA)
+      const capB = Math.max(0, natB - minB)
+
+      // 1. Folga de cobertura restante (escalados - min - já atribuídos de folga) maior tem menor impacto
+      const remainingMarginA = capA - (assignedByDate[a] || 0)
+      const remainingMarginB = capB - (assignedByDate[b] || 0)
+      if (remainingMarginA !== remainingMarginB) {
+        return remainingMarginB - remainingMarginA // ordem decrescente de folga de cobertura
+      }
+
+      // 2. Menor carga relativa proporcional
       const projectedA = capA > 0 ? ((assignedByDate[a] || 0) + 1) / capA : Number.POSITIVE_INFINITY
       const projectedB = capB > 0 ? ((assignedByDate[b] || 0) + 1) / capB : Number.POSITIVE_INFINITY
-      return projectedA - projectedB || (assignedByDate[a] || 0) - (assignedByDate[b] || 0) || a.localeCompare(b)
+      if (projectedA !== projectedB) {
+        return projectedA - projectedB
+      }
+
+      // 3. Menor contagem absoluta de folgas já atribuídas
+      if ((assignedByDate[a] || 0) !== (assignedByDate[b] || 0)) {
+        return (assignedByDate[a] || 0) - (assignedByDate[b] || 0)
+      }
+
+      // 4. Determinismo estável por data
+      return a.localeCompare(b)
     })
 
     const chosenDate = safeDates[0]
@@ -321,7 +371,8 @@ export function allocateBalancedWeekendOffDays(
 
   const coverageAfter: Record<string, number> = {}
   Object.keys(naturalCoverageByDate).forEach((date) => {
-    coverageAfter[date] = Math.max(0, naturalCoverageByDate[date] || 0) - (assignedByDate[date] || 0)
+    coverageAfter[date] =
+      Math.max(0, naturalCoverageByDate[date] || 0) - (assignedByDate[date] || 0)
   })
 
   return { assignments, coverageAfter, blockedStaffIds }
@@ -753,7 +804,9 @@ export function calculateCycleOffDaysForStaff({
   // A cobertura coletiva é protegida nos geradores de escala, que conhecem o efetivo do setor.
   let weekendOffDate: string | null = null
   if (weekendWorkedCandidates.length > 0) {
-    const idx = ((staffIndex % weekendWorkedCandidates.length) + weekendWorkedCandidates.length) % weekendWorkedCandidates.length
+    const idx =
+      ((staffIndex % weekendWorkedCandidates.length) + weekendWorkedCandidates.length) %
+      weekendWorkedCandidates.length
     weekendOffDate = weekendWorkedCandidates[idx]
   }
 

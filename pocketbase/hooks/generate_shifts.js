@@ -102,6 +102,9 @@ routerAdd(
           shift_end_time: sEnd,
           shift_parity: u.getString('shift_parity') || '',
           cycle_start_date: (u.getString('cycle_start_date') || '').split(' ')[0].split('T')[0],
+          vacation_enabled: u.getBool('vacation_enabled'),
+          vacation_start: (u.getString('vacation_start') || '').split(' ')[0].split('T')[0],
+          vacation_end: (u.getString('vacation_end') || '').split(' ')[0].split('T')[0],
         })
       } catch (_) {}
     })
@@ -206,6 +209,71 @@ routerAdd(
 
     var cycleMonths = getMonthsInCycle(cycleStart, cycleEnd)
 
+    var isWeekendDay = function (dateStr) {
+      var dow = dayOfWeekDateOnly(dateStr)
+      return dow === 6 || dow === 0
+    }
+
+    // Carregar indisponibilidades / timeoff requests (status pending ou fulfilled) no ciclo
+    var timeoffRequests = []
+    try {
+      timeoffRequests = $app.findRecordsByFilter(
+        'timeoff_requests',
+        "cycle={:cyc} && (status='pending' || status='fulfilled')",
+        'date',
+        10000,
+        0,
+        { cyc: cycleId },
+      )
+    } catch (_) {}
+    var timeoffMap = {}
+    timeoffRequests.forEach(function (tr) {
+      var pid = tr.getString('staff_profile')
+      if (!pid) return
+      if (!timeoffMap[pid]) timeoffMap[pid] = []
+      var st = (tr.getString('date') || '').split(' ')[0].split('T')[0]
+      var ed = (tr.getString('end_date') || tr.getString('date') || '').split(' ')[0].split('T')[0]
+      if (st) timeoffMap[pid].push({ start: st, end: ed || st })
+    })
+
+    // Carregar overrides manuais pré-existentes de schedule_drafts anteriores deste ciclo
+    var existingWeekendOverridesBySector = {}
+    try {
+      var prevDrafts = $app.findRecordsByFilter(
+        'schedule_drafts',
+        'cycle={:cyc}',
+        '-created',
+        20,
+        0,
+        { cyc: cycleId },
+      )
+      for (var pdi = 0; pdi < prevDrafts.length; pdi++) {
+        var pSec = prevDrafts[pdi].getString('sector')
+        if (!existingWeekendOverridesBySector[pSec]) {
+          existingWeekendOverridesBySector[pSec] = {}
+        }
+        var pSummary = prevDrafts[pdi].get('validation_summary')
+        if (typeof pSummary === 'string') {
+          try {
+            pSummary = JSON.parse(pSummary)
+          } catch (_) {}
+        }
+        if (
+          pSummary &&
+          pSummary.weekend_off_overrides &&
+          typeof pSummary.weekend_off_overrides === 'object'
+        ) {
+          var oKeys = Object.keys(pSummary.weekend_off_overrides)
+          for (var oki = 0; oki < oKeys.length; oki++) {
+            var sKey = oKeys[oki]
+            if (!existingWeekendOverridesBySector[pSec][sKey]) {
+              existingWeekendOverridesBySector[pSec][sKey] = pSummary.weekend_off_overrides[sKey]
+            }
+          }
+        }
+      }
+    } catch (_) {}
+
     // Compute natural working days for 12x36
     var computeStaffNaturalDays = function (u) {
       var is12x36 = u.work_hours === 12 && u.rest_hours >= 36
@@ -264,11 +332,33 @@ routerAdd(
       sectorById[sector.id] = sector
     })
 
+    var isDateInStaffVacation = function (u, dateStr) {
+      if (u.vacation_enabled === true && u.vacation_start && u.vacation_end) {
+        return dateStr >= u.vacation_start && dateStr <= u.vacation_end
+      }
+      return false
+    }
+
+    var isDateInStaffTimeoff = function (uId, dateStr) {
+      var reqs = timeoffMap[uId] || []
+      for (var ti = 0; ti < reqs.length; ti++) {
+        if (dateStr >= reqs[ti].start && dateStr <= reqs[ti].end) {
+          return true
+        }
+      }
+      return false
+    }
+
     var initialShiftsByStaff = {}
     var weekendCandidatesByStaff = {}
     var naturalWeekendCoverage = {}
     usersWithContracts.forEach(function (u) {
-      var staffDays = computeStaffNaturalDays(u)
+      var rawDays = computeStaffNaturalDays(u)
+      var staffDays = rawDays.filter(function (date) {
+        if (isDateInStaffVacation(u, date)) return false
+        if (isDateInStaffTimeoff(u.id, date)) return false
+        return true
+      })
       initialShiftsByStaff[u.id] = staffDays
       var candidates = []
       staffDays.forEach(function (date) {
@@ -287,6 +377,40 @@ routerAdd(
     var assignedWeekendOffByDate = {}
     var warnings = []
     var warningsBySector = {}
+
+    // 1. Aplicar Overrides Manuais Pré-Existentes Primeiro (nunca sobrescrevê-los)
+    usersWithContracts.forEach(function (u) {
+      var sectorOverrides = existingWeekendOverridesBySector[u.sector_id] || {}
+      var sOverrides = sectorOverrides[u.id]
+      if (sOverrides) {
+        var forcedDates = []
+        if (sOverrides.saturday && sOverrides.saturday.target_date) {
+          var satTgt = sOverrides.saturday.target_date.split(' ')[0].split('T')[0]
+          if (isWeekendDay(satTgt) && satTgt >= cycleStart && satTgt <= cycleEnd) {
+            forcedDates.push(satTgt)
+          }
+        }
+        if (sOverrides.sunday && sOverrides.sunday.target_date) {
+          var sunTgt = sOverrides.sunday.target_date.split(' ')[0].split('T')[0]
+          if (isWeekendDay(sunTgt) && sunTgt >= cycleStart && sunTgt <= cycleEnd) {
+            forcedDates.push(sunTgt)
+          }
+        }
+        if (forcedDates.length > 0) {
+          weekendOffAssignments[u.id] = forcedDates
+          forcedDates.forEach(function (fd) {
+            var chosenKey = u.sector_id + '|' + fd
+            assignedWeekendOffByDate[chosenKey] = (assignedWeekendOffByDate[chosenKey] || 0) + 1
+            var setDays = {}
+            ;(initialShiftsByStaff[u.id] || []).forEach(function (d) {
+              if (d !== fd) setDays[d] = true
+            })
+            initialShiftsByStaff[u.id] = Object.keys(setDays).sort()
+          })
+        }
+      }
+    })
+
     var allocationOrder = usersWithContracts.slice().sort(function (a, b) {
       return (
         (weekendCandidatesByStaff[a.id] || []).length -
@@ -297,8 +421,29 @@ routerAdd(
     })
 
     allocationOrder.forEach(function (u, staffIndex) {
+      if (weekendOffAssignments[u.id] && weekendOffAssignments[u.id].length > 0) {
+        return
+      }
+
       var candidates = weekendCandidatesByStaff[u.id] || []
       var requiredWeekendCoverage = requiredWeekendCoverageBySector[u.sector_id] || 1
+
+      // Priorizar datas em que o colaborador já está naturalmente fora (sem turno agendado e sem férias/afastamento)
+      var naturalOffWeekendDates = []
+      var cScan = cycleStart
+      while (cScan <= cycleEnd) {
+        var dowScan = dayOfWeekDateOnly(cScan)
+        if (dowScan === 6 || dowScan === 0) {
+          if (!isDateInStaffVacation(u, cScan) && !isDateInStaffTimeoff(u.id, cScan)) {
+            var isWorking = (initialShiftsByStaff[u.id] || []).indexOf(cScan) !== -1
+            if (!isWorking) {
+              naturalOffWeekendDates.push(cScan)
+            }
+          }
+        }
+        cScan = addDaysDateOnly(cScan, 1)
+      }
+
       var safeCandidates = candidates.filter(function (date) {
         var coverageKey = u.sector_id + '|' + date
         return (
@@ -308,21 +453,42 @@ routerAdd(
           requiredWeekendCoverage
         )
       })
+
+      // Ordenar fins de semana elegíveis por folga de cobertura (escalados - min_staff_per_shift - já atribuídos)
       safeCandidates.sort(function (a, b) {
         var keyA = u.sector_id + '|' + a
         var keyB = u.sector_id + '|' + b
-        var capA = Math.max(0, (naturalWeekendCoverage[keyA] || 0) - requiredWeekendCoverage)
-        var capB = Math.max(0, (naturalWeekendCoverage[keyB] || 0) - requiredWeekendCoverage)
+        var natA = naturalWeekendCoverage[keyA] || 0
+        var natB = naturalWeekendCoverage[keyB] || 0
+        var capA = Math.max(0, natA - requiredWeekendCoverage)
+        var capB = Math.max(0, natB - requiredWeekendCoverage)
+        var remMarginA = capA - (assignedWeekendOffByDate[keyA] || 0)
+        var remMarginB = capB - (assignedWeekendOffByDate[keyB] || 0)
+
+        // 1. Maior folga de cobertura restante (menor impacto)
+        if (remMarginA !== remMarginB) {
+          return remMarginB - remMarginA
+        }
+
+        // 2. Menor taxa de ocupação relativa
         var loadA = capA > 0 ? ((assignedWeekendOffByDate[keyA] || 0) + 1) / capA : 1
         var loadB = capB > 0 ? ((assignedWeekendOffByDate[keyB] || 0) + 1) / capB : 1
         if (loadA !== loadB) return loadA - loadB
+
+        // 3. Menor contagem absoluta de folgas já atribuídas
         if ((assignedWeekendOffByDate[keyA] || 0) !== (assignedWeekendOffByDate[keyB] || 0)) {
           return (assignedWeekendOffByDate[keyA] || 0) - (assignedWeekendOffByDate[keyB] || 0)
         }
+
+        // 4. Rotação determinística estável
         var originalCandidates = weekendCandidatesByStaff[u.id] || []
         var rotation = originalCandidates.length > 0 ? staffIndex % originalCandidates.length : 0
-        var indexA = (originalCandidates.indexOf(a) - rotation + originalCandidates.length) % originalCandidates.length
-        var indexB = (originalCandidates.indexOf(b) - rotation + originalCandidates.length) % originalCandidates.length
+        var indexA =
+          (originalCandidates.indexOf(a) - rotation + originalCandidates.length) %
+          originalCandidates.length
+        var indexB =
+          (originalCandidates.indexOf(b) - rotation + originalCandidates.length) %
+          originalCandidates.length
         return indexA - indexB
       })
 
@@ -330,26 +496,34 @@ routerAdd(
       ;(initialShiftsByStaff[u.id] || []).forEach(function (date) {
         staffDaysSet[date] = true
       })
-      if (safeCandidates.length === 0) {
+
+      if (safeCandidates.length > 0) {
+        var chosenWeekendOff = safeCandidates[0]
+        var chosenKey = u.sector_id + '|' + chosenWeekendOff
+        weekendOffAssignments[u.id] = [chosenWeekendOff]
+        assignedWeekendOffByDate[chosenKey] = (assignedWeekendOffByDate[chosenKey] || 0) + 1
+        delete staffDaysSet[chosenWeekendOff]
+      } else if (naturalOffWeekendDates.length > 0) {
+        var chosenNaturalOff = naturalOffWeekendDates[staffIndex % naturalOffWeekendDates.length]
+        weekendOffAssignments[u.id] = [chosenNaturalOff]
+      } else {
+        // Se inviável, manter colaborador escalado e registrar aviso
         weekendOffAssignments[u.id] = []
         if (!weekendOffBlockedBySector[u.sector_id]) weekendOffBlockedBySector[u.sector_id] = []
         weekendOffBlockedBySector[u.sector_id].push(u.id)
         var warning =
           'Folga de fim de semana não alocada para ' +
           u.name +
-          ': nenhuma data segura preserva o efetivo mínimo (' +
+          ' (ciclo ' +
+          cycle.getString('name') +
+          '): nenhuma data segura preserva o efetivo mínimo (' +
           requiredWeekendCoverage +
-          '). Plantões mantidos.'
+          '). Colaborador mantido escalado para garantir a assistência.'
         warnings.push(warning)
         if (!warningsBySector[u.sector_id]) warningsBySector[u.sector_id] = []
         warningsBySector[u.sector_id].push(warning)
-      } else {
-        var chosenWeekendOff = safeCandidates[0]
-        var chosenKey = u.sector_id + '|' + chosenWeekendOff
-        weekendOffAssignments[u.id] = [chosenWeekendOff]
-        assignedWeekendOffByDate[chosenKey] = (assignedWeekendOffByDate[chosenKey] || 0) + 1
-        delete staffDaysSet[chosenWeekendOff]
       }
+
       initialShiftsByStaff[u.id] = Object.keys(staffDaysSet).sort()
     })
 
@@ -417,6 +591,7 @@ routerAdd(
             warnings: sectorWarnings.slice(0, 20),
             weekend_off_assignments: sectorWeekendOffAssignments,
             weekend_off_blocked_staff: weekendOffBlockedBySector[sId] || [],
+            weekend_off_overrides: existingWeekendOverridesBySector[sId] || {},
             weekend_off_coverage_minimum: requiredWeekendCoverageBySector[sId] || 1,
             additional_off_assignments: {},
             cycle_start: cycleStart,

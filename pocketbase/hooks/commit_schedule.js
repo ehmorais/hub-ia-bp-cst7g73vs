@@ -463,6 +463,7 @@ routerAdd(
     var draftRecord = null
     var weekendOffAssignments = null
     var additionalOffAssignments = null
+    var weekendOffBlockedStaff = []
     var bodyDraftId = body.draft_id || body.draft || ''
 
     if (bodyDraftId) {
@@ -509,6 +510,13 @@ routerAdd(
         ) {
           additionalOffAssignments = valSummary.additional_off_assignments
         }
+        if (
+          valSummary &&
+          valSummary.weekend_off_blocked_staff &&
+          Array.isArray(valSummary.weekend_off_blocked_staff)
+        ) {
+          weekendOffBlockedStaff = valSummary.weekend_off_blocked_staff
+        }
       } catch (_) {}
     }
 
@@ -516,11 +524,7 @@ routerAdd(
     var sectorRequiredWeekendCoverage = Math.max(1, sector.getInt('min_staffing') || 0)
     var sectorBedCapacity = sector.getInt('bed_capacity') || 0
     var sectorStaffingRatio = sector.getInt('staffing_ratio') || 0
-    if (
-      !sector.getBool('is_critical') &&
-      sectorBedCapacity > 0 &&
-      sectorStaffingRatio > 0
-    ) {
+    if (!sector.getBool('is_critical') && sectorBedCapacity > 0 && sectorStaffingRatio > 0) {
       sectorRequiredWeekendCoverage = Math.max(
         sectorRequiredWeekendCoverage,
         Math.ceil(sectorBedCapacity / sectorStaffingRatio),
@@ -663,7 +667,8 @@ routerAdd(
       // Sem assignment no rascunho significa que a geração bloqueou esta folga para preservar cobertura.
       // Só use fallback para rascunhos antigos que não tenham o mapa de folgas salvo.
       var hasWeekendAssignment =
-        weekendOffAssignments && Object.prototype.hasOwnProperty.call(weekendOffAssignments, profileId)
+        weekendOffAssignments &&
+        Object.prototype.hasOwnProperty.call(weekendOffAssignments, profileId)
       if (!hasWeekendOffDate && !hasWeekendAssignment && wCandidates.length > 0) {
         var pIdx = sortedProfileIds.indexOf(profileId)
         weekendOffDate = wCandidates[(pIdx !== -1 ? pIdx : 0) % wCandidates.length]
@@ -676,12 +681,20 @@ routerAdd(
 
       // Se não existir nenhum sábado/domingo elegível fora das férias (inclusive férias cobrindo todo o ciclo ou fins de semana):
       // NÃO cria nem cobra folga de fim de semana para esse colaborador nesse ciclo. NUNCA converte para dia útil.
+      // E se a ausência de folga estiver justificada no validation_summary para preservar cobertura mínima (weekend_off_blocked_staff), NÃO barrar o commit.
+      var isStaffBlockedByCoverage = weekendOffBlockedStaff.indexOf(profileId) !== -1
       if (!weekendOffDate) {
-        if (!isVacationActiveStaff) {
+        if (!isVacationActiveStaff && !isStaffBlockedByCoverage) {
           violations.push(
             'Fim de semana obrigatório não atendido: ' +
               profile.name +
               '. Nenhuma folga de fim de semana elegível no ciclo.',
+          )
+        } else if (isStaffBlockedByCoverage) {
+          warnings.push(
+            'Folga de fim de semana não alocada para ' +
+              profile.name +
+              ': ausência justificada por preservação da cobertura mínima do setor.',
           )
         }
       } else {
