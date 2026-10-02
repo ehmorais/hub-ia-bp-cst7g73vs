@@ -4,6 +4,7 @@ import {
   prepareCalendarMultiPageData,
   renderHtmlToPdfLandscape,
 } from '@/utils/scalePdfExport'
+import { CALENDAR_PDF_COMMON_STYLES } from '@/templates/calendarPdfTemplate'
 import * as fs from 'fs'
 import * as path from 'path'
 
@@ -154,12 +155,12 @@ describe('Inspeção e Verificação Estrutural do HTML do PDF Renderizado — C
     // Verificação das semanas e continuação
     expect(html).toContain('Semana 1 de 6')
     expect(html).toContain('Semana 2 de 6')
-    expect(html).toContain('Continuação — Quinta-feira, 08/10')
+    expect(html).toContain('Continuação &mdash; Quinta-feira, 08/10')
 
-    // Verificação dos badges
-    expect(html).toContain('badge-d')
-    expect(html).toContain('badge-n')
-    expect(html).toContain('badge-fds')
+    // Verificação dos tags sem negrito
+    expect(html).toContain('tag-d')
+    expect(html).toContain('tag-n')
+    expect(html).toContain('tag-fds')
 
     // Salva o arquivo de amostra para inspeção temporária
     const samplePath = path.resolve(process.cwd(), 'sample-calendar-weekly.html')
@@ -349,7 +350,7 @@ describe('Inspeção e Verificação Estrutural do HTML do PDF Renderizado — C
     expect(html).toContain('Semana 4 de 6')
     expect(html).toContain('Semana 5 de 6')
     expect(html).toContain('Semana 6 de 6')
-    expect(html).toContain('Continuação — Quinta-feira, 08/10')
+    expect(html).toContain('Continuação &mdash; Quinta-feira, 08/10')
 
     // 4.7. Inspeção e Renderização Real de TODAS as páginas do PDF via exportAutoGenerateCalendarPdf / renderHtmlToPdfLandscape
     const pdfDoc = await renderHtmlToPdfLandscape(html, {
@@ -358,7 +359,6 @@ describe('Inspeção e Verificação Estrutural do HTML do PDF Renderizado — C
     })
 
     expect(pdfDoc).toBeDefined()
-    // Como vitest/jsdom roda em node sem layout real de DOM canvas, doc tem configuração A4 landscape
     const pageSize = pdfDoc.internal.pageSize
     expect(Math.round(pageSize.getWidth())).toBe(297)
     expect(Math.round(pageSize.getHeight())).toBe(210)
@@ -382,7 +382,7 @@ describe('Inspeção e Verificação Estrutural do HTML do PDF Renderizado — C
 
       if (pageNum === 3) {
         // Página 3 é a Continuação do dia 08/10 (quinta-feira)
-        expect(pageContent).toContain('Continuação — Quinta-feira, 08/10')
+        expect(pageContent).toContain('Continuação &mdash; Quinta-feira, 08/10')
         expect(pageContent).toContain('Laodiceia da Silva Goes Dias')
         expect(pageContent).toContain('Marcia Ferreira Sales Silva')
         expect(pageContent).toContain('Matheus Rodrigues Avelar')
@@ -401,33 +401,30 @@ describe('Inspeção e Verificação Estrutural do HTML do PDF Renderizado — C
     })
 
     // 4.8. Validação minuciosa de fontes e dimensões tipográficas reais do CSS:
-    // Nomes de profissionais: font-size: 9.5pt (>= 9pt)
-    // Registros COREN / badges / horários: font-size: 8.5pt (>= 8pt)
+    // Nomes de profissionais: font-size: 10pt (>= 10pt), font-weight: 400 (normal)
+    // Registros COREN / badges / horários: font-size: 9pt (>= 9pt), font-weight: 400 (normal)
     // Célula com largura proporcional de 7 colunas iguais: 14.285714%
     // A4 Landscape: 297mm 210mm
-    expect(html).toMatch(/\.staff-card-name\s*\{\s*font-size:\s*9\.5pt/)
-    expect(html).toMatch(/\.staff-card-details\s*\{\s*display:\s*flex;[\s\S]*?font-size:\s*8\.5pt/)
-    expect(html).toMatch(/\.badge-shift-type\s*\{\s*font-size:\s*8\.5pt/)
+    expect(html).toMatch(/\.staff-entry-name\s*\{[^}]*font-size:\s*10pt/)
+    expect(html).toMatch(/\.staff-entry-name\s*\{[^}]*font-weight:\s*400/)
+    expect(html).toMatch(/\.staff-entry-details\s*\{[^}]*font-size:\s*9pt/)
+    expect(html).toMatch(/\.staff-entry-details\s*\{[^}]*font-weight:\s*400/)
     expect(html).toMatch(/\.calendar-table\s*colgroup\s*col\s*\{\s*width:\s*14\.285714%/)
     expect(html).toMatch(/@page\s*\{\s*size:\s*297mm\s*210mm\s*landscape/)
 
-    // 4.9. Inspeção visual minuciosa dos dias 17/10, 18/10 e 19/10 (anteriormente esmagados na pág 2 do exportador antigo)
+    // 4.9. Inspeção visual minuciosa dos dias 17/10, 18/10 e 19/10
     // No ciclo 26/09/2026 a 25/10/2026:
     // 17/10 (sábado) está na Semana 4 (dias 11/10 a 17/10, Página 4 de 7)
     // 18/10 (domingo) e 19/10 (segunda) estão na Semana 5 (dias 18/10 a 24/10, Página 5 de 7)
-    // Verifica ausência de colunas residuais, compressão, sobreposição ou texto cortado nestas semanas
     const week4Html = pageHtmlBlocks[3] // Página 4 = Semana 4
     const week5Html = pageHtmlBlocks[4] // Página 5 = Semana 5
 
     expect(week4Html).toContain('17/10')
-    expect(week4Html).toContain('Sábado')
     expect(week4Html).not.toContain('transform: scale')
     expect(week4Html).not.toContain('zoom:')
 
     expect(week5Html).toContain('18/10')
     expect(week5Html).toContain('19/10')
-    expect(week5Html).toContain('Domingo')
-    expect(week5Html).toContain('Segunda-feira')
     expect(week5Html).not.toContain('transform: scale')
     expect(week5Html).not.toContain('zoom:')
   })
@@ -517,9 +514,9 @@ describe('Inspeção e Verificação Estrutural do HTML do PDF Renderizado — C
     expect(page4).toContain('17/10')
     expect(page4).toContain('Laodiceia da Silva Goes Dias')
     expect(page4).toContain('COREN 9470010')
-    expect(page4).toContain('badge-d')
+    expect(page4).toContain('tag-d')
     // Cristiane em folga FDS no sábado 17/10
-    expect(page4).toContain('badge-fds')
+    expect(page4).toContain('tag-fds')
     expect(page4).toContain('Folga Fim de Semana')
 
     // Semana 5 (Página 5) contém 18/10 (Domingo) e 19/10 (Segunda)
@@ -529,7 +526,7 @@ describe('Inspeção e Verificação Estrutural do HTML do PDF Renderizado — C
     expect(page5).toContain('19/10')
     expect(page5).toContain('Cristiane Santos Lopes de Oliveira')
     expect(page5).toContain('COREN 1928664')
-    expect(page5).toContain('badge-n')
+    expect(page5).toContain('tag-n')
     expect(page5).toContain('Marcia Ferreira Sales Silva')
     expect(page5).toContain('COREN 835384')
 

@@ -14,6 +14,9 @@ export interface ShiftItemData {
   corenText: string
   timeRange?: string
   isWeekendOff?: boolean
+  isVacation?: boolean
+  isLeave?: boolean
+  notes?: string
 }
 
 export interface CalendarDayCellData {
@@ -82,8 +85,8 @@ export function escapeHtml(str: string | null | undefined): string {
 }
 
 /**
- * Retorna o nome completo do profissional preservando acentos e quebras sem compactar para iniciais,
- * pois agora dispomos de células semanais grandes em A4 paisagem com largura de ~38mm.
+ * Retorna o nome completo do profissional preservando acentos e quebras sem truncar nem abreviar,
+ * em peso normal (400) com alta legibilidade.
  */
 export function formatCompactStaffName(name: string, _maxLen = 40): string {
   if (!name) return 'Sem nome'
@@ -91,13 +94,23 @@ export function formatCompactStaffName(name: string, _maxLen = 40): string {
 }
 
 /**
- * CSS oficial compartilhado para páginas A4 Paisagem (297x210 mm)
- * EXIGÊNCIAS RÍGIDAS DE TIPOGRAFIA E IMPRESSÃO:
- * - Sem transforms/scale de compressão
- * - Fonte mínima de 9.5pt para nomes e cabeçalhos principais
- * - Fonte mínima de 8.5pt para registros (COREN/CRM), metadados e badges
- * - Cores com alto contraste adequadas para impressão P&B e leitura nítida
- * - 7 colunas iguais (14.285714%) em A4 paisagem
+ * CSS LIMPO, MODERNO E ROBUSTO PARA EXPORTAÇÃO A4 PAISAGEM (297x210 mm)
+ *
+ * REGRAS RÍGIDAS DE TIPOGRAFIA E LAYOUT (atendendo integralmente aos requisitos do usuário):
+ * 1. Peso NORMAL (font-weight: 400, font-style: normal) para TODOS os dados de conteúdo:
+ *    nomes, COREN, horários, tipos de turno, folgas, férias e observações.
+ *    Negrito SOMENTE em títulos e cabeçalhos de semana/dia.
+ * 2. Sem fundos decorativos pesados ou sombras que disputam espaço. Grade limpa com fundo
+ *    branco, bordas finas em cinza neutro (#cbd5e1), margens internas generosas e alto contraste.
+ * 3. Sem coordenadas fixas desmedidas nem transform/scale de compressão: fluxo vertical limpo,
+ *    wrap natural, quebra de linha por flexbox/grid sem colisões.
+ * 4. 7 colunas rigorosamente uniformes (width: 14.285714%) em A4 paisagem (297x210 mm).
+ * 5. Zonas de cabeçalho e rodapé reservadas e protegidas com altura fixa e flex-shrink: 0.
+ * 6. Tamanhos de fonte conformes:
+ *    - Cabeçalhos de dia: 11pt
+ *    - Nomes de colaboradores: 10pt (peso 400 normal)
+ *    - COREN / horários / detalhes / folgas: 9pt (peso 400 normal)
+ *    - Entrelinha: mínima de 1.25 a 1.35.
  */
 export const CALENDAR_PDF_COMMON_STYLES = `
     * {
@@ -116,6 +129,9 @@ export const CALENDAR_PDF_COMMON_STYLES = `
       height: 210mm;
       background: #ffffff;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-size: 10pt;
+      font-weight: 400;
+      line-height: 1.3;
       color: #0f172a;
       -webkit-font-smoothing: antialiased;
     }
@@ -130,7 +146,7 @@ export const CALENDAR_PDF_COMMON_STYLES = `
       height: 210mm;
       max-width: 297mm;
       max-height: 210mm;
-      padding: 7mm 8mm 6mm 8mm;
+      padding: 6mm 8mm 6mm 8mm;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
@@ -139,26 +155,32 @@ export const CALENDAR_PDF_COMMON_STYLES = `
       overflow: hidden;
       page-break-after: always;
       break-after: page;
+      box-sizing: border-box;
     }
     .page-container:last-child {
       page-break-after: auto;
       break-after: auto;
     }
 
-    /* Cabeçalho Institucional compacto BPSCS */
+    /* =====================================================
+       ZONA DE CABEÇALHO RESERVADA (Nunca invadida pelo conteúdo)
+       ===================================================== */
     .header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      border-bottom: 2.5px solid #047857;
+      border-bottom: 2px solid #0f172a;
       padding-bottom: 4px;
       margin-bottom: 4px;
       height: 48px;
+      min-height: 48px;
+      max-height: 48px;
       flex-shrink: 0;
+      box-sizing: border-box;
     }
     .header-info {
       flex: 1;
-      padding-right: 14px;
+      padding-right: 12px;
       min-width: 0;
     }
     .header-brand {
@@ -169,23 +191,25 @@ export const CALENDAR_PDF_COMMON_STYLES = `
     }
     .header-logo-left {
       flex: 0 0 auto;
-      width: 38px;
-      height: 38px;
+      width: 40px;
+      height: 40px;
       display: flex;
       align-items: center;
       justify-content: center;
     }
     .header-logo-left img {
-      width: 38px;
-      height: 38px;
+      max-width: 40px;
+      max-height: 40px;
+      width: auto;
+      height: auto;
       object-fit: contain;
       display: block;
     }
     .header-org {
-      font-size: 9.5pt;
-      font-weight: 800;
+      font-size: 9pt;
+      font-weight: 700;
       text-transform: uppercase;
-      letter-spacing: 0.6px;
+      letter-spacing: 0.5px;
       color: #047857;
       line-height: 1.1;
       margin-bottom: 2px;
@@ -198,9 +222,9 @@ export const CALENDAR_PDF_COMMON_STYLES = `
     }
     .header-title {
       font-size: 13pt;
-      font-weight: 800;
+      font-weight: 700;
       color: #0f172a;
-      line-height: 1.2;
+      line-height: 1.15;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -208,32 +232,31 @@ export const CALENDAR_PDF_COMMON_STYLES = `
     .header-badge {
       display: inline-block;
       font-size: 8.5pt;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.3px;
-      padding: 2px 7px;
+      font-weight: 600;
+      padding: 1px 6px;
       border-radius: 3px;
-      background: #ecfdf5;
-      color: #047857;
-      border: 1px solid #047857;
+      background: #f1f5f9;
+      color: #334155;
+      border: 1px solid #cbd5e1;
       white-space: nowrap;
+      line-height: 1.2;
     }
     .header-badge.badge-week {
-      background: #047857;
+      background: #0f172a;
       color: #ffffff;
-      border-color: #047857;
+      border-color: #0f172a;
     }
     .header-badge.badge-continuation {
-      background: #fffbeb;
-      color: #92400e;
-      border-color: #d97706;
+      background: #f8fafc;
+      color: #0f172a;
+      border-color: #64748b;
     }
     .header-subtitle {
-      font-size: 9pt;
-      color: #1e293b;
+      font-size: 8.5pt;
+      font-weight: 400;
+      color: #475569;
       margin-top: 2px;
       line-height: 1.2;
-      font-weight: 600;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -244,7 +267,7 @@ export const CALENDAR_PDF_COMMON_STYLES = `
       align-items: center;
       justify-content: flex-end;
       width: 130px;
-      height: 44px;
+      height: 42px;
     }
     .header-logo img {
       max-height: 40px;
@@ -255,41 +278,47 @@ export const CALENDAR_PDF_COMMON_STYLES = `
       display: block;
     }
 
-    /* Faixa de identificação da semana ativa */
+    /* Faixa de Contexto da Semana (título em negrito e metadados discretos) */
     .week-headline-bar {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      background: #f1f5f9;
-      border: 1.5px solid #0f172a;
-      border-radius: 4px;
-      padding: 3px 10px;
-      margin-bottom: 5px;
-      height: 24px;
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
+      border-radius: 3px;
+      padding: 2px 8px;
+      margin-bottom: 4px;
+      height: 22px;
+      min-height: 22px;
+      max-height: 22px;
       flex-shrink: 0;
+      box-sizing: border-box;
     }
     .week-headline-title {
-      font-size: 10pt;
-      font-weight: 800;
+      font-size: 9.5pt;
+      font-weight: 700;
       color: #0f172a;
-      letter-spacing: 0.2px;
+      letter-spacing: 0.1px;
     }
     .week-headline-meta {
       font-size: 8.5pt;
-      font-weight: 700;
-      color: #334155;
+      font-weight: 400;
+      color: #64748b;
     }
 
-    /* Container do Calendário Semanal (1 semana por página) */
+    /* =====================================================
+       GRADE SEMANAL LIMPA (1 semana por página, 7 colunas iguais)
+       ===================================================== */
     .calendar-wrapper {
       flex: 1;
       display: flex;
       flex-direction: column;
-      border: 1.5px solid #0f172a;
-      border-radius: 4px;
+      border: 1px solid #94a3b8;
+      border-radius: 3px;
       overflow: hidden;
       background: #ffffff;
       min-height: 0;
+      box-sizing: border-box;
     }
     .calendar-table {
       width: 100%;
@@ -301,27 +330,27 @@ export const CALENDAR_PDF_COMMON_STYLES = `
       width: 14.285714%;
     }
     .calendar-table thead th {
-      background: #047857;
-      color: #ffffff;
-      font-size: 9.5pt;
-      font-weight: 800;
+      background: #f8fafc;
+      color: #0f172a;
+      font-size: 10pt;
+      font-weight: 700;
       text-transform: uppercase;
-      letter-spacing: 0.4px;
-      padding: 5px 2px;
+      letter-spacing: 0.3px;
+      padding: 4px 2px;
       text-align: center;
-      border-right: 1.5px solid #065f46;
-      border-bottom: 1.5px solid #0f172a;
-      height: 28px;
+      border-right: 1px solid #cbd5e1;
+      border-bottom: 1.5px solid #94a3b8;
+      height: 26px;
       box-sizing: border-box;
     }
     .calendar-table thead th:last-child {
       border-right: none;
     }
     .calendar-table tbody td {
-      border-right: 1.5px solid #94a3b8;
+      border-right: 1px solid #cbd5e1;
       border-bottom: none;
       vertical-align: top;
-      padding: 4px 4px;
+      padding: 4px;
       background: #ffffff;
       position: relative;
       overflow: hidden;
@@ -332,294 +361,329 @@ export const CALENDAR_PDF_COMMON_STYLES = `
       border-right: none;
     }
     .calendar-table tbody td.weekend-day {
-      background: #fafaf9;
+      background: #ffffff;
     }
     .calendar-table tbody td.empty-day {
-      background: #f1f5f9;
+      background: #f8fafc;
     }
 
-    /* Cabeçalho da Célula Diária */
+    /* Cabeçalho da Célula Diária: 11pt, negrito */
     .day-cell-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
       margin-bottom: 4px;
-      padding-bottom: 3px;
-      border-bottom: 1.5px solid #cbd5e1;
-      height: 22px;
+      padding-bottom: 2px;
+      border-bottom: 1px solid #e2e8f0;
+      height: 20px;
       flex-shrink: 0;
+      box-sizing: border-box;
     }
     .day-cell-date {
       font-size: 11pt;
-      font-weight: 800;
+      font-weight: 700;
       color: #0f172a;
-      letter-spacing: -0.2px;
       line-height: 1;
     }
     .day-cell-badge-weekend {
       font-size: 8.5pt;
-      font-weight: 800;
-      color: #78350f;
-      background: #fef3c7;
-      padding: 2px 5px;
-      border-radius: 3px;
-      border: 1.5px solid #d97706;
-      letter-spacing: 0.3px;
+      font-weight: 400;
+      color: #475569;
+      background: #f1f5f9;
+      padding: 1px 4px;
+      border-radius: 2px;
+      border: 1px solid #cbd5e1;
       line-height: 1;
     }
 
-    /* Lista vertical de cards de colaboradores */
+    /* Lista vertical de plantonistas do dia */
     .day-shifts-list {
       display: flex;
       flex-direction: column;
-      gap: 4px;
+      gap: 3px;
       overflow: hidden;
-      height: calc(100% - 26px);
+      height: calc(100% - 24px);
     }
 
-    /* Card individual do profissional (linha/card separado com alta legibilidade) */
-    .staff-card {
-      padding: 3.5px 4px;
-      border-radius: 3px;
-      background: #f8fafc;
+    /* =====================================================
+       ITEM DO PROFISSIONAL (Grade limpa, sem negrito, sem sobreposição)
+       Requisito 1 e 2: peso normal (400) para nomes, COREN, horários, tipos.
+       Bordas finas cinza, fundo branco, alto contraste.
+       ===================================================== */
+    .staff-entry {
+      padding: 3px 4px;
+      border-radius: 2px;
+      background: #ffffff;
       color: #0f172a;
       border: 1px solid #cbd5e1;
-      border-left: 4px solid #047857;
+      border-left: 3px solid #64748b;
       display: flex;
       flex-direction: column;
       gap: 1.5px;
       box-sizing: border-box;
       page-break-inside: avoid;
     }
-    .staff-card.shift-night {
-      border-left-color: #1e3a8a;
-      background: #f1f5f9;
-      border-color: #94a3b8;
-    }
-    .staff-card.shift-day {
+    .staff-entry.shift-day {
       border-left-color: #047857;
       background: #ffffff;
-      border-color: #94a3b8;
     }
-    .staff-card.shift-off {
-      border-left-color: #d97706;
-      background: #fffbeb;
-      border-color: #f59e0b;
+    .staff-entry.shift-night {
+      border-left-color: #1e3a8a;
+      background: #ffffff;
+    }
+    .staff-entry.shift-off {
+      border-left-color: #b45309;
+      background: #ffffff;
+    }
+    .staff-entry.shift-vacation {
+      border-left-color: #475569;
+      background: #ffffff;
+    }
+    .staff-entry.shift-leave {
+      border-left-color: #64748b;
+      background: #ffffff;
     }
 
-    .staff-card-header {
+    .staff-entry-header {
       display: flex;
       align-items: flex-start;
       justify-content: space-between;
       gap: 4px;
     }
-    .staff-card-name {
-      font-size: 9.5pt;
-      font-weight: 700;
+    .staff-entry-name {
+      font-size: 10pt;
+      font-weight: 400;
       color: #0f172a;
-      line-height: 1.2;
+      line-height: 1.25;
       word-break: normal;
       overflow-wrap: break-word;
-      hyphens: manual;
       flex: 1;
     }
-    .badge-shift-type {
+    .staff-type-tag {
       font-size: 8.5pt;
-      font-weight: 900;
-      letter-spacing: 0.3px;
-      padding: 1px 4.5px;
+      font-weight: 400;
+      line-height: 1.2;
+      padding: 0 3px;
       border-radius: 2px;
-      line-height: 1.1;
+      border: 1px solid #cbd5e1;
+      color: #334155;
+      background: #f8fafc;
       flex-shrink: 0;
       text-align: center;
-      min-width: 17px;
+      min-width: 15px;
     }
-    .badge-shift-type.badge-d {
-      background: #047857;
-      color: #ffffff;
-      border: 1px solid #065f46;
+    .staff-type-tag.tag-d {
+      border-color: #047857;
+      color: #047857;
+      background: #f0fdf4;
     }
-    .badge-shift-type.badge-n {
-      background: #1e3a8a;
-      color: #ffffff;
-      border: 1px solid #172554;
+    .staff-type-tag.tag-n {
+      border-color: #1e3a8a;
+      color: #1e3a8a;
+      background: #eff6ff;
     }
-    .badge-shift-type.badge-fds {
-      background: #d97706;
-      color: #ffffff;
-      border: 1px solid #b45309;
+    .staff-type-tag.tag-fds {
+      border-color: #b45309;
+      color: #b45309;
+      background: #fffbeb;
+    }
+    .staff-type-tag.tag-ferias {
+      border-color: #475569;
+      color: #475569;
+      background: #f8fafc;
     }
 
-    .staff-card-details {
+    .staff-entry-details {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
       gap: 4px;
-      font-size: 8.5pt;
-      font-weight: 600;
-      color: #1e293b;
-      line-height: 1.15;
+      font-size: 9pt;
+      font-weight: 400;
+      color: #475569;
+      line-height: 1.25;
     }
     .staff-coren-text {
-      color: #0f172a;
-      font-weight: 700;
+      color: #334155;
+      font-weight: 400;
     }
     .staff-time-text {
-      color: #334155;
+      color: #64748b;
+      font-weight: 400;
     }
 
     .empty-day-notice {
       font-size: 9pt;
-      color: #64748b;
-      font-style: italic;
-      padding-top: 12px;
+      font-weight: 400;
+      color: #94a3b8;
+      padding-top: 10px;
       text-align: center;
     }
 
     .day-more-notice {
       font-size: 8.5pt;
-      font-weight: 700;
-      color: #92400e;
-      background: #fef3c7;
-      border: 1px solid #d97706;
-      border-radius: 3px;
+      font-weight: 400;
+      color: #475569;
+      background: #f8fafc;
+      border: 1px dashed #94a3b8;
+      border-radius: 2px;
       padding: 2px 4px;
       text-align: center;
-      line-height: 1.15;
+      line-height: 1.2;
       margin-top: 2px;
     }
 
-    /* Página de Continuação de Dia de Alta Densidade */
+    /* =====================================================
+       PÁGINA DE CONTINUAÇÃO DEDICADA (Dias densos, ex: 08/10)
+       Grade uniforme em 3 colunas, sem corte, sem negrito generalizado.
+       ===================================================== */
     .continuation-wrapper {
       flex: 1;
       display: flex;
       flex-direction: column;
-      border: 1.5px solid #0f172a;
-      border-radius: 4px;
+      border: 1px solid #94a3b8;
+      border-radius: 3px;
       overflow: hidden;
       background: #ffffff;
-      padding: 10px 14px;
+      padding: 8px 12px;
       min-height: 0;
+      box-sizing: border-box;
     }
     .continuation-intro {
-      font-size: 10pt;
+      font-size: 9.5pt;
+      font-weight: 400;
       color: #0f172a;
       background: #f8fafc;
-      border-left: 4px solid #047857;
       border: 1px solid #cbd5e1;
-      border-left-width: 4px;
-      padding: 6px 10px;
-      margin-bottom: 10px;
-      font-weight: 600;
+      border-left: 3px solid #047857;
+      padding: 4px 8px;
+      margin-bottom: 8px;
       display: flex;
       justify-content: space-between;
       align-items: center;
+      box-sizing: border-box;
     }
     .continuation-intro strong {
-      color: #047857;
+      font-weight: 700;
+      color: #0f172a;
     }
     .continuation-intro-tag {
-      font-size: 9pt;
-      font-weight: 800;
-      background: #fef3c7;
-      color: #92400e;
-      border: 1px solid #d97706;
-      padding: 2px 8px;
-      border-radius: 3px;
+      font-size: 8.5pt;
+      font-weight: 400;
+      background: #ffffff;
+      color: #334155;
+      border: 1px solid #cbd5e1;
+      padding: 1px 6px;
+      border-radius: 2px;
     }
     .continuation-columns {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
-      gap: 12px;
+      gap: 8px;
       align-content: start;
       overflow: hidden;
       flex: 1;
     }
 
-    /* Legenda horizontal compacta com alto contraste */
+    /* =====================================================
+       LEGENDA DISCRETA (Cores suaves, alto contraste, peso normal)
+       ===================================================== */
     .legend-bar {
       display: flex;
       align-items: center;
-      gap: 16px;
-      padding: 3px 8px;
+      gap: 14px;
+      padding: 2px 8px;
       background: #f8fafc;
-      border-top: 1.5px solid #cbd5e1;
+      border-top: 1px solid #cbd5e1;
       font-size: 8.5pt;
-      color: #1e293b;
+      font-weight: 400;
+      color: #475569;
       height: 20px;
+      min-height: 20px;
+      max-height: 20px;
       flex-shrink: 0;
-      font-weight: 600;
+      box-sizing: border-box;
     }
     .legend-title {
-      font-weight: 800;
+      font-weight: 700;
       color: #0f172a;
       text-transform: uppercase;
-      letter-spacing: 0.4px;
+      letter-spacing: 0.3px;
     }
     .legend-item {
       display: flex;
       align-items: center;
       gap: 4px;
+      font-weight: 400;
+      color: #334155;
     }
     .legend-chip {
-      font-size: 8.5pt;
-      font-weight: 900;
-      padding: 1px 4px;
+      font-size: 8pt;
+      font-weight: 400;
+      padding: 0 4px;
       border-radius: 2px;
-      color: #ffffff;
-      line-height: 1;
+      line-height: 1.2;
+      border: 1px solid #cbd5e1;
     }
     .legend-chip-day {
-      background: #047857;
+      border-color: #047857;
+      color: #047857;
+      background: #f0fdf4;
     }
     .legend-chip-night {
-      background: #1e3a8a;
+      border-color: #1e3a8a;
+      color: #1e3a8a;
+      background: #eff6ff;
     }
     .legend-chip-off {
-      background: #d97706;
+      border-color: #b45309;
+      color: #b45309;
+      background: #fffbeb;
     }
 
-    /* Rodapé Institucional */
+    /* =====================================================
+       ZONA DE RODAPÉ RESERVADA (Página X de Y correta e estável)
+       ===================================================== */
     .footer {
       display: flex;
       justify-content: space-between;
       align-items: center;
       margin-top: 4px;
       padding-top: 3px;
-      border-top: 1.5px solid #cbd5e1;
+      border-top: 1px solid #cbd5e1;
       font-size: 8.5pt;
-      color: #334155;
+      font-weight: 400;
+      color: #64748b;
       height: 18px;
+      min-height: 18px;
+      max-height: 18px;
       flex-shrink: 0;
-      font-weight: 600;
+      box-sizing: border-box;
     }
     .footer-left {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
       white-space: nowrap;
     }
-    .footer-left strong {
-      color: #0f172a;
-      font-weight: 800;
+    .footer-org {
+      font-weight: 600;
+      color: #334155;
     }
     .footer-divider {
-      color: #94a3b8;
+      color: #cbd5e1;
     }
     .footer-right {
-      font-weight: 800;
+      font-weight: 400;
       color: #0f172a;
-      font-size: 9pt;
+      font-size: 8.5pt;
       white-space: nowrap;
     }
 `
 
 /**
- * Renderiza um card/linha legível para um profissional escalado ou em folga FDS.
- * Atende às exigências:
- * - Nomes COMPLETOS com quebra de linha legível
- * - Fonte mínima de 9.5pt para nome e 8.5pt para COREN/CRM
- * - Badge visível D (dia), N (noite) ou FDS (folga)
+ * Renderiza a linha de um profissional em formato limpo, fundo branco, bordas sutis
+ * e tipografia 100% em peso normal (400) para nomes, COREN, horários e tipos de turno.
  */
 export function renderStaffCardHtml(item: {
   type: 'shift' | 'off'
@@ -628,25 +692,29 @@ export function renderStaffCardHtml(item: {
   if (item.type === 'shift') {
     const s = item.data as ShiftItemData
     const isNight = s.periodLetter === 'N'
-    const cardClass = isNight ? 'shift-night' : 'shift-day'
-    const badgeClass = isNight ? 'badge-n' : 'badge-d'
+    const entryClass = isNight ? 'shift-night' : 'shift-day'
+    const tagClass = isNight ? 'tag-n' : 'tag-d'
+
     const timeInfo = s.timeRange
-      ? `<span class="staff-time-text">(${escapeHtml(s.timeRange)})</span>`
+      ? `<span class="staff-time-text">${escapeHtml(s.timeRange)}</span>`
       : ''
     const corenInfo = s.corenText
       ? `<span class="staff-coren-text">${escapeHtml(s.corenText)}</span>`
       : ''
 
+    const detailsParts = [corenInfo, timeInfo].filter(Boolean)
+    const detailsHtml =
+      detailsParts.length > 0
+        ? `<div class="staff-entry-details">${detailsParts.join(' &bull; ')}</div>`
+        : ''
+
     return `
-      <div class="staff-card ${cardClass}">
-        <div class="staff-card-header">
-          <span class="staff-card-name">${escapeHtml(s.name)}</span>
-          <span class="badge-shift-type ${badgeClass}">${s.periodLetter}</span>
+      <div class="staff-entry ${entryClass}">
+        <div class="staff-entry-header">
+          <span class="staff-entry-name">${escapeHtml(s.name)}</span>
+          <span class="staff-type-tag ${tagClass}">${s.periodLetter}</span>
         </div>
-        <div class="staff-card-details">
-          ${corenInfo}
-          ${timeInfo}
-        </div>
+        ${detailsHtml}
       </div>
     `
   }
@@ -654,12 +722,12 @@ export function renderStaffCardHtml(item: {
   // Folga de Fim de Semana (FDS)
   const off = item.data as { id: string; name: string }
   return `
-    <div class="staff-card shift-off">
-      <div class="staff-card-header">
-        <span class="staff-card-name">${escapeHtml(off.name)}</span>
-        <span class="badge-shift-type badge-fds">FDS</span>
+    <div class="staff-entry shift-off">
+      <div class="staff-entry-header">
+        <span class="staff-entry-name">${escapeHtml(off.name)}</span>
+        <span class="staff-type-tag tag-fds">FDS</span>
       </div>
-      <div class="staff-card-details">
+      <div class="staff-entry-details">
         <span class="staff-coren-text">Folga Fim de Semana</span>
       </div>
     </div>
@@ -674,7 +742,7 @@ export function renderWeeklyCellHtml(
   maxCardsPerCell = 4,
 ): string {
   if (!cell) {
-    return `<td class="empty-day"><div class="empty-day-notice">—</div></td>`
+    return `<td class="empty-day"><div class="empty-day-notice">&mdash;</div></td>`
   }
 
   const tdClass = cell.isWeekend ? 'weekend-day' : ''
@@ -692,7 +760,7 @@ export function renderWeeklyCellHtml(
   if (remainingCount > 0) {
     cardsHtml.push(`
       <div class="day-more-notice">
-        +${remainingCount} profissional(is) na pág. de continuação
+        +${remainingCount} profissional(is) na continuação
       </div>
     `)
   }
@@ -771,7 +839,7 @@ export function renderSinglePdfPageHtml(options: {
     pageBadge = `<span class="header-badge badge-week">Semana ${weekData.weekIndex} de ${weekData.weekTotal}</span>`
     headlineBarHtml = `
       <div class="week-headline-bar">
-        <span class="week-headline-title">Semana ${weekData.weekIndex} de ${weekData.weekTotal} — ${weekData.startDateFormatted} a ${weekData.endDateFormatted}</span>
+        <span class="week-headline-title">Semana ${weekData.weekIndex} de ${weekData.weekTotal} &mdash; ${weekData.startDateFormatted} a ${weekData.endDateFormatted}</span>
         <span class="week-headline-meta">Grade Semanal Paginada A4 Paisagem</span>
       </div>
     `
@@ -796,8 +864,8 @@ export function renderSinglePdfPageHtml(options: {
         </table>
         <div class="legend-bar">
           <span class="legend-title">Legenda:</span>
-          <div class="legend-item"><span class="legend-chip legend-chip-day">D</span><span>Dia (07:00–19:00)</span></div>
-          <div class="legend-item"><span class="legend-chip legend-chip-night">N</span><span>Noite (19:00–07:00)</span></div>
+          <div class="legend-item"><span class="legend-chip legend-chip-day">D</span><span>Dia (07:00&ndash;19:00)</span></div>
+          <div class="legend-item"><span class="legend-chip legend-chip-night">N</span><span>Noite (19:00&ndash;07:00)</span></div>
           <div class="legend-item"><span class="legend-chip legend-chip-off">FDS</span><span>Folga de Fim de Semana</span></div>
         </div>
       </main>
@@ -810,8 +878,8 @@ export function renderSinglePdfPageHtml(options: {
     pageBadge = `<span class="header-badge badge-continuation">Continuação${batchPart}</span>`
     headlineBarHtml = `
       <div class="week-headline-bar">
-        <span class="week-headline-title">Continuação — ${escapeHtml(continuationDay.dayOfWeekName || '')}, ${continuationDay.dayFormatted}${batchPart}</span>
-        <span class="week-headline-meta">Detalhamento dos profissionais excedentes</span>
+        <span class="week-headline-title">Continuação &mdash; ${escapeHtml(continuationDay.dayOfWeekName || '')}, ${continuationDay.dayFormatted}${batchPart}</span>
+        <span class="week-headline-meta">Detalhamento dos profissionais escalados</span>
       </div>
     `
 
@@ -832,14 +900,13 @@ export function renderSinglePdfPageHtml(options: {
         </div>
         <div class="legend-bar">
           <span class="legend-title">Legenda:</span>
-          <div class="legend-item"><span class="legend-chip legend-chip-day">D</span><span>Dia (07:00–19:00)</span></div>
-          <div class="legend-item"><span class="legend-chip legend-chip-night">N</span><span>Noite (19:00–07:00)</span></div>
+          <div class="legend-item"><span class="legend-chip legend-chip-day">D</span><span>Dia (07:00&ndash;19:00)</span></div>
+          <div class="legend-item"><span class="legend-chip legend-chip-night">N</span><span>Noite (19:00&ndash;07:00)</span></div>
           <div class="legend-item"><span class="legend-chip legend-chip-off">FDS</span><span>Folga de Fim de Semana</span></div>
         </div>
       </main>
     `
   } else if (options.overflowDays && options.overflowDays.length > 0) {
-    // Fallback compatibilidade com overflowDays legados
     pageBadge = `<span class="header-badge badge-continuation">Continuação</span>`
     const cardsHtml = options.overflowDays
       .map((d) => {
@@ -861,7 +928,6 @@ export function renderSinglePdfPageHtml(options: {
       </main>
     `
   } else {
-    // Fallback genérico de tabela
     mainContentHtml = `
       <main class="calendar-wrapper">
         <table class="calendar-table">
@@ -915,10 +981,10 @@ export function renderSinglePdfPageHtml(options: {
 
       <footer class="footer">
         <div class="footer-left">
-          <strong>Beneficência Portuguesa de São Caetano do Sul</strong>
-          <span class="footer-divider">|</span>
+          <span class="footer-org">Beneficência Portuguesa de São Caetano do Sul</span>
+          <span class="footer-divider">&bull;</span>
           <span>Gerado em: ${escapeHtml(generatedAt)}</span>
-          <span class="footer-divider">|</span>
+          <span class="footer-divider">&bull;</span>
           <span>Documento confidencial / Uso interno</span>
         </div>
         <div class="footer-right">
@@ -1032,8 +1098,8 @@ export const CALENDAR_PDF_HTML_TEMPLATE = `<!DOCTYPE html>
     </main>
     <footer class="footer">
       <div class="footer-left">
-        <strong>Beneficência Portuguesa de São Caetano do Sul</strong>
-        <span class="footer-divider">|</span>
+        <span class="footer-org">Beneficência Portuguesa de São Caetano do Sul</span>
+        <span class="footer-divider">&bull;</span>
         <span>Gerado em: {{GENERATED_AT}}</span>
       </div>
       <div class="footer-right">

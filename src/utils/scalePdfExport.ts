@@ -597,7 +597,7 @@ export function buildCalendarHtml(params: ExportAutoGenerateCalendarPdfParams): 
   } else if (templateData.cycleStart) {
     subtitleParts.push(`Início: ${templateData.cycleStart}`)
   }
-  const subtitle = subtitleParts.join(' &nbsp;|&nbsp; ')
+  const subtitle = subtitleParts.join(' &bull; ')
 
   const now = new Date()
   const generatedAt = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()} às ${String(

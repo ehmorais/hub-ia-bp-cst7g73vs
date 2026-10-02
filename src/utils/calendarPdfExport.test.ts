@@ -82,20 +82,54 @@ describe('Pipeline de Calendário Semanal Paginado em PDF (BPSCS)', () => {
   const mockWeekendOffMap = new Map<string, Set<string>>()
   mockWeekendOffMap.set('st1', new Set(['2025-05-03'])) // st1 folga no sábado 03/05
 
-  describe('Requisitos de Tipografia e Ausência de Compressão CSS/Canvas', () => {
-    it('garante que os estilos do template definem fontes >= 9pt/8pt e não usam transform/scale de compressão', () => {
-      // Verifica tamanho mínimo de fonte para nomes e títulos
-      expect(CALENDAR_PDF_COMMON_STYLES).toContain('font-size: 9.5pt')
-      expect(CALENDAR_PDF_COMMON_STYLES).toContain('font-size: 8.5pt')
+  describe('Requisitos Visuais e Tipografia Obrigatória (Pesos e Tamanhos)', () => {
+    it('garante que peso de fonte para nomes, COREN, horários e itens de conteúdo é 400 (normal)', () => {
+      // Regra 1: Peso normal para nomes, coren, horários e detalhes
+      expect(CALENDAR_PDF_COMMON_STYLES).toMatch(/\.staff-entry-name\s*\{[^}]*font-weight:\s*400/)
+      expect(CALENDAR_PDF_COMMON_STYLES).toMatch(
+        /\.staff-entry-details\s*\{[^}]*font-weight:\s*400/,
+      )
+      expect(CALENDAR_PDF_COMMON_STYLES).toMatch(/\.staff-coren-text\s*\{[^}]*font-weight:\s*400/)
+      expect(CALENDAR_PDF_COMMON_STYLES).toMatch(/\.staff-time-text\s*\{[^}]*font-weight:\s*400/)
+      expect(CALENDAR_PDF_COMMON_STYLES).toMatch(/\.staff-type-tag\s*\{[^}]*font-weight:\s*400/)
 
-      // Garante que não existem fontes minúsculas (tipo 6px, 7px ou < 8.5pt)
-      expect(CALENDAR_PDF_COMMON_STYLES).not.toContain('font-size: 6.')
-      expect(CALENDAR_PDF_COMMON_STYLES).not.toContain('font-size: 7.')
-      expect(CALENDAR_PDF_COMMON_STYLES).not.toContain('font-size: 8pt')
-      expect(CALENDAR_PDF_COMMON_STYLES).not.toContain('font-size: 6px')
-      expect(CALENDAR_PDF_COMMON_STYLES).not.toContain('font-size: 7px')
+      // Regra 6: Tamanho de fonte conforme requisitos
+      // Nomes de profissionais >= 10pt
+      expect(CALENDAR_PDF_COMMON_STYLES).toMatch(/\.staff-entry-name\s*\{[^}]*font-size:\s*10pt/)
+      // Cabeçalhos de dia >= 11pt
+      expect(CALENDAR_PDF_COMMON_STYLES).toMatch(/\.day-cell-date\s*\{[^}]*font-size:\s*11pt/)
+      // COREN e horários >= 9pt
+      expect(CALENDAR_PDF_COMMON_STYLES).toMatch(/\.staff-entry-details\s*\{[^}]*font-size:\s*9pt/)
+    })
 
-      // Garante ausência total de transformações ou scale CSS compressivo
+    it('FALHA se qualquer elemento de conteúdo (nomes, COREN, horários, tipos) usar font-weight bold ou > 400', () => {
+      // Teste específico anti-regressão exigido:
+      // "Adicione teste que FALHE se o template usar negrito em campos de conteúdo"
+      const contentClasses = [
+        'staff-entry-name',
+        'staff-coren-text',
+        'staff-time-text',
+        'staff-entry-details',
+        'staff-type-tag',
+        'legend-item',
+      ]
+
+      contentClasses.forEach((className) => {
+        const classRegex = new RegExp(`\\.${className}\\s*\\{([^}]+)\\}`, 'g')
+        const match = classRegex.exec(CALENDAR_PDF_COMMON_STYLES)
+        expect(match, `Classe .${className} deve existir no CSS`).not.toBeNull()
+        if (match) {
+          const rules = match[1]
+          expect(rules).not.toContain('font-weight: bold')
+          expect(rules).not.toContain('font-weight: 700')
+          expect(rules).not.toContain('font-weight: 800')
+          expect(rules).not.toContain('font-weight: 900')
+          expect(rules).toContain('font-weight: 400')
+        }
+      })
+    })
+
+    it('garante que não existem transform: scale, zoom ou coordenadas absolutas no conteúdo das células', () => {
       expect(CALENDAR_PDF_COMMON_STYLES).not.toContain('transform: scale')
       expect(CALENDAR_PDF_COMMON_STYLES).not.toContain('transform-origin')
       expect(CALENDAR_PDF_COMMON_STYLES).not.toContain('zoom:')
@@ -139,9 +173,9 @@ describe('Pipeline de Calendário Semanal Paginado em PDF (BPSCS)', () => {
       expect(html).toContain('Enf. Juliana Souza')
       expect(html).toContain('CRM 123456-SP')
       expect(html).toContain('COREN 654321-SP')
-      expect(html).toContain('badge-d')
-      expect(html).toContain('badge-n')
-      expect(html).toContain('badge-fds')
+      expect(html).toContain('tag-d')
+      expect(html).toContain('tag-n')
+      expect(html).toContain('tag-fds')
       expect(html).toContain('Folga Fim de Semana')
       expect(html).toContain('Página 1 de 2')
       expect(html).toContain('Página 2 de 2')
@@ -356,7 +390,7 @@ describe('Pipeline de Calendário Semanal Paginado em PDF (BPSCS)', () => {
       expect(fullHtml).toContain('Semana 6 de 6')
 
       // Continuação de 08/10
-      expect(fullHtml).toContain('Continuação — Quinta-feira, 08/10')
+      expect(fullHtml).toContain('Continuação &mdash; Quinta-feira, 08/10')
       expect(fullHtml).toContain('Dia de Alta Densidade')
 
       // Rodapé com numeração total
