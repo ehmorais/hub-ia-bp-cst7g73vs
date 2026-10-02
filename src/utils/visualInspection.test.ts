@@ -431,4 +431,112 @@ describe('Inspeção e Verificação Estrutural do HTML do PDF Renderizado — C
     expect(week5Html).not.toContain('transform: scale')
     expect(week5Html).not.toContain('zoom:')
   })
+
+  it('valida especificamente plantões nos dias críticos 17/10, 18/10 e 19/10 com nomes longos e ausência de sobreposição', () => {
+    // 26/09/2026 a 25/10/2026
+    const days: Array<{ date: Date; key: string; dayOfWeek: number }> = []
+    for (let i = 0; i < 30; i++) {
+      const d = new Date(2026, 8, 26 + i)
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      days.push({
+        date: d,
+        key,
+        dayOfWeek: d.getDay(),
+      })
+    }
+
+    const staffProfiles = [
+      {
+        id: 'sp-laodiceia',
+        name: 'Laodiceia da Silva Goes Dias',
+        professional_id: 'COREN 9470010',
+        default_sector: 'sec-ps-resp',
+      },
+      {
+        id: 'sp-cristiane',
+        name: 'Cristiane Santos Lopes de Oliveira',
+        professional_id: 'COREN 1928664',
+        default_sector: 'sec-ps-resp',
+      },
+      {
+        id: 'sp-marcia',
+        name: 'Marcia Ferreira Sales Silva',
+        professional_id: 'COREN 835384',
+        default_sector: 'sec-ps-resp',
+      },
+    ]
+
+    const shifts = [
+      // 17/10 (Sábado) - Laodiceia Diurno
+      {
+        id: 'sh-17',
+        staff_profile: 'sp-laodiceia',
+        start_time: '2026-10-17 07:00:00',
+        end_time: '2026-10-17 19:00:00',
+      },
+      // 18/10 (Domingo) - Cristiane Noturno
+      {
+        id: 'sh-18',
+        staff_profile: 'sp-cristiane',
+        start_time: '2026-10-18 19:00:00',
+        end_time: '2026-10-19 07:00:00',
+      },
+      // 19/10 (Segunda) - Marcia Diurno
+      {
+        id: 'sh-19',
+        staff_profile: 'sp-marcia',
+        start_time: '2026-10-19 07:00:00',
+        end_time: '2026-10-19 19:00:00',
+      },
+    ]
+
+    const weekendOffMap = new Map<string, Set<string>>()
+    weekendOffMap.set('sp-cristiane', new Set(['2026-10-17'])) // Folga FDS no sábado 17/10
+
+    const html = buildCalendarHtml({
+      title: 'Escala de Plantões — Calendário Semanal',
+      sectorName: 'PS RESPIRATÓRIO',
+      cycleName: 'Ciclo Outubro 2026',
+      cycleStart: '2026-09-26',
+      cycleEnd: '2026-10-25',
+      days,
+      shifts,
+      contracts: [],
+      staffProfiles,
+      weekendOffMap,
+      selectedSectorId: 'sec-ps-resp',
+    })
+
+    const pageHtmlBlocks = html.split('<div class="page-container"').slice(1)
+    // 30 dias em semanas sem > 4 chips por dia = exatamente 6 páginas semanais
+    expect(pageHtmlBlocks.length).toBe(6)
+
+    // Semana 4 (Página 4) contém 17/10 (Sábado)
+    const page4 = pageHtmlBlocks[3]
+    expect(page4).toContain('Semana 4 de 6')
+    expect(page4).toContain('17/10')
+    expect(page4).toContain('Laodiceia da Silva Goes Dias')
+    expect(page4).toContain('COREN 9470010')
+    expect(page4).toContain('badge-d')
+    // Cristiane em folga FDS no sábado 17/10
+    expect(page4).toContain('badge-fds')
+    expect(page4).toContain('Folga Fim de Semana')
+
+    // Semana 5 (Página 5) contém 18/10 (Domingo) e 19/10 (Segunda)
+    const page5 = pageHtmlBlocks[4]
+    expect(page5).toContain('Semana 5 de 6')
+    expect(page5).toContain('18/10')
+    expect(page5).toContain('19/10')
+    expect(page5).toContain('Cristiane Santos Lopes de Oliveira')
+    expect(page5).toContain('COREN 1928664')
+    expect(page5).toContain('badge-n')
+    expect(page5).toContain('Marcia Ferreira Sales Silva')
+    expect(page5).toContain('COREN 835384')
+
+    // Sem colunas residuais e com 7 colunas iguais
+    expect(page4).toContain('width: 14.285714%')
+    expect(page5).toContain('width: 14.285714%')
+    expect(page4).not.toContain('transform: scale')
+    expect(page5).not.toContain('transform: scale')
+  })
 })
