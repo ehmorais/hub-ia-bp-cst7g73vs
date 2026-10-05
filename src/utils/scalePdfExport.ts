@@ -35,6 +35,7 @@ export interface ExportScalePdfParams {
   cellMap: Record<string, Record<string, ShiftSlot | undefined>> // cellMap[staffId][dateKey]
   weekendOffMap: Map<string, Set<string>> // staffId → Set<"YYYY-MM-DD">
   staffCorens?: Record<string, string | null | undefined> // staffId → professional_id
+  returnDoc?: boolean
 }
 
 export function formatSafeFilename(cycleStart?: string): string {
@@ -277,6 +278,9 @@ export function exportScalePdf(data: ExportScalePdfParams) {
   }
 
   const filename = formatSafeFilename(cycleStart)
+  if ((data as any).returnDoc) {
+    return doc as any
+  }
   doc.save(filename)
   return filename
 }
@@ -310,6 +314,7 @@ export interface ExportAutoGenerateCalendarPdfParams {
   selectedStaffId?: string
   logoBase64?: string
   logoOnLeft?: boolean
+  returnDoc?: boolean
 }
 
 /**
@@ -843,6 +848,9 @@ export async function exportAutoGenerateCalendarPdf(
     format: 'a4',
   })
 
+  // Garante explicitamente a página 1 em landscape e dimensões A4 (297 x 210 mm)
+  doc.setPage(1)
+
   doc.setProperties({
     title,
     subject: sectorName ? `Escala Calendário - ${sectorName}` : 'Escala Calendário',
@@ -853,6 +861,9 @@ export async function exportAutoGenerateCalendarPdf(
   // salvamos e retornamos o doc diretamente.
   if (typeof window === 'undefined' || typeof document === 'undefined') {
     const filename = formatSafeFilename(cycleStart)
+    if ((params as any).returnDoc) {
+      return doc as any
+    }
     doc.save(filename)
     return filename
   }
@@ -949,7 +960,7 @@ export async function exportAutoGenerateCalendarPdf(
       const pageEl = mountContainer.querySelector('.page-container') as HTMLElement
       if (pageEl) {
         if (pIdx > 0) {
-          doc.addPage('a4', 'landscape')
+          doc.addPage([297, 210], 'landscape')
         }
 
         const canvas = await html2canvas(pageEl, {
@@ -966,17 +977,22 @@ export async function exportAutoGenerateCalendarPdf(
 
         if (canvas && typeof canvas.toDataURL === 'function') {
           const imgData = canvas.toDataURL('image/png')
+          // Dimensões exatas A4 Landscape em mm: 297 x 210
           const pageWidth = 297
           const pageHeight = 210
+          // Margem mínima de segurança para impressão em mm (2mm)
+          const margin = 2
+          const printableWidth = pageWidth - margin * 2
+          const printableHeight = pageHeight - margin * 2
 
           const canvasWidth = canvas.width
           const canvasHeight = canvas.height
-          const ratio = Math.min(pageWidth / canvasWidth, pageHeight / canvasHeight)
+          const ratio = Math.min(printableWidth / canvasWidth, printableHeight / canvasHeight)
 
           const renderedWidth = canvasWidth * ratio
           const renderedHeight = canvasHeight * ratio
-          const offsetX = (pageWidth - renderedWidth) / 2
-          const offsetY = (pageHeight - renderedHeight) / 2
+          const offsetX = margin + (printableWidth - renderedWidth) / 2
+          const offsetY = margin + (printableHeight - renderedHeight) / 2
 
           doc.addImage(imgData, 'PNG', offsetX, offsetY, renderedWidth, renderedHeight)
         }

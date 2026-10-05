@@ -191,9 +191,39 @@ describe('Pipeline de Calendário Semanal Paginado em PDF (BPSCS)', () => {
 
       expect(doc).toBeInstanceOf(jsPDF)
       const pageInfo = doc.internal.pageSize
+      expect(pageInfo.getWidth()).toBeGreaterThan(pageInfo.getHeight())
       expect(Math.round(pageInfo.getWidth())).toBe(297)
       expect(Math.round(pageInfo.getHeight())).toBe(210)
       expect(doc.getNumberOfPages()).toBe(1)
+    })
+
+    it('exportAutoGenerateCalendarPdf com returnDoc gera páginas em orientação landscape (largura > altura)', async () => {
+      const doc = await exportAutoGenerateCalendarPdf({
+        title: 'Escala Calendário Landscape Test',
+        sectorName: 'UTI Geral',
+        cycleStart: '2025-05-01',
+        cycleEnd: '2025-05-31',
+        days: mockDays,
+        shifts: mockShifts,
+        contracts: [],
+        staffProfiles: mockStaff,
+        weekendOffMap: mockWeekendOffMap,
+        returnDoc: true,
+      } as any)
+
+      expect(doc).toBeDefined()
+      const totalPages = (doc as any).getNumberOfPages()
+      expect(totalPages).toBeGreaterThanOrEqual(1)
+
+      for (let p = 1; p <= totalPages; p++) {
+        ;(doc as any).setPage(p)
+        const size = (doc as any).internal.pageSize
+        const w = size.getWidth()
+        const h = size.getHeight()
+        expect(w).toBeGreaterThan(h) // Estritamente paisagem
+        expect(Math.round(w)).toBe(297)
+        expect(Math.round(h)).toBe(210)
+      }
     })
 
     it('exportAutoGenerateCalendarPdf executa fluxo completo e salva com filename seguro', async () => {

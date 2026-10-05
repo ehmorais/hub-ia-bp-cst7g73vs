@@ -1,10 +1,14 @@
 import { describe, it, expect } from 'vitest'
-import { buildCalendarHtml, prepareCalendarMultiPageData } from '@/utils/scalePdfExport'
+import {
+  buildCalendarHtml,
+  prepareCalendarMultiPageData,
+  exportAutoGenerateCalendarPdf,
+} from '@/utils/scalePdfExport'
 import * as fs from 'fs'
 import * as path from 'path'
 
 describe('Inspeção Visual Real do PDF — Ciclo Outubro 2026 / PS RESPIRATÓRIO', () => {
-  it('inspeciona e valida rigorosamente cada uma das 7 páginas geradas para o ciclo real de Outubro 2026', () => {
+  it('inspeciona e valida rigorosamente cada uma das 7 páginas geradas para o ciclo real de Outubro 2026', async () => {
     // Ciclo 26/09/2026 a 25/10/2026 (30 dias)
     const days: Array<{ date: Date; key: string; dayOfWeek: number }> = []
     for (let i = 0; i < 30; i++) {
@@ -203,5 +207,37 @@ describe('Inspeção Visual Real do PDF — Ciclo Outubro 2026 / PS RESPIRATÓRI
     fs.writeFileSync(outPath, fullHtml, 'utf-8')
     expect(fs.existsSync(outPath)).toBe(true)
     fs.unlinkSync(outPath)
+
+    // Validação direta do documento jsPDF gerado pelo exportador real
+    const doc = await exportAutoGenerateCalendarPdf({
+      title: 'Escala de Plantões — Calendário',
+      sectorName: 'PS RESPIRATÓRIO',
+      cycleName: 'Ciclo Outubro 2026',
+      cycleStart: '2026-09-26',
+      cycleEnd: '2026-10-25',
+      days,
+      shifts,
+      contracts: [],
+      staffProfiles,
+      weekendOffMap,
+      selectedSectorId: 'qrrh9pfkq090hlo',
+      returnDoc: true,
+    } as any)
+
+    expect(doc).toBeDefined()
+    const totalPdfPages = (doc as any).getNumberOfPages()
+    expect(totalPdfPages).toBeGreaterThanOrEqual(1)
+
+    for (let i = 1; i <= totalPdfPages; i++) {
+      ;(doc as any).setPage(i)
+      const pageSize = (doc as any).internal.pageSize
+      const width = pageSize.getWidth()
+      const height = pageSize.getHeight()
+
+      // Proporção de Landscape: largura (297mm) > altura (210mm)
+      expect(width).toBeGreaterThan(height)
+      expect(Math.round(width)).toBe(297)
+      expect(Math.round(height)).toBe(210)
+    }
   })
 })
