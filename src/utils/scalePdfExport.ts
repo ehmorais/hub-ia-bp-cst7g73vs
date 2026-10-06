@@ -16,6 +16,7 @@ import {
   type DayOverflowItem,
   type CalendarPageData,
 } from '@/templates/calendarPdfTemplate'
+import { buildClassifiedDayItems } from '@/lib/escala-calendar-order'
 
 export interface ShiftSlot {
   type: 'day' | 'night' | 'morning' | 'afternoon' | 'leave' | string
@@ -427,64 +428,34 @@ export function prepareCalendarTemplateData(params: ExportAutoGenerateCalendarPd
         .sort((a, b) => String(a.start_time).localeCompare(String(b.start_time)))
 
       const isWeekendDay = dayItem.dayOfWeek === 6 || dayItem.dayOfWeek === 0
-      const workedStaffIds = new Set(dayShifts.map((s) => s.staff_profile || s.user_id || s.user))
 
-      // Folgas de fim de semana (WEEKEND_OFF)
-      const weekendOffStaff: Array<{ id: string; name: string }> = []
-      if (isWeekendDay) {
-        sectorStaffProfiles.forEach((staff) => {
-          if (selectedStaffId && staff.id !== selectedStaffId) return
-          if (workedStaffIds.has(staff.id)) return
-          const offDates = weekendOffMap.get(staff.id)
-          if (offDates && offDates.has(dateKey)) {
-            weekendOffStaff.push({ id: staff.id, name: staff.name })
-          }
-        })
-      }
-
-      const formattedShifts: ShiftItemData[] = dayShifts.map((s) => {
-        const contract = contracts.find(
-          (item) => (item.staff_profile || item.user) === (s.staff_profile || s.user),
-        )
-        const shiftType = contract?.expand?.shift_type
-        const profileId = s.staff_profile || s.user_id || s.user
-        const matchedProfile = staffProfiles.find((sp) => sp.id === profileId)
-        const name =
-          s.expand?.staff_profile?.name ||
-          s.expand?.user?.name ||
-          matchedProfile?.name ||
-          s.name ||
-          'Sem nome'
-        const professionalId =
-          s.expand?.staff_profile?.professional_id ??
-          matchedProfile?.professional_id ??
-          s.professional_id ??
-          null
-
-        const startTime = (String(s.start_time || '').split(/[ T]/)[1] || '').substring(0, 5)
-        const endTime = (String(s.end_time || '').split(/[ T]/)[1] || '').substring(0, 5)
-        const startHour = parseInt(
-          (shiftType?.start_time || startTime || '0').split(':')[0] || '0',
-          10,
-        )
-        const crossesMidnight =
-          !!(shiftType?.start_time || startTime) &&
-          !!(shiftType?.end_time || endTime) &&
-          (shiftType?.end_time || endTime) < (shiftType?.start_time || startTime)
-        const isNight = startHour >= 18 || crossesMidnight
-        const periodLetter: 'D' | 'N' = isNight ? 'N' : 'D'
-        const corenText = formatCorenLabel(professionalId)
-        const timeRange = startTime && endTime ? `${startTime}–${endTime}` : undefined
-
-        return {
-          staffId: profileId,
-          name,
-          professionalId,
-          periodLetter,
-          corenText,
-          timeRange,
-        }
+      // Constrói os 6 grupos na sequência estrita a–f com ordem alfabética por nome
+      const classifiedItems = buildClassifiedDayItems({
+        dateKey,
+        dayOfWeek: dayItem.dayOfWeek,
+        dayShifts,
+        contracts,
+        staffProfiles,
+        sectorStaffProfiles,
+        weekendOffMap,
+        selectedStaffId,
       })
+
+      const formattedShifts: ShiftItemData[] = classifiedItems.map((item) => ({
+        staffId: item.staffId,
+        name: item.name,
+        professionalId: item.professionalId,
+        periodLetter: item.periodLetter,
+        corenText: item.corenText,
+        timeRange: item.timeRange,
+        isVacation: item.absenceType === 'FÉRIAS' || item.isShiftOnVacation,
+        isWeekendOff: item.absenceType === 'FOLGA',
+        absenceType: item.absenceType,
+      }))
+
+      // Mantém weekendOffStaff vazio porque todos os ausentes (folga/férias) já estão integrados
+      // em formattedShifts na ordem estrita dos 6 grupos (a–f)
+      const weekendOffStaff: Array<{ id: string; name: string }> = []
 
       return {
         dayFormatted,

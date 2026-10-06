@@ -17,6 +17,7 @@ export interface ShiftItemData {
   isVacation?: boolean
   isLeave?: boolean
   notes?: string
+  absenceType?: 'FOLGA' | 'FÉRIAS'
 }
 
 export interface CalendarDayCellData {
@@ -27,7 +28,13 @@ export interface CalendarDayCellData {
   isWeekend: boolean
   isOtherMonth?: boolean
   shifts: ShiftItemData[]
-  weekendOffs: Array<{ id: string; name: string }>
+  weekendOffs: Array<{
+    id: string
+    name: string
+    professionalId?: string | null
+    periodLetter?: 'D' | 'N'
+    corenText?: string
+  }>
 }
 
 export interface DayOverflowItem {
@@ -487,10 +494,15 @@ export const CALENDAR_PDF_COMMON_STYLES = `
       color: #b45309;
       background: #fffbeb;
     }
+    .staff-type-tag.tag-folga {
+      border-color: #ea580c;
+      color: #9a3412;
+      background: #ffedd5;
+    }
     .staff-type-tag.tag-ferias {
-      border-color: #475569;
-      color: #475569;
-      background: #f8fafc;
+      border-color: #059669;
+      color: #065f46;
+      background: #ecfdf5;
     }
 
     .staff-entry-details {
@@ -686,11 +698,60 @@ export const CALENDAR_PDF_COMMON_STYLES = `
  * e tipografia 100% em peso normal (400) para nomes, COREN, horários e tipos de turno.
  */
 export function renderStaffCardHtml(item: {
-  type: 'shift' | 'off'
-  data: ShiftItemData | { id: string; name: string }
+  type: 'shift' | 'off' | 'vacation'
+  data:
+    | ShiftItemData
+    | {
+        id: string
+        name: string
+        professionalId?: string | null
+        periodLetter?: 'D' | 'N'
+        corenText?: string
+        absenceType?: string
+      }
 }): string {
   if (item.type === 'shift') {
     const s = item.data as ShiftItemData
+
+    // Se o item for classificado como ausente (FÉRIAS ou FOLGA)
+    if (s.absenceType === 'FÉRIAS' || s.isVacation) {
+      const period = s.periodLetter || 'D'
+      const isNight = period === 'N'
+      const coren = s.corenText || 'COREN não informado'
+      return `
+        <div class="staff-entry shift-vacation">
+          <div class="staff-entry-header">
+            <span class="staff-entry-name">${escapeHtml(s.name)}</span>
+            <span class="staff-type-tag tag-ferias">FÉRIAS</span>
+          </div>
+          <div class="staff-entry-details">
+            <span class="staff-type-tag ${isNight ? 'tag-n' : 'tag-d'}">${period}</span>
+            <span class="staff-coren-text">${escapeHtml(coren)}</span>
+          </div>
+        </div>
+      `
+    }
+
+    if (s.absenceType === 'FOLGA' || s.isWeekendOff) {
+      const period = s.periodLetter || 'D'
+      const isNight = period === 'N'
+      const coren = s.corenText || 'COREN não informado'
+      return `
+        <div class="staff-entry shift-off">
+          <div class="staff-entry-header">
+            <span class="staff-entry-name">${escapeHtml(s.name)}</span>
+            <span class="staff-type-tag tag-folga">FOLGA</span>
+            <span class="staff-type-tag tag-fds" style="display:none">FDS</span>
+          </div>
+          <div class="staff-entry-details">
+            <span class="staff-type-tag ${isNight ? 'tag-n' : 'tag-d'}">${period}</span>
+            <span class="staff-coren-text">${escapeHtml(coren)}</span>
+            <span class="staff-time-text" style="display:none">Folga Fim de Semana</span>
+          </div>
+        </div>
+      `
+    }
+
     const isNight = s.periodLetter === 'N'
     const entryClass = isNight ? 'shift-night' : 'shift-day'
     const tagClass = isNight ? 'tag-n' : 'tag-d'
@@ -719,16 +780,47 @@ export function renderStaffCardHtml(item: {
     `
   }
 
-  // Folga de Fim de Semana (FDS)
-  const off = item.data as { id: string; name: string }
+  // Folga de Fim de Semana (FDS / FOLGA) - Card de Ausente
+  const off = item.data as {
+    id: string
+    name: string
+    professionalId?: string | null
+    periodLetter?: 'D' | 'N'
+    corenText?: string
+    absenceType?: string
+  }
+  const isVacation = item.type === 'vacation' || off.absenceType === 'FÉRIAS'
+  const period = off.periodLetter || 'D'
+  const isNight = period === 'N'
+  const coren =
+    off.corenText || (off.professionalId ? `COREN ${off.professionalId}` : 'COREN não informado')
+
+  if (isVacation) {
+    return `
+      <div class="staff-entry shift-vacation">
+        <div class="staff-entry-header">
+          <span class="staff-entry-name">${escapeHtml(off.name)}</span>
+          <span class="staff-type-tag tag-ferias">FÉRIAS</span>
+        </div>
+        <div class="staff-entry-details">
+          <span class="staff-type-tag ${isNight ? 'tag-n' : 'tag-d'}">${period}</span>
+          <span class="staff-coren-text">${escapeHtml(coren)}</span>
+        </div>
+      </div>
+    `
+  }
+
   return `
     <div class="staff-entry shift-off">
       <div class="staff-entry-header">
         <span class="staff-entry-name">${escapeHtml(off.name)}</span>
+        <span class="staff-type-tag tag-folga">FOLGA</span>
         <span class="staff-type-tag tag-fds">FDS</span>
       </div>
       <div class="staff-entry-details">
-        <span class="staff-coren-text">Folga Fim de Semana</span>
+        <span class="staff-type-tag ${isNight ? 'tag-n' : 'tag-d'}">${period}</span>
+        <span class="staff-coren-text">${escapeHtml(coren)}</span>
+        <span class="staff-time-text">Folga Fim de Semana</span>
       </div>
     </div>
   `
@@ -748,7 +840,7 @@ export function renderWeeklyCellHtml(
   const tdClass = cell.isWeekend ? 'weekend-day' : ''
   const weekendBadge = cell.isWeekend ? `<span class="day-cell-badge-weekend">FDS</span>` : ''
 
-  const allItems: Array<{ type: 'shift' | 'off'; data: any }> = []
+  const allItems: Array<{ type: 'shift' | 'off' | 'vacation'; data: any }> = []
   cell.shifts.forEach((s) => allItems.push({ type: 'shift', data: s }))
   cell.weekendOffs.forEach((off) => allItems.push({ type: 'off', data: off }))
 
@@ -883,7 +975,7 @@ export function renderSinglePdfPageHtml(options: {
       </div>
     `
 
-    const allItems: Array<{ type: 'shift' | 'off'; data: any }> = []
+    const allItems: Array<{ type: 'shift' | 'off' | 'vacation'; data: any }> = []
     continuationDay.shifts.forEach((s) => allItems.push({ type: 'shift', data: s }))
     continuationDay.weekendOffs.forEach((off) => allItems.push({ type: 'off', data: off }))
 
@@ -910,7 +1002,7 @@ export function renderSinglePdfPageHtml(options: {
     pageBadge = `<span class="header-badge badge-continuation">Continuação</span>`
     const cardsHtml = options.overflowDays
       .map((d) => {
-        const items: Array<{ type: 'shift' | 'off'; data: any }> = []
+        const items: Array<{ type: 'shift' | 'off' | 'vacation'; data: any }> = []
         d.remainingShifts.forEach((s) => items.push({ type: 'shift', data: s }))
         d.remainingWeekendOffs.forEach((off) => items.push({ type: 'off', data: off }))
         return items.map(renderStaffCardHtml).join('')
