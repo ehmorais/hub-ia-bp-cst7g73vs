@@ -809,6 +809,7 @@ routerAdd(
     var persisted = []
     try {
       $app.runInTransaction(function (txApp) {
+        // 1. Remover plantões existentes deste ciclo e deste setor
         var existing = txApp.findRecordsByFilter(
           'shifts',
           'cycle={:cyc} && sector={:sec}',
@@ -820,6 +821,26 @@ routerAdd(
         existing.forEach(function (rec) {
           txApp.delete(rec)
         })
+
+        // 2. Remover quaisquer plantões órfãos/anteriores deste mesmo ciclo pertencentes
+        // aos colaboradores elegíveis deste setor (ex: se o colaborador pertencia a outro setor
+        // anteriormente ou teve plantões gerados em outro setor no mesmo ciclo, evitando violação
+        // de unicidade em idx_shifts_profile_cycle_start_unique).
+        var eligibleStaffIds = Object.keys(eligibleIds)
+        for (var esi = 0; esi < eligibleStaffIds.length; esi++) {
+          var pStaffId = eligibleStaffIds[esi]
+          var prevStaffShifts = txApp.findRecordsByFilter(
+            'shifts',
+            'cycle={:cyc} && staff_profile={:sp}',
+            '-created',
+            1000,
+            0,
+            { cyc: cycleId, sp: pStaffId },
+          )
+          prevStaffShifts.forEach(function (rec) {
+            txApp.delete(rec)
+          })
+        }
 
         var shiftsCol = txApp.findCollectionByNameOrId('shifts')
         cleanDraft.forEach(function (entry) {

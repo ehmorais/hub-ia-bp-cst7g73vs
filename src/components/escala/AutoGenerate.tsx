@@ -790,6 +790,18 @@ function AutoGenerateInner({
       console.error('Error during AI draft generation:', err)
       const isPBError = err && typeof err === 'object' && 'response' in err
       const respData = isPBError ? err.response : null
+
+      // Tratar expiração de sessão / token inválido (401 / 403)
+      const isAuthError =
+        err?.status === 401 ||
+        err?.status === 403 ||
+        respData?.code === 401 ||
+        respData?.code === 403 ||
+        (typeof err?.message === 'string' &&
+          /unauthorized|forbidden|token|autentica/i.test(err.message))
+      const authMessage =
+        'Sua sessão expirou durante a geração. Por favor, faça login novamente para continuar.'
+
       // A 502/gateway timeout surfaces from the SDK as a generic
       // "Something went wrong." message (and err.status === 502), which is
       // useless to the user. Detect that specific case and show an
@@ -804,7 +816,11 @@ function AutoGenerateInner({
       const fallbackTimeoutMsg =
         'O servidor de IA excedeu o tempo limite. Isto pode ocorrer com muitos colaboradores ou regras complexas. Tente novamente — a segunda tentativa costuma ser mais rápida.'
       const rawMsg = respData?.error || respData?.message || err.message || 'Falha na geração.'
-      const msg = isTimeout ? respData?.error || fallbackTimeoutMsg : rawMsg
+      const msg = isAuthError
+        ? authMessage
+        : isTimeout
+          ? respData?.error || fallbackTimeoutMsg
+          : rawMsg
       setGenError(typeof msg === 'string' ? msg : JSON.stringify(msg))
       setGenDiagnostics(respData?.diagnostics || null)
       setGenSuggestion(respData?.suggestion || '')
@@ -818,7 +834,11 @@ function AutoGenerateInner({
       setGenError(typeof detailedMsg === 'string' ? detailedMsg : JSON.stringify(detailedMsg))
       setGenStatus('error')
       toast({
-        title: isTimeout ? 'Tempo limite da IA' : 'Falha na geração do draft',
+        title: isAuthError
+          ? 'Sessão expirada'
+          : isTimeout
+            ? 'Tempo limite da IA'
+            : 'Falha na geração do draft',
         description: typeof msg === 'string' ? msg : JSON.stringify(msg),
         variant: 'destructive',
       })

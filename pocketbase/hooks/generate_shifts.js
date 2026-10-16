@@ -567,6 +567,25 @@ routerAdd(
           }
         })
 
+        // Limpa plantões órfãos do ciclo para os colaboradores incluídos nesta geração
+        var touchedStaffIds = {}
+        usersWithContracts.forEach(function (u) {
+          touchedStaffIds[u.id] = true
+        })
+        Object.keys(touchedStaffIds).forEach(function (spId) {
+          var prevStaffShifts = txApp.findRecordsByFilter(
+            'shifts',
+            'cycle={:cyc} && staff_profile={:sp}',
+            '-created',
+            1000,
+            0,
+            { cyc: cycleId, sp: spId },
+          )
+          prevStaffShifts.forEach(function (rec) {
+            txApp.delete(rec)
+          })
+        })
+
         var draftsCol = txApp.findCollectionByNameOrId('schedule_drafts')
         validSectorIds.forEach(function (sId) {
           var draftRec = new Record(draftsCol)

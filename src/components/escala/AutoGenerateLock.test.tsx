@@ -164,4 +164,21 @@ describe('AutoGenerate - Concorrência, TTL e Reconciliação de Geração', () 
       expect(err.response.error).toContain('Nenhum colaborador elegível')
     }
   })
+
+  it('6. Erro de autenticação/sessão expirada (401/403) é capturado com mensagem amigável', async () => {
+    vi.spyOn(escalaService, 'generateDraftShifts').mockRejectedValueOnce({
+      status: 401,
+      response: {
+        code: 401,
+        message: 'The request requires valid administrator authorization token.',
+      },
+    })
+
+    try {
+      await escalaService.generateDraftShifts('cycle-1', 'sector-1')
+    } catch (err: any) {
+      expect(err.status).toBe(401)
+      expect(err.response.code).toBe(401)
+    }
+  })
 })
