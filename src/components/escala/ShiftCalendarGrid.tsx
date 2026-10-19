@@ -40,6 +40,7 @@ export interface ShiftCalendarGridProps {
   onCellDrop?: (e: React.DragEvent, day: Date) => void
   onCellDragOver?: (e: React.DragEvent) => void
   isInteractive?: boolean
+  maxItemsPerDay?: number
 }
 
 /**
@@ -114,6 +115,7 @@ export function ShiftCalendarGrid({
   onCellDrop,
   onCellDragOver,
   isInteractive = true,
+  maxItemsPerDay,
 }: ShiftCalendarGridProps) {
   // Setor staff profiles para exibição de folgas e férias
   const sectorStaffProfiles = React.useMemo(() => {
@@ -308,166 +310,189 @@ export function ShiftCalendarGrid({
                     return null
                   }
 
-                  return classifiedItems.map((item) => {
-                    const isNight = item.periodLetter === 'N'
+                  const hasLimit = typeof maxItemsPerDay === 'number' && maxItemsPerDay > 0
+                  const visibleItems = hasLimit
+                    ? classifiedItems.slice(0, maxItemsPerDay)
+                    : classifiedItems
+                  const overflowCount = hasLimit
+                    ? Math.max(0, classifiedItems.length - maxItemsPerDay)
+                    : 0
 
-                    // Renderização de Colaborador ESCALADO (plantão ativo D ou N)
-                    if (item.shift) {
-                      const s = item.shift
-                      const matchedProfile = staffProfiles.find((sp) => sp.id === item.staffId)
-                      const isShiftOnVacation =
-                        item.isShiftOnVacation ?? isVacationDateInclusive(matchedProfile, dateKey)
-                      const vacationPeriodText =
-                        matchedProfile?.vacation_start && matchedProfile?.vacation_end
-                          ? `Férias de ${format(parseISO(matchedProfile.vacation_start.split(' ')[0]), 'dd/MM')} a ${format(parseISO(matchedProfile.vacation_end.split(' ')[0]), 'dd/MM')}`
-                          : 'Férias'
+                  return (
+                    <>
+                      {visibleItems.map((item) => {
+                        const isNight = item.periodLetter === 'N'
 
-                      return (
-                        <div
-                          key={s.id}
-                          draggable={isInteractive}
-                          onDragStart={
-                            isInteractive && onShiftDragStart
-                              ? (e) => onShiftDragStart(e, s)
-                              : undefined
-                          }
-                          className={cn(
-                            'text-xs p-2 rounded bg-white border shadow-sm flex flex-col gap-1 transition-colors min-h-max',
-                            isInteractive && 'cursor-move active:cursor-grabbing',
-                            movedShiftIds.has(s.id)
-                              ? 'border-orange-500 hover:border-orange-600'
-                              : isInteractive
-                                ? 'border-slate-200 hover:border-primary/50'
-                                : 'border-slate-200',
-                          )}
-                        >
-                          {/* Primeira linha: nome completo */}
-                          <div className="flex items-start justify-between gap-1">
+                        // Renderização de Colaborador ESCALADO (plantão ativo D ou N)
+                        if (item.shift) {
+                          const s = item.shift
+                          const matchedProfile = staffProfiles.find((sp) => sp.id === item.staffId)
+                          const isShiftOnVacation =
+                            item.isShiftOnVacation ??
+                            isVacationDateInclusive(matchedProfile, dateKey)
+                          const vacationPeriodText =
+                            matchedProfile?.vacation_start && matchedProfile?.vacation_end
+                              ? `Férias de ${format(parseISO(matchedProfile.vacation_start.split(' ')[0]), 'dd/MM')} a ${format(parseISO(matchedProfile.vacation_end.split(' ')[0]), 'dd/MM')}`
+                              : 'Férias'
+
+                          return (
                             <div
-                              className="font-semibold text-slate-800 break-words whitespace-normal leading-snug flex-1"
-                              title={item.name}
+                              key={s.id}
+                              draggable={isInteractive}
+                              onDragStart={
+                                isInteractive && onShiftDragStart
+                                  ? (e) => onShiftDragStart(e, s)
+                                  : undefined
+                              }
+                              className={cn(
+                                'text-xs p-2 rounded bg-white border shadow-sm flex flex-col gap-1 transition-colors min-h-max',
+                                isInteractive && 'cursor-move active:cursor-grabbing',
+                                movedShiftIds.has(s.id)
+                                  ? 'border-orange-500 hover:border-orange-600'
+                                  : isInteractive
+                                    ? 'border-slate-200 hover:border-primary/50'
+                                    : 'border-slate-200',
+                              )}
                             >
-                              {item.name}
-                            </div>
-                            {isShiftOnVacation && (
-                              <span
-                                className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 border border-emerald-300 text-emerald-800 shrink-0"
-                                title={vacationPeriodText}
-                                aria-label={vacationPeriodText}
+                              {/* Primeira linha: nome completo */}
+                              <div className="flex items-start justify-between gap-1">
+                                <div
+                                  className="font-semibold text-slate-800 break-words whitespace-normal leading-snug flex-1"
+                                  title={item.name}
+                                >
+                                  {item.name}
+                                </div>
+                                {isShiftOnVacation && (
+                                  <span
+                                    className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 border border-emerald-300 text-emerald-800 shrink-0"
+                                    title={vacationPeriodText}
+                                    aria-label={vacationPeriodText}
+                                  >
+                                    <Palmtree className="h-3 w-3 shrink-0" />
+                                    <span>FÉRIAS</span>
+                                  </span>
+                                )}
+                              </div>
+                              {/* Segunda linha: D/N + • + COREN */}
+                              <div
+                                className="flex items-center gap-1.5 text-slate-600 text-[11px] min-w-0 break-words whitespace-normal leading-tight font-medium"
+                                title={item.secondLineText}
                               >
-                                <Palmtree className="h-3 w-3 shrink-0" />
-                                <span>FÉRIAS</span>
-                              </span>
-                            )}
-                          </div>
-                          {/* Segunda linha: D/N + • + COREN */}
-                          <div
-                            className="flex items-center gap-1.5 text-slate-600 text-[11px] min-w-0 break-words whitespace-normal leading-tight font-medium"
-                            title={item.secondLineText}
-                          >
-                            <span
-                              className={cn(
-                                'font-bold shrink-0 text-xs',
-                                isNight ? 'text-indigo-700' : 'text-emerald-700',
-                              )}
-                            >
-                              {item.periodLetter}
-                            </span>
-                            <span className="text-slate-400 select-none">•</span>
-                            <span
-                              data-testid={`shift-coren-${s.id}`}
-                              className={cn(
-                                'break-words',
-                                !item.professionalId ? 'text-slate-400 italic' : 'text-slate-700',
-                              )}
-                            >
-                              {item.corenText}
-                            </span>
-                          </div>
-                        </div>
-                      )
-                    }
-
-                    // Renderização de Colaborador AUSENTE (FÉRIAS ou FOLGA)
-                    // Card unificado: nome completo, COREN (formatCorenLabel), letra do plantão-base (D ou N) e tag FOLGA ou FÉRIAS
-                    const isVacation = item.absenceType === 'FÉRIAS'
-                    const fullProfile = staffProfiles.find((sp) => sp.id === item.staffId)
-                    const vacationPeriodText =
-                      fullProfile?.vacation_start && fullProfile?.vacation_end
-                        ? `Férias de ${format(parseISO(fullProfile.vacation_start.split(' ')[0]), 'dd/MM')} a ${format(parseISO(fullProfile.vacation_end.split(' ')[0]), 'dd/MM')}`
-                        : 'Férias'
-
-                    return (
-                      <div
-                        key={item.id}
-                        data-testid={
-                          isVacation
-                            ? `vacation-${item.staffId}-${dateKey}`
-                            : `weekend-off-${item.staffId}-${dateKey}`
+                                <span
+                                  className={cn(
+                                    'font-bold shrink-0 text-xs',
+                                    isNight ? 'text-indigo-700' : 'text-emerald-700',
+                                  )}
+                                >
+                                  {item.periodLetter}
+                                </span>
+                                <span className="text-slate-400 select-none">•</span>
+                                <span
+                                  data-testid={`shift-coren-${s.id}`}
+                                  className={cn(
+                                    'break-words',
+                                    !item.professionalId
+                                      ? 'text-slate-400 italic'
+                                      : 'text-slate-700',
+                                  )}
+                                >
+                                  {item.corenText}
+                                </span>
+                              </div>
+                            </div>
+                          )
                         }
-                        title={isVacation ? vacationPeriodText : 'Folga Fim de Semana'}
-                        aria-label={isVacation ? vacationPeriodText : 'Folga Fim de Semana'}
-                        className={cn(
-                          'rounded p-2 text-xs shadow-sm flex flex-col gap-1 transition-colors select-none min-h-max border',
-                          isVacation
-                            ? 'bg-emerald-50 border-emerald-300 text-emerald-950'
-                            : 'bg-orange-50/90 border-orange-300 text-slate-900',
-                        )}
-                      >
-                        {/* Linha 1: Nome completo e Tag de status (FOLGA ou FÉRIAS) */}
-                        <div className="flex items-start justify-between gap-1">
-                          <div
-                            className={cn(
-                              'font-semibold break-words whitespace-normal leading-snug flex-1',
-                              isVacation ? 'text-emerald-950' : 'text-slate-900',
-                            )}
-                            title={item.name}
-                          >
-                            {item.name}
-                          </div>
-                          {isVacation ? (
-                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 border border-emerald-400 text-emerald-800 shrink-0">
-                              <Palmtree className="h-3 w-3 shrink-0" />
-                              <span>FÉRIAS</span>
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-orange-200/80 border border-orange-400 text-orange-900 shrink-0">
-                              FOLGA
-                            </span>
-                          )}
-                        </div>
 
-                        {/* Linha 2: Letra do plantão-base (D ou N) + • + COREN formatado */}
-                        <div
-                          className="flex items-center gap-1.5 text-slate-600 text-[11px] min-w-0 break-words whitespace-normal leading-tight font-medium"
-                          title={item.secondLineText}
-                        >
-                          <span
-                            className={cn(
-                              'font-bold shrink-0 text-xs',
-                              isNight ? 'text-indigo-700' : 'text-emerald-700',
-                            )}
-                          >
-                            {item.periodLetter}
-                          </span>
-                          <span className="text-slate-400 select-none">•</span>
-                          <span
+                        // Renderização de Colaborador AUSENTE (FÉRIAS ou FOLGA)
+                        // Card unificado: nome completo, COREN (formatCorenLabel), letra do plantão-base (D ou N) e tag FOLGA ou FÉRIAS
+                        const isVacation = item.absenceType === 'FÉRIAS'
+                        const fullProfile = staffProfiles.find((sp) => sp.id === item.staffId)
+                        const vacationPeriodText =
+                          fullProfile?.vacation_start && fullProfile?.vacation_end
+                            ? `Férias de ${format(parseISO(fullProfile.vacation_start.split(' ')[0]), 'dd/MM')} a ${format(parseISO(fullProfile.vacation_end.split(' ')[0]), 'dd/MM')}`
+                            : 'Férias'
+
+                        return (
+                          <div
+                            key={item.id}
                             data-testid={
                               isVacation
-                                ? `vacation-coren-${item.staffId}-${dateKey}`
-                                : `off-coren-${item.staffId}-${dateKey}`
+                                ? `vacation-${item.staffId}-${dateKey}`
+                                : `weekend-off-${item.staffId}-${dateKey}`
                             }
+                            title={isVacation ? vacationPeriodText : 'Folga Fim de Semana'}
+                            aria-label={isVacation ? vacationPeriodText : 'Folga Fim de Semana'}
                             className={cn(
-                              'break-words',
-                              !item.professionalId ? 'text-slate-400 italic' : 'text-slate-700',
+                              'rounded p-2 text-xs shadow-sm flex flex-col gap-1 transition-colors select-none min-h-max border',
+                              isVacation
+                                ? 'bg-emerald-50 border-emerald-300 text-emerald-950'
+                                : 'bg-orange-50/90 border-orange-300 text-slate-900',
                             )}
                           >
-                            {item.corenText}
-                          </span>
+                            {/* Linha 1: Nome completo e Tag de status (FOLGA ou FÉRIAS) */}
+                            <div className="flex items-start justify-between gap-1">
+                              <div
+                                className={cn(
+                                  'font-semibold break-words whitespace-normal leading-snug flex-1',
+                                  isVacation ? 'text-emerald-950' : 'text-slate-900',
+                                )}
+                                title={item.name}
+                              >
+                                {item.name}
+                              </div>
+                              {isVacation ? (
+                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 border border-emerald-400 text-emerald-800 shrink-0">
+                                  <Palmtree className="h-3 w-3 shrink-0" />
+                                  <span>FÉRIAS</span>
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-orange-200/80 border border-orange-400 text-orange-900 shrink-0">
+                                  FOLGA
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Linha 2: Letra do plantão-base (D ou N) + • + COREN formatado */}
+                            <div
+                              className="flex items-center gap-1.5 text-slate-600 text-[11px] min-w-0 break-words whitespace-normal leading-tight font-medium"
+                              title={item.secondLineText}
+                            >
+                              <span
+                                className={cn(
+                                  'font-bold shrink-0 text-xs',
+                                  isNight ? 'text-indigo-700' : 'text-emerald-700',
+                                )}
+                              >
+                                {item.periodLetter}
+                              </span>
+                              <span className="text-slate-400 select-none">•</span>
+                              <span
+                                data-testid={
+                                  isVacation
+                                    ? `vacation-coren-${item.staffId}-${dateKey}`
+                                    : `off-coren-${item.staffId}-${dateKey}`
+                                }
+                                className={cn(
+                                  'break-words',
+                                  !item.professionalId ? 'text-slate-400 italic' : 'text-slate-700',
+                                )}
+                              >
+                                {item.corenText}
+                              </span>
+                            </div>
+                          </div>
+                        )
+                      })}
+                      {overflowCount > 0 && (
+                        <div
+                          className="text-[10px] font-medium text-slate-600 bg-slate-100 border border-slate-300 rounded px-1.5 py-1 text-center"
+                          data-testid={`grid-overflow-notice-${dateKey}`}
+                        >
+                          +{overflowCount} profissional(is) na continuação
                         </div>
-                      </div>
-                    )
-                  })
+                      )}
+                    </>
+                  )
                 })()}
               </div>
             </div>

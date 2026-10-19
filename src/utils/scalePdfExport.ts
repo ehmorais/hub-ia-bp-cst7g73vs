@@ -11,6 +11,9 @@ import { CalendarDayItem } from '@/components/escala/ShiftCalendarGrid'
 import {
   renderCalendarPdfTemplate,
   renderMultiPageCalendarHtml,
+  renderSinglePdfPageHtml,
+  renderWeeklyTableBody,
+  CALENDAR_PDF_COMMON_STYLES,
   type CalendarDayCellData,
   type ShiftItemData,
   type DayOverflowItem,
@@ -828,9 +831,17 @@ export async function exportAutoGenerateCalendarPdf(
     author: 'Gestão de Escalas BP — IA',
   })
 
-  // Se não estivermos em ambiente com DOM (ex.: testes unitários sem window/document completo),
-  // salvamos e retornamos o doc diretamente.
+  // 1. Usar a paginação completa com limite de 4 cards por célula e páginas de continuação
+  // dedicadas para dias densos (excedente escoa para continuação sem corte nem redução de fonte)
+  const { pages: multiPages, templateData } = prepareCalendarMultiPageData(params)
+
+  const totalPages = Math.max(1, multiPages.length)
+
+  // Em ambiente sem DOM completo (ex.: Vitest/Node), prepara todas as páginas com doc.addPage('a4', 'landscape')
   if (typeof window === 'undefined' || typeof document === 'undefined') {
+    for (let p = 1; p < totalPages; p++) {
+      doc.addPage('a4', 'landscape')
+    }
     const filename = formatSafeFilename(cycleStart)
     if ((params as any).returnDoc) {
       return doc as any
@@ -839,12 +850,22 @@ export async function exportAutoGenerateCalendarPdf(
     return filename
   }
 
-  // 1. Dividir em semanas e páginas
-  const weeks = chunkDaysIntoCalendarWeeks(days)
-  const pageWeeksList = groupWeeksIntoPages(weeks, shifts)
-  const totalPages = Math.max(1, pageWeeksList.length)
+  const now = new Date()
+  const generatedAt = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()} às ${String(
+    now.getHours(),
+  ).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
 
-  // 2. Criar container offscreen para montagem React
+  const subtitleParts: string[] = []
+  if (templateData.sectorName) subtitleParts.push(`Setor: ${templateData.sectorName}`)
+  if (templateData.cycleName) subtitleParts.push(`Ciclo: ${templateData.cycleName}`)
+  else if (templateData.cycleStart && templateData.cycleEnd) {
+    subtitleParts.push(`Período: ${templateData.cycleStart} a ${templateData.cycleEnd}`)
+  } else if (templateData.cycleStart) {
+    subtitleParts.push(`Início: ${templateData.cycleStart}`)
+  }
+  const subtitle = subtitleParts.join(' &bull; ')
+
+  // 2. Criar container offscreen para montagem com dimensões A4 Landscape travadas (297x210mm ~ 1123x794px)
   const mountContainer = document.createElement('div')
   mountContainer.setAttribute('aria-hidden', 'true')
   mountContainer.id = 'offscreen-pdf-renderer'
@@ -852,61 +873,53 @@ export async function exportAutoGenerateCalendarPdf(
   mountContainer.style.left = '-10000px'
   mountContainer.style.top = '0'
   mountContainer.style.width = '1123px'
+  mountContainer.style.maxWidth = '1123px'
+  mountContainer.style.minHeight = '794px'
+  mountContainer.style.maxHeight = '794px'
+  mountContainer.style.height = '794px'
+  mountContainer.style.overflow = 'hidden'
   mountContainer.style.backgroundColor = '#ffffff'
   mountContainer.style.zIndex = '-9999'
+  mountContainer.style.margin = '0'
+  mountContainer.style.padding = '0'
+  mountContainer.style.boxSizing = 'border-box'
   document.body.appendChild(mountContainer)
 
-  const root = createRoot(mountContainer)
-
   try {
+    // Injetar folha de estilo oficial do PDF no container para isolamento e precisão visual
+    const styleEl = document.createElement('style')
+    styleEl.innerHTML = CALENDAR_PDF_COMMON_STYLES
+    mountContainer.appendChild(styleEl)
+
+    const contentWrapper = document.createElement('div')
+    contentWrapper.id = 'offscreen-page-host'
+    mountContainer.appendChild(contentWrapper)
+
     // 3. Renderizar cada página sequencialmente com html2canvas de alta resolução
     for (let pIdx = 0; pIdx < totalPages; pIdx++) {
-      const pageWeeks = pageWeeksList[pIdx] || []
-      const pageDays = pageWeeks.flat()
-
-      const firstD = pageDays[0]
-      const lastD = pageDays[pageDays.length - 1]
-      const weekRangeLabel =
-        firstD && lastD
-          ? `Período: ${firstD.key.split('-').slice(1).reverse().join('/')} a ${lastD.key.split('-').slice(1).reverse().join('/')}`
-          : undefined
-
-      const isLastPage = pIdx === totalPages - 1
-
-      // Renderiza a página no container offscreen usando React.createElement
-      await new Promise<void>((resolve) => {
-        root.render(
-          React.createElement(
-            'div',
-            {
-              id: `pdf-page-wrapper-${pIdx}`,
-              className: 'bg-white',
-              style: { width: '1123px' },
-            },
-            React.createElement(CalendarPdfPage, {
-              title,
-              sectorName,
-              cycleName,
-              cycleStart,
-              cycleEnd,
-              days: pageDays,
-              shifts,
-              contracts,
-              staffProfiles,
-              weekendOffMap,
-              selectedSectorId,
-              selectedStaffId,
-              pageCurrent: pIdx + 1,
-              pageTotal: totalPages,
-              showLegend: isLastPage,
-              logoBase64,
-              weekRangeLabel,
-            }),
-          ),
-        )
-        // Aguarda microtasks de layout e render do React
-        setTimeout(resolve, 60)
+      const pageData = multiPages[pIdx]
+      const singlePageHtml = renderSinglePdfPageHtml({
+        pageType: pageData.pageType,
+        pageNumber: pIdx + 1,
+        pageTotal: totalPages,
+        title: templateData.title,
+        subtitle,
+        logoBase64: templateData.logoBase64,
+        logoOnLeft: templateData.logoOnLeft,
+        generatedAt,
+        weekDayHeaders: templateData.weekDayHeaders,
+        weekData: pageData.weekData,
+        continuationDay: pageData.continuationDay,
+        continuationBatchIndex: pageData.continuationBatchIndex,
+        continuationBatchTotal: pageData.continuationBatchTotal,
+        weeksHtml: pageData.weeks ? renderWeeklyTableBody(pageData.weeks[0] || [], 4) : undefined,
+        overflowDays: pageData.overflowDays,
       })
+
+      contentWrapper.innerHTML = singlePageHtml
+
+      // Aguarda microtasks de layout e render
+      await new Promise<void>((resolve) => setTimeout(resolve, 60))
 
       // Aguarda document.fonts.ready e imagens carregarem
       if (document.fonts && typeof document.fonts.ready?.then === 'function') {
@@ -917,7 +930,7 @@ export async function exportAutoGenerateCalendarPdf(
         }
       }
 
-      const images = Array.from(mountContainer.querySelectorAll('img'))
+      const images = Array.from(contentWrapper.querySelectorAll('img'))
       await Promise.all(
         images.map((img) => {
           if (img.complete) return Promise.resolve()
@@ -928,10 +941,11 @@ export async function exportAutoGenerateCalendarPdf(
         }),
       )
 
-      const pageEl = mountContainer.querySelector('.page-container') as HTMLElement
+      const pageEl = (contentWrapper.querySelector('.page-container') ||
+        contentWrapper.firstElementChild) as HTMLElement
       if (pageEl) {
         if (pIdx > 0) {
-          doc.addPage([297, 210], 'landscape')
+          doc.addPage('a4', 'landscape')
         }
 
         const canvas = await html2canvas(pageEl, {
@@ -940,8 +954,8 @@ export async function exportAutoGenerateCalendarPdf(
           allowTaint: true,
           backgroundColor: '#ffffff',
           logging: false,
-          width: pageEl.offsetWidth || 1123,
-          height: pageEl.offsetHeight || 794,
+          width: 1123,
+          height: 794,
           windowWidth: 1123,
           windowHeight: 794,
         })
@@ -970,11 +984,6 @@ export async function exportAutoGenerateCalendarPdf(
       }
     }
   } finally {
-    try {
-      root.unmount()
-    } catch {
-      // ignora
-    }
     if (mountContainer.parentNode) {
       mountContainer.parentNode.removeChild(mountContainer)
     }

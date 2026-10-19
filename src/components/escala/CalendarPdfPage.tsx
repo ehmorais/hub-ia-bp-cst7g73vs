@@ -70,7 +70,11 @@ export function CalendarPdfPage({
       className="page-container bg-white text-slate-800 flex flex-col justify-between box-border p-6"
       style={{
         width: '1123px',
+        maxWidth: '1123px',
         minHeight: '794px',
+        maxHeight: '794px',
+        height: '794px',
+        overflow: 'hidden',
         boxSizing: 'border-box',
         backgroundColor: '#ffffff',
       }}
@@ -116,6 +120,7 @@ export function CalendarPdfPage({
             dayFilter="all"
             view="cycle"
             isInteractive={false}
+            maxItemsPerDay={4}
           />
         </div>
       </div>
