@@ -1,10 +1,11 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import {
   prepareCalendarMultiPageData,
   exportAutoGenerateCalendarPdf,
-  ExportAutoGenerateCalendarPdfParams,
+  type ExportAutoGenerateCalendarPdfParams,
 } from './scalePdfExport'
 import jsPDF from 'jspdf'
+import { CALENDAR_PDF_COMMON_STYLES } from '@/templates/calendarPdfTemplate'
 
 describe('Teste de Regressão: Exportação UTI 2 Densa (17 colaboradores, 7-12 cards/dia)', () => {
   // Cenário realista do setor UTI 2: 17 colaboradores, dia denso com 11 plantões
@@ -61,7 +62,7 @@ describe('Teste de Regressão: Exportação UTI 2 Densa (17 colaboradores, 7-12 
 
     // A página de continuação deve conter os plantões do dia denso
     const contDay = continuationPages[0].continuationDay
-    expect(contDay?.key).toBe('2026-10-06')
+    expect(contDay?.dateKey).toBe('2026-10-06')
     expect(contDay?.shifts.length).toBe(11)
   })
 
@@ -90,8 +91,6 @@ describe('Teste de Regressão: Exportação UTI 2 Densa (17 colaboradores, 7-12 
 
   it('(d): ausência de transform/scale/zoom distorcivo ou esticamento da captura no contêiner de renderização', () => {
     // Validar regras de estilo CSS da captura e templates
-    const { CALENDAR_PDF_COMMON_STYLES } = require('@/templates/calendarPdfTemplate')
-
     // Contêiner tem dimensões fixas compatíveis com A4 landscape (297x210 mm) sem zooms ou escalas deformantes
     expect(CALENDAR_PDF_COMMON_STYLES).toMatch(/width:\s*1123px/)
     expect(CALENDAR_PDF_COMMON_STYLES).not.toMatch(/zoom:\s*0\./)
