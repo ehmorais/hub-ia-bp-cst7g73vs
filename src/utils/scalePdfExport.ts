@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import html2canvas from 'html2canvas'
+import { toast } from '@/hooks/use-toast'
 import { formatCorenLabel } from '@/lib/escala-calendar-formatter'
 import { BPSCS_LOGO_BASE64 } from './bpscsLogo'
 import { SIDEBAR_HOSPITAL_LOGO } from './sidebarHospitalLogo'
@@ -683,7 +684,7 @@ export async function renderHtmlToPdfLandscape(
       })
 
       if (canvas && typeof canvas.toDataURL === 'function') {
-        const imgData = canvas.toDataURL('image/png')
+        const imgData = canvas.toDataURL('image/jpeg', 0.9)
         // A4 Landscape em mm: 297 x 210
         const pageWidth = 297
         const pageHeight = 210
@@ -698,9 +699,35 @@ export async function renderHtmlToPdfLandscape(
         const offsetX = (pageWidth - renderedWidth) / 2
         const offsetY = (pageHeight - renderedHeight) / 2
 
-        doc.addImage(imgData, 'PNG', offsetX, offsetY, renderedWidth, renderedHeight)
+        doc.addImage(
+          imgData,
+          'JPEG',
+          offsetX,
+          offsetY,
+          renderedWidth,
+          renderedHeight,
+          undefined,
+          'FAST',
+        )
+
+        // Libera memória do canvas entre páginas
+        canvas.width = 0
+        canvas.height = 0
       }
     }
+  } catch (error) {
+    console.error('Falha ao serializar páginas HTML em PDF:', error)
+    try {
+      toast({
+        title: 'Erro ao gerar PDF',
+        description:
+          'Ocorreu uma falha ao renderizar as páginas do calendário em PDF. Tente novamente ou filtre por setor/período menor.',
+        variant: 'destructive',
+      })
+    } catch {
+      // Ignora se ambiente sem DOM / hook
+    }
+    throw error
   } finally {
     if (container.parentNode) {
       container.parentNode.removeChild(container)
@@ -961,7 +988,7 @@ export async function exportAutoGenerateCalendarPdf(
         })
 
         if (canvas && typeof canvas.toDataURL === 'function') {
-          const imgData = canvas.toDataURL('image/png')
+          const imgData = canvas.toDataURL('image/jpeg', 0.9)
           // Dimensões exatas A4 Landscape em mm: 297 x 210
           const pageWidth = 297
           const pageHeight = 210
@@ -979,10 +1006,36 @@ export async function exportAutoGenerateCalendarPdf(
           const offsetX = margin + (printableWidth - renderedWidth) / 2
           const offsetY = margin + (printableHeight - renderedHeight) / 2
 
-          doc.addImage(imgData, 'PNG', offsetX, offsetY, renderedWidth, renderedHeight)
+          doc.addImage(
+            imgData,
+            'JPEG',
+            offsetX,
+            offsetY,
+            renderedWidth,
+            renderedHeight,
+            undefined,
+            'FAST',
+          )
+
+          // Libera memória do canvas entre páginas
+          canvas.width = 0
+          canvas.height = 0
         }
       }
     }
+  } catch (error) {
+    console.error('Falha ao serializar páginas do calendário em PDF:', error)
+    try {
+      toast({
+        title: 'Erro ao gerar PDF do Calendário',
+        description:
+          'Ocorreu uma falha na renderização gráfica das páginas da escala. Tente novamente ou filtre por setor.',
+        variant: 'destructive',
+      })
+    } catch {
+      // Ignora se ambiente sem DOM / hook
+    }
+    throw error
   } finally {
     if (mountContainer.parentNode) {
       mountContainer.parentNode.removeChild(mountContainer)

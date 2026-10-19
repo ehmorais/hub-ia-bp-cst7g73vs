@@ -1,10 +1,11 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import {
   prepareCalendarMultiPageData,
   exportAutoGenerateCalendarPdf,
   type ExportAutoGenerateCalendarPdfParams,
 } from './scalePdfExport'
 import jsPDF from 'jspdf'
+import html2canvas from 'html2canvas'
 import { CALENDAR_PDF_COMMON_STYLES } from '@/templates/calendarPdfTemplate'
 
 describe('Teste de Regressão: Exportação UTI 2 Densa (17 colaboradores, 7-12 cards/dia)', () => {
@@ -136,5 +137,75 @@ describe('Teste de Regressão: Exportação UTI 2 Densa (17 colaboradores, 7-12 
     expect(continuationPages.length).toBe(0)
     expect(pages.length).toBe(1)
     expect(pages[0].pageType).toBe('week')
+  })
+
+  it('(e): fluxo de renderização e exportação usa JPEG (não PNG) a 0.90, addImage FAST e zera width/height do canvas entre páginas no cenário UTI 2 densa', async () => {
+    // Simula ambiente de navegador com DOM disponível para disparar html2canvas e addImage
+    const canvasInstances: Array<{
+      width: number
+      height: number
+      toDataURL: ReturnType<typeof vi.fn>
+    }> = []
+
+    const toDataURLSpy = vi.fn().mockImplementation((type: string, quality?: number) => {
+      return `data:${type};base64,/9j/fakejpegdata...`
+    })
+
+    const html2canvasMock = vi.fn().mockImplementation(async () => {
+      const fakeCanvas = {
+        width: 1123,
+        height: 794,
+        toDataURL: toDataURLSpy,
+      }
+      canvasInstances.push(fakeCanvas)
+      return fakeCanvas
+    })
+
+    // Mock temporário de html2canvas
+    vi.spyOn(html2canvas as any, 'default').mockImplementation(html2canvasMock as any)
+
+    const addImageSpy = vi.spyOn(jsPDF.prototype, 'addImage')
+    const saveSpy = vi.spyOn(jsPDF.prototype, 'save').mockImplementation(() => undefined as any)
+
+    await exportAutoGenerateCalendarPdf(params)
+
+    // Valida que html2canvas foi chamado para múltiplas páginas (página principal + continuação)
+    expect(html2canvasMock).toHaveBeenCalled()
+    expect(canvasInstances.length).toBeGreaterThanOrEqual(2)
+
+    // Verifica que toDataURL foi chamado com 'image/jpeg' e qualidade 0.90 para TODAS as páginas
+    for (const call of toDataURLSpy.mock.calls as any[]) {
+      expect(call[0]).toBe('image/jpeg')
+      expect(call[1]).toBe(0.9)
+      expect(call[0]).not.toBe('image/png')
+    }
+
+    // Verifica que addImage foi chamado com formato 'JPEG' e compressão 'FAST' para as páginas
+    const calls = addImageSpy.mock.calls as any[]
+    const jpegAddImageCalls = calls.filter((call) => call[1] === 'JPEG')
+    expect(jpegAddImageCalls.length).toBeGreaterThanOrEqual(2)
+    for (const call of jpegAddImageCalls) {
+      expect(call[1]).toBe('JPEG')
+      expect(call[7]).toBe('FAST')
+    }
+
+    // Verifica que NENHUMA página do calendário usou 'PNG' no fluxo html2canvas
+    const pngCalendarCalls = calls.filter(
+      (call) =>
+        call[1] === 'PNG' &&
+        typeof call[0] === 'string' &&
+        (call[0] as string).startsWith('data:image/jpeg'),
+    )
+    expect(pngCalendarCalls.length).toBe(0)
+
+    // Verifica que a largura e altura do canvas foram zeradas (canvas.width = 0; canvas.height = 0)
+    for (const fakeCanvas of canvasInstances) {
+      expect(fakeCanvas.width).toBe(0)
+      expect(fakeCanvas.height).toBe(0)
+    }
+
+    addImageSpy.mockRestore()
+    saveSpy.mockRestore()
+    vi.restoreAllMocks()
   })
 })
