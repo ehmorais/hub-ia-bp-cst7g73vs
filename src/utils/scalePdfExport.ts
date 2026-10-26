@@ -5,8 +5,7 @@ const A4_LANDSCAPE_WIDTH_MM = 297
 const A4_LANDSCAPE_HEIGHT_MM = 210
 const PDF_CONTENT_WIDTH_RATIO = 0.85
 const PDF_CONTENT_WIDTH_MM = A4_LANDSCAPE_WIDTH_MM * PDF_CONTENT_WIDTH_RATIO
-const PDF_HORIZONTAL_MARGIN_MM =
-  (A4_LANDSCAPE_WIDTH_MM - PDF_CONTENT_WIDTH_MM) / 2
+const PDF_HORIZONTAL_MARGIN_MM = (A4_LANDSCAPE_WIDTH_MM - PDF_CONTENT_WIDTH_MM) / 2
 const PDF_WEEK_COLUMN_WIDTH_MM = PDF_CONTENT_WIDTH_MM / 7
 import { formatCorenLabel } from '@/lib/escala-calendar-formatter'
 import { BPSCS_LOGO_BASE64 } from './bpscsLogo'
@@ -566,8 +565,7 @@ export function prepareCalendarMultiPageData(params: ExportAutoGenerateCalendarP
   }
 
   overflowChunks.forEach((overflowDay) => {
-    const rowCount =
-      overflowDay.remainingShifts.length + overflowDay.remainingWeekendOffs.length
+    const rowCount = overflowDay.remainingShifts.length + overflowDay.remainingWeekendOffs.length
     if (pendingRows > 0 && pendingRows + rowCount > continuationRowsPerPage) {
       flushContinuationPage()
     }
@@ -697,7 +695,6 @@ export function groupWeeksIntoPages(
   return pages
 }
 
-
 function formatShiftForVectorPdf(shift: ShiftItemData): string {
   const registration = shift.corenText ? ` — ${shift.corenText}` : ''
   const time = shift.timeRange ? ` (${shift.timeRange})` : ''
@@ -762,8 +759,7 @@ function renderCalendarPagesAsVector(
           day.dayFormatted,
           ...(visibleLines.length > 0 ? visibleLines : ['Sem plantões']),
           ...(hiddenCount > 0 ? [`+${hiddenCount} na continuação`] : []),
-        ].join('
-')
+        ].join('\n')
       })
 
       autoTable(doc, {
@@ -781,7 +777,12 @@ function renderCalendarPagesAsVector(
           5: { cellWidth: PDF_WEEK_COLUMN_WIDTH_MM },
           6: { cellWidth: PDF_WEEK_COLUMN_WIDTH_MM },
         },
-        margin: { left: PDF_HORIZONTAL_MARGIN_MM, right: PDF_HORIZONTAL_MARGIN_MM, top: 23, bottom: 9 },
+        margin: {
+          left: PDF_HORIZONTAL_MARGIN_MM,
+          right: PDF_HORIZONTAL_MARGIN_MM,
+          top: 23,
+          bottom: 9,
+        },
         styles: {
           font: 'helvetica',
           fontSize: 7.1,
@@ -804,14 +805,16 @@ function renderCalendarPagesAsVector(
       const overflowDays =
         pageData.overflowDays ||
         (pageData.continuationDay
-          ? [{
-              dayFormatted: pageData.continuationDay.dayFormatted,
-              dateKey: pageData.continuationDay.dateKey || pageData.continuationDay.dayFormatted,
-              dayOfWeekName: pageData.continuationDay.dayOfWeekName || '',
-              isWeekend: pageData.continuationDay.isWeekend,
-              remainingShifts: pageData.continuationDay.shifts,
-              remainingWeekendOffs: pageData.continuationDay.weekendOffs,
-            }]
+          ? [
+              {
+                dayFormatted: pageData.continuationDay.dayFormatted,
+                dateKey: pageData.continuationDay.dateKey || pageData.continuationDay.dayFormatted,
+                dayOfWeekName: pageData.continuationDay.dayOfWeekName || '',
+                isWeekend: pageData.continuationDay.isWeekend,
+                remainingShifts: pageData.continuationDay.shifts,
+                remainingWeekendOffs: pageData.continuationDay.weekendOffs,
+              },
+            ]
           : [])
 
       doc.setFont('helvetica', 'bold')
@@ -851,7 +854,12 @@ function renderCalendarPagesAsVector(
         body: rows,
         theme: 'grid',
         tableWidth: PDF_CONTENT_WIDTH_MM,
-        margin: { left: PDF_HORIZONTAL_MARGIN_MM, right: PDF_HORIZONTAL_MARGIN_MM, top: 23, bottom: 9 },
+        margin: {
+          left: PDF_HORIZONTAL_MARGIN_MM,
+          right: PDF_HORIZONTAL_MARGIN_MM,
+          top: 23,
+          bottom: 9,
+        },
         styles: {
           font: 'helvetica',
           fontSize: 8,
@@ -903,7 +911,6 @@ function downloadVectorPdf(doc: jsPDF, filename: string): void {
   window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000)
 }
 
-
 /**
  * Exporta a escala gerada por IA como PDF vetorial A4 Landscape.
  * Não há captura do DOM, canvas, data URL ou bitmap de página.
@@ -911,12 +918,7 @@ function downloadVectorPdf(doc: jsPDF, filename: string): void {
 export async function exportAutoGenerateCalendarPdf(
   params: ExportAutoGenerateCalendarPdfParams,
 ): Promise<string> {
-  const {
-    title = 'Escala de Plantões — Calendário',
-    sectorName,
-    cycleName,
-    cycleStart,
-  } = params
+  const { title = 'Escala de Plantões — Calendário', sectorName, cycleName, cycleStart } = params
 
   const doc = new jsPDF({
     orientation: 'landscape',
@@ -949,13 +951,7 @@ export async function exportAutoGenerateCalendarPdf(
     subtitleParts.push(`Início: ${templateData.cycleStart}`)
   }
 
-  renderCalendarPagesAsVector(
-    doc,
-    pages,
-    templateData,
-    subtitleParts.join(' • '),
-    generatedAt,
-  )
+  renderCalendarPagesAsVector(doc, pages, templateData, subtitleParts.join(' • '), generatedAt)
 
   if ((params as any).returnDoc) return doc as any
 
