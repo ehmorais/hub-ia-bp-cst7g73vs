@@ -1,13 +1,16 @@
-import React from 'react'
-import { createRoot } from 'react-dom/client'
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
-import html2canvas from 'html2canvas'
+
+const A4_LANDSCAPE_WIDTH_MM = 297
+const A4_LANDSCAPE_HEIGHT_MM = 210
+const PDF_CONTENT_WIDTH_RATIO = 0.85
+const PDF_CONTENT_WIDTH_MM = A4_LANDSCAPE_WIDTH_MM * PDF_CONTENT_WIDTH_RATIO
+const PDF_HORIZONTAL_MARGIN_MM =
+  (A4_LANDSCAPE_WIDTH_MM - PDF_CONTENT_WIDTH_MM) / 2
+const PDF_WEEK_COLUMN_WIDTH_MM = PDF_CONTENT_WIDTH_MM / 7
 import { formatCorenLabel } from '@/lib/escala-calendar-formatter'
 import { BPSCS_LOGO_BASE64 } from './bpscsLogo'
 import { SIDEBAR_HOSPITAL_LOGO } from './sidebarHospitalLogo'
-import { CalendarPdfPage } from '@/components/escala/CalendarPdfPage'
-import { CalendarDayItem } from '@/components/escala/ShiftCalendarGrid'
 import {
   renderCalendarPdfTemplate,
   renderMultiPageCalendarHtml,
@@ -501,65 +504,84 @@ export function prepareCalendarMultiPageData(params: ExportAutoGenerateCalendarP
   templateData: ReturnType<typeof prepareCalendarTemplateData>
 } {
   const templateData = prepareCalendarTemplateData(params)
-  const maxChipsPerCell = 4 // Em A4 landscape com 1 semana por página, 4 cards por célula cabem confortavelmente
-
-  const pages: CalendarPageData[] = []
+  const maxChipsPerCell = 4
+  const continuationRowsPerPage = 16
+  const weekPages: CalendarPageData[] = []
+  const overflowChunks: DayOverflowItem[] = []
   const totalWeeks = templateData.weeks.length
 
   templateData.weeks.forEach((weekDays, weekIdx) => {
-    // Acha primeiro e último dia não nulo desta semana
-    const validDays = weekDays.filter((d): d is CalendarDayCellData => d !== null)
-    const startDateFormatted = validDays.length > 0 ? validDays[0].dayFormatted : ''
-    const endDateFormatted =
-      validDays.length > 0 ? validDays[validDays.length - 1].dayFormatted : ''
-
-    // 1. Adiciona a página principal da semana
-    pages.push({
+    const validDays = weekDays.filter((day): day is CalendarDayCellData => day !== null)
+    weekPages.push({
       pageType: 'week',
-      pageIndex: pages.length,
+      pageIndex: 0,
       weekData: {
         weekIndex: weekIdx + 1,
         weekTotal: totalWeeks,
-        startDateFormatted,
-        endDateFormatted,
+        startDateFormatted: validDays[0]?.dayFormatted || '',
+        endDateFormatted: validDays[validDays.length - 1]?.dayFormatted || '',
         days: weekDays,
       },
     })
 
-    // 2. Se algum dia dessa semana exceder maxChipsPerCell, gera páginas de continuação para aquele dia
     weekDays.forEach((cell) => {
       if (!cell) return
-      const totalItems = cell.shifts.length + cell.weekendOffs.length
-      if (totalItems > maxChipsPerCell) {
-        // Divide os itens daquele dia em lotes de até 12 plantonistas por página de continuação
-        const SHIFTS_PER_CONTINUATION_PAGE = 12
-        const totalBatches = Math.ceil(totalItems / SHIFTS_PER_CONTINUATION_PAGE)
+      const orderedItems = [
+        ...cell.shifts.map((item) => ({ kind: 'shift' as const, item })),
+        ...cell.weekendOffs.map((item) => ({ kind: 'off' as const, item })),
+      ]
+      const excessItems = orderedItems.slice(maxChipsPerCell)
 
-        for (let b = 0; b < totalBatches; b++) {
-          const startIdx = b * SHIFTS_PER_CONTINUATION_PAGE
-          const batchItems = cell.shifts.slice(startIdx, startIdx + SHIFTS_PER_CONTINUATION_PAGE)
-
-          pages.push({
-            pageType: 'day_continuation',
-            pageIndex: pages.length,
-            continuationDay: {
-              ...cell,
-              shifts: batchItems,
-              weekendOffs: b === 0 ? cell.weekendOffs : [],
-            },
-            continuationBatchIndex: totalBatches > 1 ? b + 1 : undefined,
-            continuationBatchTotal: totalBatches > 1 ? totalBatches : undefined,
-          })
-        }
+      for (let offset = 0; offset < excessItems.length; offset += continuationRowsPerPage) {
+        const batch = excessItems.slice(offset, offset + continuationRowsPerPage)
+        overflowChunks.push({
+          dayFormatted: cell.dayFormatted,
+          dateKey: cell.dateKey || cell.dayFormatted,
+          dayOfWeekName: cell.dayOfWeekName || '',
+          isWeekend: cell.isWeekend,
+          remainingShifts: batch
+            .filter((entry) => entry.kind === 'shift')
+            .map((entry) => entry.item as ShiftItemData),
+          remainingWeekendOffs: batch
+            .filter((entry) => entry.kind === 'off')
+            .map((entry) => entry.item as { id: string; name: string }),
+        })
       }
     })
   })
 
-  return {
-    pages,
-    maxChipsPerCell,
-    templateData,
+  const continuationPages: CalendarPageData[] = []
+  let pendingDays: DayOverflowItem[] = []
+  let pendingRows = 0
+
+  const flushContinuationPage = () => {
+    if (pendingDays.length === 0) return
+    continuationPages.push({
+      pageType: 'continuation',
+      pageIndex: 0,
+      overflowDays: pendingDays,
+    })
+    pendingDays = []
+    pendingRows = 0
   }
+
+  overflowChunks.forEach((overflowDay) => {
+    const rowCount =
+      overflowDay.remainingShifts.length + overflowDay.remainingWeekendOffs.length
+    if (pendingRows > 0 && pendingRows + rowCount > continuationRowsPerPage) {
+      flushContinuationPage()
+    }
+    pendingDays.push(overflowDay)
+    pendingRows += rowCount
+  })
+  flushContinuationPage()
+
+  const pages = [...weekPages, ...continuationPages]
+  pages.forEach((page, pageIndex) => {
+    page.pageIndex = pageIndex
+  })
+
+  return { pages, maxChipsPerCell, templateData }
 }
 
 /**
@@ -593,118 +615,6 @@ export function buildCalendarHtml(params: ExportAutoGenerateCalendarPdfParams): 
     weekDayHeaders: templateData.weekDayHeaders,
     pages,
   })
-}
-
-/**
- * Converte HTML em documento jsPDF no formato A4 Landscape (297x210 mm).
- * Suporta múltiplas páginas com renderização off-screen de cada `.page-container`
- * com html2canvas de alta resolução (scale: 2), sem sobreposição e sem corte.
- */
-export async function renderHtmlToPdfLandscape(
-  htmlString: string,
-  docOptions?: { title?: string; author?: string; subject?: string },
-): Promise<jsPDF> {
-  const doc = new jsPDF({
-    orientation: 'landscape',
-    unit: 'mm',
-    format: 'a4',
-  })
-
-  if (docOptions) {
-    doc.setProperties({
-      title: docOptions.title || 'Escala de Plantões — Calendário',
-      author: docOptions.author || 'Gestão de Escalas BP — IA',
-      subject: docOptions.subject || 'Escala Calendário',
-    })
-  }
-
-  // Se o ambiente não possuir suporte completo a DOM ou html2canvas (ex.: Vitest/Node sem canvas real),
-  // retornamos o doc A4 landscape válido configurado.
-  if (typeof window === 'undefined' || typeof document === 'undefined') {
-    return doc
-  }
-
-  // Cria um container off-screen visível para renderização com medidas fixas de A4 landscape
-  // 297mm x 210mm a 96dpi é aprox 1122.5px x 793.7px
-  const container = document.createElement('div')
-  container.setAttribute('aria-hidden', 'true')
-  container.style.position = 'fixed'
-  container.style.left = '-10000px'
-  container.style.top = '0'
-  container.style.width = '1123px' // ~297mm a 96dpi
-  container.style.minHeight = '794px' // ~210mm a 96dpi
-  container.style.backgroundColor = '#ffffff'
-  container.style.zIndex = '-9999'
-  container.style.margin = '0'
-  container.style.padding = '0'
-  container.innerHTML = htmlString
-
-  document.body.appendChild(container)
-
-  try {
-    // Aguardar imagens base64 carregarem no DOM
-    const images = Array.from(container.querySelectorAll('img'))
-    await Promise.all(
-      images.map((img) => {
-        if (img.complete) return Promise.resolve()
-        return new Promise<void>((resolve) => {
-          img.onload = () => resolve()
-          img.onerror = () => resolve()
-        })
-      }),
-    )
-
-    const pageElements = Array.from(container.querySelectorAll('.page-container')) as HTMLElement[]
-
-    const elementsToRender =
-      pageElements.length > 0
-        ? pageElements
-        : [(container.firstElementChild || container) as HTMLElement]
-
-    for (let pageIdx = 0; pageIdx < elementsToRender.length; pageIdx++) {
-      if (pageIdx > 0) {
-        doc.addPage('a4', 'landscape')
-      }
-
-      const pageEl = elementsToRender[pageIdx]
-      const canvas = await html2canvas(pageEl, {
-        scale: 2, // 2x para garantir nitidez nos textos pequenos
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: '#ffffff',
-        logging: false,
-        width: pageEl.offsetWidth || 1123,
-        height: pageEl.offsetHeight || 794,
-        windowWidth: 1123,
-        windowHeight: 794,
-      })
-
-      if (canvas && typeof canvas.toDataURL === 'function') {
-        const imgData = canvas.toDataURL('image/png')
-        // A4 Landscape em mm: 297 x 210
-        const pageWidth = 297
-        const pageHeight = 210
-
-        // Calcular proporção para caber exatamente na página
-        const canvasWidth = canvas.width
-        const canvasHeight = canvas.height
-        const ratio = Math.min(pageWidth / canvasWidth, pageHeight / canvasHeight)
-
-        const renderedWidth = canvasWidth * ratio
-        const renderedHeight = canvasHeight * ratio
-        const offsetX = (pageWidth - renderedWidth) / 2
-        const offsetY = (pageHeight - renderedHeight) / 2
-
-        doc.addImage(imgData, 'PNG', offsetX, offsetY, renderedWidth, renderedHeight)
-      }
-    }
-  } finally {
-    if (container.parentNode) {
-      container.parentNode.removeChild(container)
-    }
-  }
-
-  return doc
 }
 
 /**
@@ -787,12 +697,216 @@ export function groupWeeksIntoPages(
   return pages
 }
 
+
+function formatShiftForVectorPdf(shift: ShiftItemData): string {
+  const registration = shift.corenText ? ` — ${shift.corenText}` : ''
+  const time = shift.timeRange ? ` (${shift.timeRange})` : ''
+  return `${shift.periodLetter} • ${shift.name}${registration}${time}`
+}
+
+function drawVectorPageHeader(
+  doc: jsPDF,
+  templateData: ReturnType<typeof prepareCalendarTemplateData>,
+  subtitle: string,
+): void {
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(13)
+  doc.setTextColor(6, 95, 70)
+  doc.text(templateData.title, 5, 9)
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(7.5)
+  doc.setTextColor(71, 85, 105)
+  doc.text(subtitle || 'Escala de colaboradores', 5, 14)
+
+  try {
+    doc.addImage(templateData.logoBase64, 'PNG', 274, 2.5, 17, 13, 'bpscs-logo', 'FAST')
+  } catch {
+    // Mantém o cabeçalho textual caso o logotipo não seja decodificado.
+  }
+}
+
+function renderCalendarPagesAsVector(
+  doc: jsPDF,
+  pages: CalendarPageData[],
+  templateData: ReturnType<typeof prepareCalendarTemplateData>,
+  subtitle: string,
+  generatedAt: string,
+): void {
+  const pagesToRender: CalendarPageData[] =
+    pages.length > 0 ? pages : [{ pageType: 'week', pageIndex: 0 }]
+
+  pagesToRender.forEach((pageData, pageIndex) => {
+    if (pageIndex > 0) doc.addPage('a4', 'landscape')
+    drawVectorPageHeader(doc, templateData, subtitle)
+
+    if (pageData.weekData) {
+      const week = pageData.weekData
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(8.5)
+      doc.setTextColor(15, 23, 42)
+      doc.text(
+        `Semana ${week.weekIndex} de ${week.weekTotal} — ${week.startDateFormatted} a ${week.endDateFormatted}`,
+        5,
+        20,
+      )
+
+      const cells = week.days.map((day) => {
+        if (!day) return ''
+        const orderedLines = [
+          ...day.shifts.map(formatShiftForVectorPdf),
+          ...day.weekendOffs.map((off) => `FDS • ${off.name}`),
+        ]
+        const visibleLines = orderedLines.slice(0, 4)
+        const hiddenCount = orderedLines.length - visibleLines.length
+        return [
+          day.dayFormatted,
+          ...(visibleLines.length > 0 ? visibleLines : ['Sem plantões']),
+          ...(hiddenCount > 0 ? [`+${hiddenCount} na continuação`] : []),
+        ].join('
+')
+      })
+
+      autoTable(doc, {
+        startY: 23,
+        head: [templateData.weekDayHeaders],
+        body: [cells],
+        theme: 'grid',
+        tableWidth: PDF_CONTENT_WIDTH_MM,
+        columnStyles: {
+          0: { cellWidth: PDF_WEEK_COLUMN_WIDTH_MM },
+          1: { cellWidth: PDF_WEEK_COLUMN_WIDTH_MM },
+          2: { cellWidth: PDF_WEEK_COLUMN_WIDTH_MM },
+          3: { cellWidth: PDF_WEEK_COLUMN_WIDTH_MM },
+          4: { cellWidth: PDF_WEEK_COLUMN_WIDTH_MM },
+          5: { cellWidth: PDF_WEEK_COLUMN_WIDTH_MM },
+          6: { cellWidth: PDF_WEEK_COLUMN_WIDTH_MM },
+        },
+        margin: { left: PDF_HORIZONTAL_MARGIN_MM, right: PDF_HORIZONTAL_MARGIN_MM, top: 23, bottom: 9 },
+        styles: {
+          font: 'helvetica',
+          fontSize: 7.1,
+          cellPadding: 1.5,
+          overflow: 'linebreak',
+          valign: 'top',
+          lineColor: [148, 163, 184],
+          lineWidth: 0.15,
+          minCellHeight: 169,
+        },
+        headStyles: {
+          fillColor: [6, 95, 70],
+          textColor: [255, 255, 255],
+          fontStyle: 'bold',
+          halign: 'center',
+          minCellHeight: 8,
+        },
+      })
+    } else {
+      const overflowDays =
+        pageData.overflowDays ||
+        (pageData.continuationDay
+          ? [{
+              dayFormatted: pageData.continuationDay.dayFormatted,
+              dateKey: pageData.continuationDay.dateKey || pageData.continuationDay.dayFormatted,
+              dayOfWeekName: pageData.continuationDay.dayOfWeekName || '',
+              isWeekend: pageData.continuationDay.isWeekend,
+              remainingShifts: pageData.continuationDay.shifts,
+              remainingWeekendOffs: pageData.continuationDay.weekendOffs,
+            }]
+          : [])
+
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(8.5)
+      doc.setTextColor(15, 23, 42)
+      doc.text('Continuação — somente excedentes após os 4 primeiros', 5, 20)
+
+      const rows: string[][] = []
+      overflowDays.forEach((day) => {
+        day.remainingShifts.forEach((shift) => {
+          const dayLabel = day.dayOfWeekName
+            ? day.dayFormatted + ' (' + day.dayOfWeekName + ')'
+            : day.dayFormatted
+          rows.push([
+            dayLabel,
+            shift.name,
+            shift.corenText || '-',
+            shift.periodLetter === 'D'
+              ? 'Dia'
+              : shift.periodLetter === 'N'
+                ? 'Noite'
+                : shift.periodLetter,
+            shift.timeRange || '-',
+          ])
+        })
+        day.remainingWeekendOffs.forEach((off) => {
+          const dayLabel = day.dayOfWeekName
+            ? day.dayFormatted + ' (' + day.dayOfWeekName + ')'
+            : day.dayFormatted
+          rows.push([dayLabel, off.name, '-', 'Folga FDS', '-'])
+        })
+      })
+
+      autoTable(doc, {
+        startY: 23,
+        head: [['Data', 'Colaborador', 'COREN/Registro', 'Período', 'Horário']],
+        body: rows,
+        theme: 'grid',
+        tableWidth: PDF_CONTENT_WIDTH_MM,
+        margin: { left: PDF_HORIZONTAL_MARGIN_MM, right: PDF_HORIZONTAL_MARGIN_MM, top: 23, bottom: 9 },
+        styles: {
+          font: 'helvetica',
+          fontSize: 8,
+          cellPadding: 1.6,
+          overflow: 'linebreak',
+          valign: 'middle',
+          lineColor: [203, 213, 225],
+          lineWidth: 0.15,
+        },
+        headStyles: {
+          fillColor: [6, 95, 70],
+          textColor: [255, 255, 255],
+          fontStyle: 'bold',
+        },
+        columnStyles: {
+          0: { cellWidth: PDF_CONTENT_WIDTH_MM * (44 / 287) },
+          1: { cellWidth: PDF_CONTENT_WIDTH_MM * (108 / 287) },
+          2: { cellWidth: PDF_CONTENT_WIDTH_MM * (49 / 287) },
+          3: { cellWidth: PDF_CONTENT_WIDTH_MM * (38 / 287) },
+          4: { cellWidth: PDF_CONTENT_WIDTH_MM * (48 / 287) },
+        },
+      })
+    }
+
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(6.8)
+    doc.setTextColor(100, 116, 139)
+    doc.text(`Gerado em: ${generatedAt}`, 5, A4_LANDSCAPE_HEIGHT_MM - 4)
+    doc.text(
+      `Página ${pageIndex + 1} de ${pagesToRender.length}`,
+      A4_LANDSCAPE_WIDTH_MM - 5,
+      A4_LANDSCAPE_HEIGHT_MM - 4,
+      { align: 'right' },
+    )
+  })
+}
+
+function downloadVectorPdf(doc: jsPDF, filename: string): void {
+  const pdfBuffer = doc.output('arraybuffer')
+  const pdfBlob = new Blob([pdfBuffer], { type: 'application/pdf' })
+  const objectUrl = URL.createObjectURL(pdfBlob)
+  const link = document.createElement('a')
+  link.href = objectUrl
+  link.download = filename
+  link.style.display = 'none'
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000)
+}
+
+
 /**
- * Exporta a escala gerada por IA no formato "Calendário" mensal / ciclo.
- * Fonte visual ÚNICA compartilhada: reutiliza fielmente os componentes React
- * `<CalendarPdfPage />` e `<ShiftCalendarGrid />` com exatamente o mesmo CSS Tailwind da tela.
- * Renderiza em contêiner offscreen (~1123px largura A4 landscape), aguarda fontes e imagens,
- * e captura com html2canvas(scale: 2) + jsPDF landscape A4.
+ * Exporta a escala gerada por IA como PDF vetorial A4 Landscape.
+ * Não há captura do DOM, canvas, data URL ou bitmap de página.
  */
 export async function exportAutoGenerateCalendarPdf(
   params: ExportAutoGenerateCalendarPdfParams,
@@ -802,25 +916,14 @@ export async function exportAutoGenerateCalendarPdf(
     sectorName,
     cycleName,
     cycleStart,
-    cycleEnd,
-    days,
-    shifts,
-    contracts,
-    staffProfiles = [],
-    weekendOffMap = new Map(),
-    selectedSectorId,
-    selectedStaffId,
-    logoBase64 = BPSCS_LOGO_BASE64,
   } = params
 
   const doc = new jsPDF({
     orientation: 'landscape',
     unit: 'mm',
     format: 'a4',
+    compress: true,
   })
-
-  // Garante explicitamente a página 1 em landscape e dimensões A4 (297 x 210 mm)
-  doc.setPage(1)
 
   doc.setProperties({
     title,
@@ -828,163 +931,45 @@ export async function exportAutoGenerateCalendarPdf(
     author: 'Gestão de Escalas BP — IA',
   })
 
-  // Se não estivermos em ambiente com DOM (ex.: testes unitários sem window/document completo),
-  // salvamos e retornamos o doc diretamente.
-  if (typeof window === 'undefined' || typeof document === 'undefined') {
-    const filename = formatSafeFilename(cycleStart)
-    if ((params as any).returnDoc) {
-      return doc as any
-    }
-    doc.save(filename)
-    return filename
+  const { pages, templateData } = prepareCalendarMultiPageData(params)
+  const now = new Date()
+  const generatedAt = `${String(now.getDate()).padStart(2, '0')}/${String(
+    now.getMonth() + 1,
+  ).padStart(2, '0')}/${now.getFullYear()} às ${String(now.getHours()).padStart(
+    2,
+    '0',
+  )}:${String(now.getMinutes()).padStart(2, '0')}`
+
+  const subtitleParts: string[] = []
+  if (templateData.sectorName) subtitleParts.push(`Setor: ${templateData.sectorName}`)
+  if (cycleName) subtitleParts.push(`Ciclo: ${cycleName}`)
+  else if (templateData.cycleStart && templateData.cycleEnd) {
+    subtitleParts.push(`Período: ${templateData.cycleStart} a ${templateData.cycleEnd}`)
+  } else if (templateData.cycleStart) {
+    subtitleParts.push(`Início: ${templateData.cycleStart}`)
   }
 
-  // 1. Dividir em semanas e páginas
-  const weeks = chunkDaysIntoCalendarWeeks(days)
-  const pageWeeksList = groupWeeksIntoPages(weeks, shifts)
-  const totalPages = Math.max(1, pageWeeksList.length)
+  renderCalendarPagesAsVector(
+    doc,
+    pages,
+    templateData,
+    subtitleParts.join(' • '),
+    generatedAt,
+  )
 
-  // 2. Criar container offscreen para montagem React
-  const mountContainer = document.createElement('div')
-  mountContainer.setAttribute('aria-hidden', 'true')
-  mountContainer.id = 'offscreen-pdf-renderer'
-  mountContainer.style.position = 'fixed'
-  mountContainer.style.left = '-10000px'
-  mountContainer.style.top = '0'
-  mountContainer.style.width = '1123px'
-  mountContainer.style.backgroundColor = '#ffffff'
-  mountContainer.style.zIndex = '-9999'
-  document.body.appendChild(mountContainer)
-
-  const root = createRoot(mountContainer)
-
-  try {
-    // 3. Renderizar cada página sequencialmente com html2canvas de alta resolução
-    for (let pIdx = 0; pIdx < totalPages; pIdx++) {
-      const pageWeeks = pageWeeksList[pIdx] || []
-      const pageDays = pageWeeks.flat()
-
-      const firstD = pageDays[0]
-      const lastD = pageDays[pageDays.length - 1]
-      const weekRangeLabel =
-        firstD && lastD
-          ? `Período: ${firstD.key.split('-').slice(1).reverse().join('/')} a ${lastD.key.split('-').slice(1).reverse().join('/')}`
-          : undefined
-
-      const isLastPage = pIdx === totalPages - 1
-
-      // Renderiza a página no container offscreen usando React.createElement
-      await new Promise<void>((resolve) => {
-        root.render(
-          React.createElement(
-            'div',
-            {
-              id: `pdf-page-wrapper-${pIdx}`,
-              className: 'bg-white',
-              style: { width: '1123px' },
-            },
-            React.createElement(CalendarPdfPage, {
-              title,
-              sectorName,
-              cycleName,
-              cycleStart,
-              cycleEnd,
-              days: pageDays,
-              shifts,
-              contracts,
-              staffProfiles,
-              weekendOffMap,
-              selectedSectorId,
-              selectedStaffId,
-              pageCurrent: pIdx + 1,
-              pageTotal: totalPages,
-              showLegend: isLastPage,
-              logoBase64,
-              weekRangeLabel,
-            }),
-          ),
-        )
-        // Aguarda microtasks de layout e render do React
-        setTimeout(resolve, 60)
-      })
-
-      // Aguarda document.fonts.ready e imagens carregarem
-      if (document.fonts && typeof document.fonts.ready?.then === 'function') {
-        try {
-          await document.fonts.ready
-        } catch {
-          // prossegue
-        }
-      }
-
-      const images = Array.from(mountContainer.querySelectorAll('img'))
-      await Promise.all(
-        images.map((img) => {
-          if (img.complete) return Promise.resolve()
-          return new Promise<void>((res) => {
-            img.onload = () => res()
-            img.onerror = () => res()
-          })
-        }),
-      )
-
-      const pageEl = mountContainer.querySelector('.page-container') as HTMLElement
-      if (pageEl) {
-        if (pIdx > 0) {
-          doc.addPage([297, 210], 'landscape')
-        }
-
-        const canvas = await html2canvas(pageEl, {
-          scale: 2,
-          useCORS: true,
-          allowTaint: true,
-          backgroundColor: '#ffffff',
-          logging: false,
-          width: pageEl.offsetWidth || 1123,
-          height: pageEl.offsetHeight || 794,
-          windowWidth: 1123,
-          windowHeight: 794,
-        })
-
-        if (canvas && typeof canvas.toDataURL === 'function') {
-          const imgData = canvas.toDataURL('image/png')
-          // Dimensões exatas A4 Landscape em mm: 297 x 210
-          const pageWidth = 297
-          const pageHeight = 210
-          // Margem mínima de segurança para impressão em mm (2mm)
-          const margin = 2
-          const printableWidth = pageWidth - margin * 2
-          const printableHeight = pageHeight - margin * 2
-
-          const canvasWidth = canvas.width
-          const canvasHeight = canvas.height
-          const ratio = Math.min(printableWidth / canvasWidth, printableHeight / canvasHeight)
-
-          const renderedWidth = canvasWidth * ratio
-          const renderedHeight = canvasHeight * ratio
-          const offsetX = margin + (printableWidth - renderedWidth) / 2
-          const offsetY = margin + (printableHeight - renderedHeight) / 2
-
-          doc.addImage(imgData, 'PNG', offsetX, offsetY, renderedWidth, renderedHeight)
-        }
-      }
-    }
-  } finally {
-    try {
-      root.unmount()
-    } catch {
-      // ignora
-    }
-    if (mountContainer.parentNode) {
-      mountContainer.parentNode.removeChild(mountContainer)
-    }
-  }
+  if ((params as any).returnDoc) return doc as any
 
   const filename = formatSafeFilename(cycleStart)
-  doc.save(filename)
+  if (
+    typeof window !== 'undefined' &&
+    typeof document !== 'undefined' &&
+    typeof URL !== 'undefined' &&
+    typeof URL.createObjectURL === 'function'
+  ) {
+    downloadVectorPdf(doc, filename)
+  }
   return filename
 }
-
 /**
  * Parâmetros para exportação do Relatório "Lista por dia" da Escala Gerada por IA
  */
