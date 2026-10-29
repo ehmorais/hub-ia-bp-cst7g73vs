@@ -24,12 +24,12 @@ export interface ExportScalePdfParams {
   sectorName?: string
   cycleStart?: string
   cycleEnd?: string
-  staffNames: Record<string, string> // staffId â†’ nome completo
+  staffNames: Record<string, string> // staffId → nome completo
   staffRows: string[] // staffIds ordenados
   dateHeaders: string[] // datas "YYYY-MM-DD" ordenadas
   cellMap: Record<string, Record<string, ShiftSlot | undefined>> // cellMap[staffId][dateKey]
-  weekendOffMap: Map<string, Set<string>> // staffId â†’ Set<"YYYY-MM-DD">
-  staffCorens?: Record<string, string | null | undefined> // staffId â†’ professional_id
+  weekendOffMap: Map<string, Set<string>> // staffId → Set<"YYYY-MM-DD">
+  staffCorens?: Record<string, string | null | undefined> // staffId → professional_id
   returnDoc?: boolean
 }
 
@@ -76,7 +76,7 @@ export { BPSCS_LOGO_BASE64 } from './bpscsLogo'
 
 export function exportScalePdf(data: ExportScalePdfParams) {
   const {
-    title = 'Escala de PlantÃµes',
+    title = 'Escala de Plantões',
     sectorName,
     cycleStart,
     cycleEnd,
@@ -95,8 +95,8 @@ export function exportScalePdf(data: ExportScalePdfParams) {
 
   doc.setProperties({
     title,
-    subject: sectorName ? `Escala - ${sectorName}` : 'Escala de PlantÃµes',
-    author: 'GestÃ£o de Escalas BP',
+    subject: sectorName ? `Escala - ${sectorName}` : 'Escala de Plantões',
+    author: 'Gestão de Escalas BP',
   })
 
   // Chunk dates if there are more than 12 columns per page for readable layout in A4 landscape
@@ -120,10 +120,10 @@ export function exportScalePdf(data: ExportScalePdfParams) {
     if (sectorName) subtitleParts.push(`Setor: ${sectorName}`)
     if (cycleStart && cycleEnd) {
       subtitleParts.push(
-        `PerÃ­odo: ${formatDateDisplay(cycleStart)} a ${formatDateDisplay(cycleEnd)}`,
+        `Período: ${formatDateDisplay(cycleStart)} a ${formatDateDisplay(cycleEnd)}`,
       )
     } else if (cycleStart) {
-      subtitleParts.push(`InÃ­cio: ${formatDateDisplay(cycleStart)}`)
+      subtitleParts.push(`Início: ${formatDateDisplay(cycleStart)}`)
     }
     if (dateChunks.length > 1) {
       subtitleParts.push(`Parte ${chunkIndex + 1} de ${dateChunks.length}`)
@@ -159,11 +159,9 @@ export function exportScalePdf(data: ExportScalePdfParams) {
 
           let displayText = ''
           if (isDay) {
-            displayText =
-              slot.start && slot.end ? `D ${slot.start}â€“${slot.end}` : 'D 07:00â€“19:00'
+            displayText = slot.start && slot.end ? `D ${slot.start}–${slot.end}` : 'D 07:00–19:00'
           } else if (isNight) {
-            displayText =
-              slot.start && slot.end ? `N ${slot.start}â€“${slot.end}` : 'N 19:00â€“07:00'
+            displayText = slot.start && slot.end ? `N ${slot.start}–${slot.end}` : 'N 19:00–07:00'
           } else {
             displayText = typeUpper
           }
@@ -246,7 +244,7 @@ export function exportScalePdf(data: ExportScalePdfParams) {
           console.warn('Falha ao renderizar logo no PDF Escala:', imgErr)
         }
 
-        // TÃ­tulo e subtÃ­tulo no topo de cada pÃ¡gina
+        // Título e subtítulo no topo de cada página
         doc.setFont('helvetica', 'bold')
         doc.setFontSize(14)
         doc.setTextColor(30, 41, 59)
@@ -270,7 +268,7 @@ export function exportScalePdf(data: ExportScalePdfParams) {
     doc.setFontSize(7.5)
     doc.setTextColor(148, 163, 184)
     doc.text(
-      `PÃ¡gina ${i} de ${totalPages} | Gerado via BP Escalas`,
+      `Página ${i} de ${totalPages} | Gerado via BP Escalas`,
       doc.internal.pageSize.getWidth() - 10,
       doc.internal.pageSize.getHeight() - 6,
       { align: 'right' },
@@ -286,7 +284,7 @@ export function exportScalePdf(data: ExportScalePdfParams) {
 }
 
 /**
- * ParÃ¢metros para exportaÃ§Ã£o do CalendÃ¡rio Mensal em PDF para a Escala Gerada por IA
+ * Parâmetros para exportação do Calendário Mensal em PDF para a Escala Gerada por IA
  */
 export interface ExportAutoGenerateCalendarPdfParams {
   title?: string
@@ -297,9 +295,9 @@ export interface ExportAutoGenerateCalendarPdfParams {
   days: Array<{
     date: Date
     key: string // "YYYY-MM-DD"
-    dayOfWeek: number // 0 = Dom, 6 = SÃ¡b
+    dayOfWeek: number // 0 = Dom, 6 = Sáb
   }>
-  shifts: any[] // Lista de plantÃµes da visualizaÃ§Ã£o atual
+  shifts: any[] // Lista de plantões da visualização atual
   contracts: any[]
   staffProfiles: Array<{
     id: string
@@ -318,11 +316,11 @@ export interface ExportAutoGenerateCalendarPdfParams {
 }
 
 /**
- * Prepara a estrutura de dados (cÃ©lulas, dias e semanas) necessÃ¡ria para renderizar o template HTML do calendÃ¡rio.
+ * Prepara a estrutura de dados (células, dias e semanas) necessária para renderizar o template HTML do calendário.
  */
 export function prepareCalendarTemplateData(params: ExportAutoGenerateCalendarPdfParams) {
   const {
-    title = 'Escala de PlantÃµes â€” CalendÃ¡rio',
+    title = 'Escala de Plantões — Calendário',
     sectorName,
     cycleName,
     cycleStart,
@@ -338,7 +336,7 @@ export function prepareCalendarTemplateData(params: ExportAutoGenerateCalendarPd
     logoOnLeft = false,
   } = params
 
-  // Setor staff profiles para exibiÃ§Ã£o de folgas de fim de semana
+  // Setor staff profiles para exibição de folgas de fim de semana
   const sectorStaffMap = new Map<
     string,
     { id: string; name: string; professional_id?: string | null }
@@ -365,23 +363,23 @@ export function prepareCalendarTemplateData(params: ExportAutoGenerateCalendarPd
   })
   const sectorStaffProfiles = Array.from(sectorStaffMap.values())
 
-  // CabeÃ§alhos dos 7 dias da semana (sempre calendÃ¡rio padrÃ£o: Domingo a SÃ¡bado)
-  const standardWeekLabels = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'SÃ¡b']
+  // Cabeçalhos dos 7 dias da semana (sempre calendário padrão: Domingo a Sábado)
+  const standardWeekLabels = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
   const dayNamesFull = [
     'Domingo',
     'Segunda-feira',
-    'TerÃ§a-feira',
+    'Terça-feira',
     'Quarta-feira',
     'Quinta-feira',
     'Sexta-feira',
-    'SÃ¡bado',
+    'Sábado',
   ]
 
-  // Montar semanas estruturadas rigorosamente de Domingo (0) a SÃ¡bado (6)
+  // Montar semanas estruturadas rigorosamente de Domingo (0) a Sábado (6)
   const rawWeeks: Array<Array<{ date: Date; key: string; dayOfWeek: number } | null>> = []
   let currentWeek: Array<{ date: Date; key: string; dayOfWeek: number } | null> = []
 
-  // Preencher com nulls os dias anteriores ao primeiro dia da grade atÃ© o domingo correspondente
+  // Preencher com nulls os dias anteriores ao primeiro dia da grade até o domingo correspondente
   const firstDay = days.length > 0 ? days[0] : null
   const initialEmptyDaysCount = firstDay ? firstDay.dayOfWeek : 0
   for (let i = 0; i < initialEmptyDaysCount; i++) {
@@ -413,7 +411,7 @@ export function prepareCalendarTemplateData(params: ExportAutoGenerateCalendarPd
         dayItem.date.getMonth() + 1,
       ).padStart(2, '0')}`
 
-      // PlantÃµes do dia
+      // Plantões do dia
       const dayShifts = shifts
         .filter((s) => {
           const sDateStr = s.start_time ? s.start_time.split(' ')[0].split('T')[0] : ''
@@ -428,7 +426,7 @@ export function prepareCalendarTemplateData(params: ExportAutoGenerateCalendarPd
 
       const isWeekendDay = dayItem.dayOfWeek === 6 || dayItem.dayOfWeek === 0
 
-      // ConstrÃ³i os 6 grupos na sequÃªncia estrita aâ€“f com ordem alfabÃ©tica por nome
+      // Constrói os 6 grupos na sequência estrita a–f com ordem alfabética por nome
       const classifiedItems = buildClassifiedDayItems({
         dateKey,
         dayOfWeek: dayItem.dayOfWeek,
@@ -447,13 +445,13 @@ export function prepareCalendarTemplateData(params: ExportAutoGenerateCalendarPd
         periodLetter: item.periodLetter,
         corenText: item.corenText,
         timeRange: item.timeRange,
-        isVacation: item.absenceType === 'FÃ‰RIAS' || item.isShiftOnVacation,
+        isVacation: item.absenceType === 'FÉRIAS' || item.isShiftOnVacation,
         isWeekendOff: item.absenceType === 'FOLGA',
         absenceType: item.absenceType,
       }))
 
-      // MantÃ©m weekendOffStaff vazio porque todos os ausentes (folga/fÃ©rias) jÃ¡ estÃ£o integrados
-      // em formattedShifts na ordem estrita dos 6 grupos (aâ€“f)
+      // Mantém weekendOffStaff vazio porque todos os ausentes (folga/férias) já estão integrados
+      // em formattedShifts na ordem estrita dos 6 grupos (a–f)
       const weekendOffStaff: Array<{ id: string; name: string }> = []
 
       return {
@@ -485,13 +483,13 @@ export function prepareCalendarTemplateData(params: ExportAutoGenerateCalendarPd
 }
 
 /**
- * Prepara pÃ¡ginas do documento de calendÃ¡rio com paginaÃ§Ã£o SEMANAL (exatamente 1 semana por pÃ¡gina)
- * e continuaÃ§Ãµes dedicadas para dias com excesso de plantonistas (alta densidade).
+ * Prepara páginas do documento de calendário com paginação SEMANAL (exatamente 1 semana por página)
+ * e continuações dedicadas para dias com excesso de plantonistas (alta densidade).
  *
- * Cada semana (domingo a sÃ¡bado, 7 colunas iguais) ganha sua prÃ³pria pÃ¡gina A4 Paisagem,
- * com cÃ©lulas espaÃ§osas e fontes legÃ­veis (mÃ­nimo 9.5pt para nomes, 8.5pt para COREN/metadados).
- * Dias com mais de 4 profissionais mantÃªm os 4 primeiros na grade semanal e desdobram
- * o dia completo em pÃ¡ginas adicionais de continuaÃ§Ã£o, garantindo que nenhum nome seja cortado
+ * Cada semana (domingo a sábado, 7 colunas iguais) ganha sua própria página A4 Paisagem,
+ * com células espaçosas e fontes legíveis (mínimo 9.5pt para nomes, 8.5pt para COREN/metadados).
+ * Dias com mais de 4 profissionais mantêm os 4 primeiros na grade semanal e desdobram
+ * o dia completo em páginas adicionais de continuação, garantindo que nenhum nome seja cortado
  * ou comprimido.
  */
 
@@ -581,8 +579,8 @@ export function prepareCalendarMultiPageData(params: ExportAutoGenerateCalendarP
 }
 
 /**
- * Gera a string HTML completa do CalendÃ¡rio Mensal a partir dos parÃ¢metros de exportaÃ§Ã£o,
- * gerando documento multi-pÃ¡gina com pÃ¡ginas de continuaÃ§Ã£o quando necessÃ¡rio.
+ * Gera a string HTML completa do Calendário Mensal a partir dos parâmetros de exportação,
+ * gerando documento multi-página com páginas de continuação quando necessário.
  */
 export function buildCalendarHtml(params: ExportAutoGenerateCalendarPdfParams): string {
   const { pages, maxChipsPerCell, templateData } = prepareCalendarMultiPageData(params)
@@ -591,14 +589,14 @@ export function buildCalendarHtml(params: ExportAutoGenerateCalendarPdfParams): 
   if (templateData.sectorName) subtitleParts.push(`Setor: ${templateData.sectorName}`)
   if (templateData.cycleName) subtitleParts.push(`Ciclo: ${templateData.cycleName}`)
   else if (templateData.cycleStart && templateData.cycleEnd) {
-    subtitleParts.push(`PerÃ­odo: ${templateData.cycleStart} a ${templateData.cycleEnd}`)
+    subtitleParts.push(`Período: ${templateData.cycleStart} a ${templateData.cycleEnd}`)
   } else if (templateData.cycleStart) {
-    subtitleParts.push(`InÃ­cio: ${templateData.cycleStart}`)
+    subtitleParts.push(`Início: ${templateData.cycleStart}`)
   }
   const subtitle = subtitleParts.join(' &bull; ')
 
   const now = new Date()
-  const generatedAt = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()} Ã s ${String(
+  const generatedAt = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()} às ${String(
     now.getHours(),
   ).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
 
@@ -614,7 +612,7 @@ export function buildCalendarHtml(params: ExportAutoGenerateCalendarPdfParams): 
 }
 
 /**
- * Agrupa a lista de dias do ciclo em semanas completas (domingo a sÃ¡bado).
+ * Agrupa a lista de dias do ciclo em semanas completas (domingo a sábado).
  */
 export function chunkDaysIntoCalendarWeeks(
   days: Array<{ date: Date; key: string; dayOfWeek: number }>,
@@ -625,13 +623,13 @@ export function chunkDaysIntoCalendarWeeks(
   let currentWeek: Array<{ date: Date; key: string; dayOfWeek: number }> = []
 
   days.forEach((d) => {
-    // Se o dia for domingo (0) e jÃ¡ tivermos dias acumulados na semana atual, fecha e abre nova
+    // Se o dia for domingo (0) e já tivermos dias acumulados na semana atual, fecha e abre nova
     if (d.dayOfWeek === 0 && currentWeek.length > 0) {
       weeks.push(currentWeek)
       currentWeek = []
     }
     currentWeek.push(d)
-    // Se o dia for sÃ¡bado (6), fecha a semana
+    // Se o dia for sábado (6), fecha a semana
     if (d.dayOfWeek === 6) {
       weeks.push(currentWeek)
       currentWeek = []
@@ -646,9 +644,9 @@ export function chunkDaysIntoCalendarWeeks(
 }
 
 /**
- * Agrupa semanas em pÃ¡ginas para o PDF, com no mÃ¡ximo 2 ou 3 semanas por pÃ¡gina,
- * garantindo semanas COMPLETAS por pÃ¡gina e nunca cortando linhas, nomes ou cards.
- * Dias densos (com muitos plantÃµes) recebem alocaÃ§Ã£o conservadora (1 ou 2 semanas por pÃ¡gina).
+ * Agrupa semanas em páginas para o PDF, com no máximo 2 ou 3 semanas por página,
+ * garantindo semanas COMPLETAS por página e nunca cortando linhas, nomes ou cards.
+ * Dias densos (com muitos plantões) recebem alocação conservadora (1 ou 2 semanas por página).
  */
 export function groupWeeksIntoPages(
   weeks: Array<Array<{ date: Date; key: string; dayOfWeek: number }>>,
@@ -660,7 +658,7 @@ export function groupWeeksIntoPages(
   let currentPageWeeks: Array<Array<{ date: Date; key: string; dayOfWeek: number }>> = []
 
   weeks.forEach((week) => {
-    // Calcula o pico de densidade de plantÃµes nos dias da semana
+    // Calcula o pico de densidade de plantões nos dias da semana
     let maxShiftsInDay = 0
     week.forEach((d) => {
       const count = shifts.filter((s) => {
@@ -670,7 +668,7 @@ export function groupWeeksIntoPages(
       if (count > maxShiftsInDay) maxShiftsInDay = count
     })
 
-    // Se o dia tiver 4 ou mais plantÃµes, a semana Ã© alta -> limite de 1 ou 2 semanas por pÃ¡gina
+    // Se o dia tiver 4 ou mais plantões, a semana é alta -> limite de 1 ou 2 semanas por página
     const maxWeeksForThisPage = maxShiftsInDay >= 4 ? 1 : 2
 
     if (currentPageWeeks.length >= maxWeeksForThisPage) {
@@ -678,7 +676,7 @@ export function groupWeeksIntoPages(
       currentPageWeeks = [week]
     } else {
       currentPageWeeks.push(week)
-      // Se esta semana que acabou de entrar Ã© alta, fecha a pÃ¡gina imediatamente
+      // Se esta semana que acabou de entrar é alta, fecha a página imediatamente
       if (maxShiftsInDay >= 4) {
         pages.push(currentPageWeeks)
         currentPageWeeks = []
@@ -704,7 +702,7 @@ interface VectorStaffCardPalette {
 
 function getVectorStaffCardPalette(shift: ShiftItemData): VectorStaffCardPalette {
   const absenceType = String((shift as any).absenceType || '').toUpperCase()
-  const isVacation = Boolean((shift as any).isVacation) || absenceType === 'FÃ‰RIAS'
+  const isVacation = Boolean((shift as any).isVacation) || absenceType === 'FÉRIAS'
   const isOff = Boolean(shift.isWeekendOff) || absenceType === 'FOLGA'
 
   if (isVacation) {
@@ -742,7 +740,7 @@ function getVectorStaffCardPalette(shift: ShiftItemData): VectorStaffCardPalette
 /**
  * Desenha um card vetorial ao redor dos dados de um colaborador.
  * O contorno arredondado replica no PDF o mesmo agrupamento visual usado
- * pelos cards dos demais setores, sem rasterizar a pÃ¡gina.
+ * pelos cards dos demais setores, sem rasterizar a página.
  */
 function drawVectorStaffCard(
   doc: jsPDF,
@@ -757,8 +755,8 @@ function drawVectorStaffCard(
   const paddingX = 3.2
   const absenceType = String((shift as any).absenceType || '').toUpperCase()
   const statusLabel =
-    absenceType === 'FÃ‰RIAS'
-      ? 'FÃ‰RIAS'
+    absenceType === 'FÉRIAS'
+      ? 'FÉRIAS'
       : shift.isWeekendOff || absenceType === 'FOLGA'
         ? 'FOLGA'
         : shift.periodLetter
@@ -768,7 +766,7 @@ function drawVectorStaffCard(
   doc.setFillColor(...palette.fill)
   doc.roundedRect(x, y, width, height, radius, radius, 'FD')
 
-  // Faixa lateral de identificaÃ§Ã£o do plantÃ£o, preservando o contorno externo.
+  // Faixa lateral de identificação do plantão, preservando o contorno externo.
   doc.setFillColor(...palette.accent)
   doc.roundedRect(x + 0.45, y + 0.45, 1.45, height - 0.9, 0.7, 0.7, 'F')
 
@@ -817,7 +815,7 @@ function drawVectorPageHeader(
   try {
     doc.addImage(templateData.logoBase64, 'PNG', 274, 2.5, 17, 13, 'bpscs-logo', 'FAST')
   } catch {
-    // MantÃ©m o cabeÃ§alho textual caso o logotipo nÃ£o seja decodificado.
+    // Mantém o cabeçalho textual caso o logotipo não seja decodificado.
   }
 }
 
@@ -841,7 +839,7 @@ function renderCalendarPagesAsVector(
       doc.setFontSize(8.5)
       doc.setTextColor(15, 23, 42)
       doc.text(
-        `Semana ${week.weekIndex} de ${week.weekTotal} â€” ${week.startDateFormatted} a ${week.endDateFormatted}`,
+        `Semana ${week.weekIndex} de ${week.weekTotal} — ${week.startDateFormatted} a ${week.endDateFormatted}`,
         5,
         20,
       )
@@ -877,8 +875,8 @@ function renderCalendarPagesAsVector(
           valign: 'top',
           lineColor: [148, 163, 184],
           lineWidth: 0.15,
-          // 169 mm de corpo + 8 mm de cabeÃ§alho ocupam praticamente toda
-          // a altura Ãºtil entre y=23 mm e a margem inferior de 9 mm.
+          // 169 mm de corpo + 8 mm de cabeçalho ocupam praticamente toda
+          // a altura útil entre y=23 mm e a margem inferior de 9 mm.
           minCellHeight: 169,
         },
         headStyles: {
@@ -890,7 +888,7 @@ function renderCalendarPagesAsVector(
         },
         didParseCell: (hookData: any) => {
           if (hookData.section === 'body' && hookData.row.index === 0) {
-            // O conteÃºdo Ã© desenhado manualmente para permitir cards arredondados vetoriais.
+            // O conteúdo é desenhado manualmente para permitir cards arredondados vetoriais.
             hookData.cell.text = []
           }
         },
@@ -923,7 +921,7 @@ function renderCalendarPagesAsVector(
             doc.setFont('helvetica', 'normal')
             doc.setFontSize(6.3)
             doc.setTextColor(100, 116, 139)
-            doc.text('Sem plantÃµes', cell.x + cell.width / 2, dateY + 7, { align: 'center' })
+            doc.text('Sem plantões', cell.x + cell.width / 2, dateY + 7, { align: 'center' })
             return
           }
 
@@ -940,7 +938,7 @@ function renderCalendarPagesAsVector(
               (availableHeight - cardGap * (visibleItems.length - 1)) / visibleItems.length,
             ),
           )
-          // MantÃ©m a mesma largura e reduz somente a moldura vertical em 50%.
+          // Mantém a mesma largura e reduz somente a moldura vertical em 50%.
           const cardHeight = originalCardHeight * 0.5
 
           visibleItems.forEach((shift, itemIndex) => {
@@ -959,7 +957,7 @@ function renderCalendarPagesAsVector(
             doc.setFontSize(5.7)
             doc.setTextColor(71, 85, 105)
             doc.text(
-              `+${hiddenCount} na continuaÃ§Ã£o`,
+              `+${hiddenCount} na continuação`,
               cell.x + cell.width / 2,
               cell.y + cell.height - 2.2,
               { align: 'center' },
@@ -986,14 +984,33 @@ function renderCalendarPagesAsVector(
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(8.5)
       doc.setTextColor(15, 23, 42)
-      doc.text('ContinuaÃ§Ã£o â€” somente excedentes apÃ³s os 4 primeiros', 5, 20)
+      doc.text('Continuação — plantões, férias e folgas após os 4 primeiros', 5, 20)
 
-      const rows: string[][] = []
+      const rows: any[][] = []
       overflowDays.forEach((day) => {
         day.remainingShifts.forEach((shift) => {
           const dayLabel = day.dayOfWeekName
             ? day.dayFormatted + ' (' + day.dayOfWeekName + ')'
             : day.dayFormatted
+          const absenceType = String(shift.absenceType || '').toUpperCase()
+          const isVacation = absenceType === 'FÉRIAS' || shift.isVacation
+          const isWeekendOff = absenceType === 'FOLGA' || shift.isWeekendOff
+          const situationLabel = isVacation ? 'FÉRIAS' : isWeekendOff ? 'FOLGA FDS' : 'PLANTÃO'
+          const situationStyles = isVacation
+            ? {
+                fillColor: [236, 253, 245],
+                textColor: [4, 120, 87],
+                fontStyle: 'bold',
+                halign: 'center',
+              }
+            : isWeekendOff
+              ? {
+                  fillColor: [255, 247, 237],
+                  textColor: [194, 65, 12],
+                  fontStyle: 'bold',
+                  halign: 'center',
+                }
+              : { halign: 'center' }
           rows.push([
             dayLabel,
             shift.name,
@@ -1003,6 +1020,7 @@ function renderCalendarPagesAsVector(
               : shift.periodLetter === 'N'
                 ? 'Noite'
                 : shift.periodLetter,
+            { content: situationLabel, styles: situationStyles },
             shift.timeRange || '-',
           ])
         })
@@ -1010,13 +1028,28 @@ function renderCalendarPagesAsVector(
           const dayLabel = day.dayOfWeekName
             ? day.dayFormatted + ' (' + day.dayOfWeekName + ')'
             : day.dayFormatted
-          rows.push([dayLabel, off.name, '-', 'Folga FDS', '-'])
+          rows.push([
+            dayLabel,
+            off.name,
+            '-',
+            '-',
+            {
+              content: 'FOLGA FDS',
+              styles: {
+                fillColor: [255, 247, 237],
+                textColor: [194, 65, 12],
+                fontStyle: 'bold',
+                halign: 'center',
+              },
+            },
+            '-',
+          ])
         })
       })
 
       autoTable(doc, {
         startY: 23,
-        head: [['Data', 'Colaborador', 'COREN/Registro', 'PerÃ­odo', 'HorÃ¡rio']],
+        head: [['Data', 'Colaborador', 'COREN/Registro', 'Período', 'Situação', 'Horário']],
         body: rows,
         theme: 'grid',
         tableWidth: PDF_CONTENT_WIDTH_MM,
@@ -1041,11 +1074,12 @@ function renderCalendarPagesAsVector(
           fontStyle: 'bold',
         },
         columnStyles: {
-          0: { cellWidth: PDF_CONTENT_WIDTH_MM * (44 / 287) },
-          1: { cellWidth: PDF_CONTENT_WIDTH_MM * (108 / 287) },
-          2: { cellWidth: PDF_CONTENT_WIDTH_MM * (49 / 287) },
-          3: { cellWidth: PDF_CONTENT_WIDTH_MM * (38 / 287) },
-          4: { cellWidth: PDF_CONTENT_WIDTH_MM * (48 / 287) },
+          0: { cellWidth: PDF_CONTENT_WIDTH_MM * (42 / 287) },
+          1: { cellWidth: PDF_CONTENT_WIDTH_MM * (90 / 287) },
+          2: { cellWidth: PDF_CONTENT_WIDTH_MM * (46 / 287) },
+          3: { cellWidth: PDF_CONTENT_WIDTH_MM * (30 / 287) },
+          4: { cellWidth: PDF_CONTENT_WIDTH_MM * (35 / 287) },
+          5: { cellWidth: PDF_CONTENT_WIDTH_MM * (44 / 287) },
         },
       })
     }
@@ -1055,7 +1089,7 @@ function renderCalendarPagesAsVector(
     doc.setTextColor(100, 116, 139)
     doc.text(`Gerado em: ${generatedAt}`, 5, A4_LANDSCAPE_HEIGHT_MM - 4)
     doc.text(
-      `PÃ¡gina ${pageIndex + 1} de ${pagesToRender.length}`,
+      `Página ${pageIndex + 1} de ${pagesToRender.length}`,
       A4_LANDSCAPE_WIDTH_MM - 5,
       A4_LANDSCAPE_HEIGHT_MM - 4,
       { align: 'right' },
@@ -1079,17 +1113,12 @@ function downloadVectorPdf(doc: jsPDF, filename: string): void {
 
 /**
  * Exporta a escala gerada por IA como PDF vetorial A4 Landscape.
- * NÃ£o hÃ¡ captura do DOM, canvas, data URL ou bitmap de pÃ¡gina.
+ * Não há captura do DOM, canvas, data URL ou bitmap de página.
  */
 export async function exportAutoGenerateCalendarPdf(
   params: ExportAutoGenerateCalendarPdfParams,
 ): Promise<string> {
-  const {
-    title = 'Escala de PlantÃµes â€” CalendÃ¡rio',
-    sectorName,
-    cycleName,
-    cycleStart,
-  } = params
+  const { title = 'Escala de Plantões — Calendário', sectorName, cycleName, cycleStart } = params
 
   const doc = new jsPDF({
     orientation: 'landscape',
@@ -1100,15 +1129,15 @@ export async function exportAutoGenerateCalendarPdf(
 
   doc.setProperties({
     title,
-    subject: sectorName ? `Escala CalendÃ¡rio - ${sectorName}` : 'Escala CalendÃ¡rio',
-    author: 'GestÃ£o de Escalas BP â€” IA',
+    subject: sectorName ? `Escala Calendário - ${sectorName}` : 'Escala Calendário',
+    author: 'Gestão de Escalas BP — IA',
   })
 
   const { pages, templateData } = prepareCalendarMultiPageData(params)
   const now = new Date()
   const generatedAt = `${String(now.getDate()).padStart(2, '0')}/${String(
     now.getMonth() + 1,
-  ).padStart(2, '0')}/${now.getFullYear()} Ã s ${String(now.getHours()).padStart(
+  ).padStart(2, '0')}/${now.getFullYear()} às ${String(now.getHours()).padStart(
     2,
     '0',
   )}:${String(now.getMinutes()).padStart(2, '0')}`
@@ -1117,12 +1146,12 @@ export async function exportAutoGenerateCalendarPdf(
   if (templateData.sectorName) subtitleParts.push(`Setor: ${templateData.sectorName}`)
   if (cycleName) subtitleParts.push(`Ciclo: ${cycleName}`)
   else if (templateData.cycleStart && templateData.cycleEnd) {
-    subtitleParts.push(`PerÃ­odo: ${templateData.cycleStart} a ${templateData.cycleEnd}`)
+    subtitleParts.push(`Período: ${templateData.cycleStart} a ${templateData.cycleEnd}`)
   } else if (templateData.cycleStart) {
-    subtitleParts.push(`InÃ­cio: ${templateData.cycleStart}`)
+    subtitleParts.push(`Início: ${templateData.cycleStart}`)
   }
 
-  renderCalendarPagesAsVector(doc, pages, templateData, subtitleParts.join(' â€¢ '), generatedAt)
+  renderCalendarPagesAsVector(doc, pages, templateData, subtitleParts.join(' • '), generatedAt)
 
   if ((params as any).returnDoc) return doc as any
 
@@ -1139,7 +1168,7 @@ export async function exportAutoGenerateCalendarPdf(
 }
 
 /**
- * ParÃ¢metros para exportaÃ§Ã£o do RelatÃ³rio "Lista por dia" da Escala Gerada por IA
+ * Parâmetros para exportação do Relatório "Lista por dia" da Escala Gerada por IA
  */
 export interface ExportAutoGenerateDailyListPdfParams {
   title?: string
@@ -1164,7 +1193,7 @@ export function exportAutoGenerateDailyListPdf(
   params: ExportAutoGenerateDailyListPdfParams,
 ): string {
   const {
-    title = 'Escala de PlantÃµes â€” Rascunho',
+    title = 'Escala de Plantões — Rascunho',
     sectorName,
     cycleName,
     cycleStart,
@@ -1183,7 +1212,7 @@ export function exportAutoGenerateDailyListPdf(
   doc.setProperties({
     title: `Escala - ${sectorName || 'Setor'}`,
     subject: 'Rascunho de escala gerado por IA (Lista por dia)',
-    author: 'GestÃ£o de Escalas BP',
+    author: 'Gestão de Escalas BP',
   })
 
   const sortedShifts = [...draftShifts].sort((a, b) =>
@@ -1223,7 +1252,7 @@ export function exportAutoGenerateDailyListPdf(
       : ''
 
     const dayOfWeekShort = !isNaN(displayDate.getTime())
-      ? ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'SÃ¡b'][displayDate.getDay()]
+      ? ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'][displayDate.getDay()]
       : ''
 
     return [
@@ -1231,7 +1260,7 @@ export function exportAutoGenerateDailyListPdf(
       dayOfWeekShort,
       name,
       corenText,
-      shiftType?.name || shiftType?.code || 'PadrÃ£o',
+      shiftType?.name || shiftType?.code || 'Padrão',
       startTime,
       endTime,
       shift.expand?.sector?.name || sectorName || 'Sem setor',
@@ -1240,7 +1269,7 @@ export function exportAutoGenerateDailyListPdf(
 
   autoTable(doc, {
     startY: 34,
-    head: [['Data', 'Dia', 'Colaborador', 'COREN', 'Tipo', 'InÃ­cio', 'Fim', 'Setor']],
+    head: [['Data', 'Dia', 'Colaborador', 'COREN', 'Tipo', 'Início', 'Fim', 'Setor']],
     body,
     theme: 'grid',
     styles: {
@@ -1279,11 +1308,11 @@ export function exportAutoGenerateDailyListPdf(
         console.warn('Falha ao renderizar logo no PDF Lista por dia (didDrawPage):', imgErr)
       }
 
-      // Identidade institucional, tÃ­tulo e metadados repetidos no topo de cada pÃ¡gina
+      // Identidade institucional, título e metadados repetidos no topo de cada página
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(9)
       doc.setTextColor(5, 120, 80)
-      doc.text('BeneficÃªncia Portuguesa de SÃ£o Caetano do Sul', 36, 10)
+      doc.text('Beneficência Portuguesa de São Caetano do Sul', 36, 10)
 
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(15)
@@ -1294,7 +1323,7 @@ export function exportAutoGenerateDailyListPdf(
       doc.setFontSize(8.5)
       doc.setTextColor(71, 85, 105)
       doc.text(
-        `Setor: ${sectorName || 'Sem setor'}   |   Ciclo: ${cycleName || 'Sem ciclo'}   |   Total: ${body.length} plantÃµes`,
+        `Setor: ${sectorName || 'Sem setor'}   |   Ciclo: ${cycleName || 'Sem ciclo'}   |   Total: ${body.length} plantões`,
         36,
         23,
       )
@@ -1302,7 +1331,7 @@ export function exportAutoGenerateDailyListPdf(
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(8)
       doc.setTextColor(180, 83, 9)
-      doc.text('Documento nÃ£o publicado', 36, 28)
+      doc.text('Documento não publicado', 36, 28)
       doc.setTextColor(0, 0, 0)
     },
   })
@@ -1314,7 +1343,7 @@ export function exportAutoGenerateDailyListPdf(
     doc.setFontSize(8)
     doc.setTextColor(100, 116, 139)
     doc.text(
-      `PÃ¡gina ${page} de ${pageCount}`,
+      `Página ${page} de ${pageCount}`,
       doc.internal.pageSize.getWidth() - 14,
       doc.internal.pageSize.getHeight() - 7,
       { align: 'right' },
