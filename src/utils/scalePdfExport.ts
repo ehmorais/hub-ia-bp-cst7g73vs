@@ -482,15 +482,49 @@ export function prepareCalendarTemplateData(params: ExportAutoGenerateCalendarPd
   }
 }
 
+function splitCalendarDayItemsForPdf(
+  items: ShiftItemData[],
+  maxVisible = 4,
+): { visibleItems: ShiftItemData[]; remainingItems: ShiftItemData[] } {
+  const categoryOf = (item: ShiftItemData): 'day' | 'night' | 'off' | 'vacation' => {
+    const absenceType = String((item as any).absenceType || '').toUpperCase()
+    if (Boolean((item as any).isVacation) || absenceType === 'FÉRIAS') return 'vacation'
+    if (Boolean(item.isWeekendOff) || absenceType === 'FOLGA') return 'off'
+    return item.periodLetter === 'N' ? 'night' : 'day'
+  }
+
+  const selectedIndexes = new Set<number>()
+  ;(['day', 'night', 'off', 'vacation'] as const).forEach((category) => {
+    const categoryIndex = items.findIndex(
+      (item, itemIndex) => !selectedIndexes.has(itemIndex) && categoryOf(item) === category,
+    )
+    if (categoryIndex >= 0 && selectedIndexes.size < maxVisible) {
+      selectedIndexes.add(categoryIndex)
+    }
+  })
+
+  for (
+    let itemIndex = 0;
+    itemIndex < items.length && selectedIndexes.size < maxVisible;
+    itemIndex += 1
+  ) {
+    selectedIndexes.add(itemIndex)
+  }
+
+  const visibleItems = items.filter((_, itemIndex) => selectedIndexes.has(itemIndex))
+  const remainingItems = items.filter((_, itemIndex) => !selectedIndexes.has(itemIndex))
+  return { visibleItems, remainingItems }
+}
+
 /**
  * Prepara páginas do documento de calendário com paginação SEMANAL (exatamente 1 semana por página)
  * e continuações dedicadas para dias com excesso de plantonistas (alta densidade).
  *
  * Cada semana (domingo a sábado, 7 colunas iguais) ganha sua própria página A4 Paisagem,
  * com células espaçosas e fontes legíveis (mínimo 9.5pt para nomes, 8.5pt para COREN/metadados).
- * Dias com mais de 4 profissionais mantêm os 4 primeiros na grade semanal e desdobram
- * o dia completo em páginas adicionais de continuação, garantindo que nenhum nome seja cortado
- * ou comprimido.
+ * Dias com mais de 4 profissionais mantêm até 4 representantes na grade semanal,
+ * priorizando a presença visual de plantão diurno, plantão noturno, folga e férias.
+ * Os demais seguem para páginas de continuação, sem cortes ou duplicidades.
  */
 
 export function prepareCalendarMultiPageData(params: ExportAutoGenerateCalendarPdfParams): {
@@ -523,9 +557,23 @@ export function prepareCalendarMultiPageData(params: ExportAutoGenerateCalendarP
       if (!cell) return
       const orderedItems = [
         ...cell.shifts.map((item) => ({ kind: 'shift' as const, item })),
-        ...cell.weekendOffs.map((item) => ({ kind: 'off' as const, item })),
+        ...cell.weekendOffs.map((off) => ({
+          kind: 'off' as const,
+          item: {
+            staffId: off.id,
+            name: off.name,
+            periodLetter: 'D' as const,
+            corenText: '',
+            isWeekendOff: true,
+          } satisfies ShiftItemData,
+        })),
       ]
-      const excessItems = orderedItems.slice(maxChipsPerCell)
+      const { remainingItems } = splitCalendarDayItemsForPdf(
+        orderedItems.map((entry) => entry.item),
+        maxChipsPerCell,
+      )
+      const remainingSet = new Set(remainingItems)
+      const excessItems = orderedItems.filter((entry) => remainingSet.has(entry.item))
 
       for (let offset = 0; offset < excessItems.length; offset += continuationRowsPerPage) {
         const batch = excessItems.slice(offset, offset + continuationRowsPerPage)
@@ -539,7 +587,7 @@ export function prepareCalendarMultiPageData(params: ExportAutoGenerateCalendarP
             .map((entry) => entry.item as ShiftItemData),
           remainingWeekendOffs: batch
             .filter((entry) => entry.kind === 'off')
-            .map((entry) => entry.item as { id: string; name: string }),
+            .map((entry) => ({ id: entry.item.staffId, name: entry.item.name })),
         })
       }
     })
@@ -707,26 +755,26 @@ function getVectorStaffCardPalette(shift: ShiftItemData): VectorStaffCardPalette
 
   if (isVacation) {
     return {
-      fill: [250, 245, 255],
-      border: [168, 85, 247],
-      accent: [126, 34, 206],
-      badge: [126, 34, 206],
+      fill: [220, 252, 231],
+      border: [22, 163, 74],
+      accent: [5, 150, 105],
+      badge: [5, 150, 105],
     }
   }
   if (isOff) {
     return {
-      fill: [255, 251, 235],
-      border: [245, 158, 11],
-      accent: [217, 119, 6],
-      badge: [217, 119, 6],
+      fill: [255, 237, 213],
+      border: [234, 88, 12],
+      accent: [194, 65, 12],
+      badge: [194, 65, 12],
     }
   }
   if (shift.periodLetter === 'N') {
     return {
-      fill: [241, 245, 249],
-      border: [148, 163, 184],
-      accent: [30, 58, 138],
-      badge: [30, 58, 138],
+      fill: [219, 234, 254],
+      border: [37, 99, 235],
+      accent: [30, 64, 175],
+      badge: [30, 64, 175],
     }
   }
   return {
@@ -914,8 +962,8 @@ function renderCalendarPagesAsVector(
               isWeekendOff: true,
             })),
           ]
-          const visibleItems = items.slice(0, 4)
-          const hiddenCount = items.length - visibleItems.length
+          const { visibleItems, remainingItems } = splitCalendarDayItemsForPdf(items, 4)
+          const hiddenCount = remainingItems.length
 
           if (visibleItems.length === 0) {
             doc.setFont('helvetica', 'normal')
@@ -984,7 +1032,7 @@ function renderCalendarPagesAsVector(
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(8.5)
       doc.setTextColor(15, 23, 42)
-      doc.text('Continuação — plantões, férias e folgas após os 4 primeiros', 5, 20)
+      doc.text('Continuação — demais plantões, férias e folgas do dia', 5, 20)
 
       const rows: any[][] = []
       overflowDays.forEach((day) => {
@@ -995,22 +1043,40 @@ function renderCalendarPagesAsVector(
           const absenceType = String(shift.absenceType || '').toUpperCase()
           const isVacation = absenceType === 'FÉRIAS' || shift.isVacation
           const isWeekendOff = absenceType === 'FOLGA' || shift.isWeekendOff
-          const situationLabel = isVacation ? 'FÉRIAS' : isWeekendOff ? 'FOLGA FDS' : 'PLANTÃO'
+          const situationLabel = isVacation
+            ? 'FÉRIAS'
+            : isWeekendOff
+              ? 'FOLGA FDS'
+              : shift.periodLetter === 'N'
+                ? 'PLANTÃO NOTURNO'
+                : 'PLANTÃO DIURNO'
           const situationStyles = isVacation
             ? {
-                fillColor: [236, 253, 245],
-                textColor: [4, 120, 87],
+                fillColor: [5, 150, 105],
+                textColor: [255, 255, 255],
                 fontStyle: 'bold',
                 halign: 'center',
               }
             : isWeekendOff
               ? {
-                  fillColor: [255, 247, 237],
-                  textColor: [194, 65, 12],
+                  fillColor: [194, 65, 12],
+                  textColor: [255, 255, 255],
                   fontStyle: 'bold',
                   halign: 'center',
                 }
-              : { halign: 'center' }
+              : shift.periodLetter === 'N'
+                ? {
+                    fillColor: [30, 64, 175],
+                    textColor: [255, 255, 255],
+                    fontStyle: 'bold',
+                    halign: 'center',
+                  }
+                : {
+                    fillColor: [4, 120, 87],
+                    textColor: [255, 255, 255],
+                    fontStyle: 'bold',
+                    halign: 'center',
+                  }
           rows.push([
             dayLabel,
             shift.name,
@@ -1036,8 +1102,8 @@ function renderCalendarPagesAsVector(
             {
               content: 'FOLGA FDS',
               styles: {
-                fillColor: [255, 247, 237],
-                textColor: [194, 65, 12],
+                fillColor: [194, 65, 12],
+                textColor: [255, 255, 255],
                 fontStyle: 'bold',
                 halign: 'center',
               },
@@ -1073,13 +1139,46 @@ function renderCalendarPagesAsVector(
           textColor: [255, 255, 255],
           fontStyle: 'bold',
         },
+        didParseCell: (hookData: any) => {
+          if (hookData.section !== 'body') return
+
+          const rawSituation = hookData.row.raw?.[4]
+          const situation = String(rawSituation?.content || rawSituation || '').toUpperCase()
+          const isVacationRow = situation === 'FÉRIAS'
+          const isOffRow = situation === 'FOLGA FDS'
+          const isNightRow = situation === 'PLANTÃO NOTURNO'
+
+          if (isVacationRow) {
+            hookData.cell.styles.fillColor = [220, 252, 231]
+            hookData.cell.styles.textColor = [6, 78, 59]
+          } else if (isOffRow) {
+            hookData.cell.styles.fillColor = [255, 237, 213]
+            hookData.cell.styles.textColor = [124, 45, 18]
+          } else if (isNightRow) {
+            hookData.cell.styles.fillColor = [219, 234, 254]
+            hookData.cell.styles.textColor = [30, 58, 138]
+          }
+
+          if (hookData.column.index === 4) {
+            hookData.cell.styles.fontStyle = 'bold'
+            hookData.cell.styles.halign = 'center'
+            hookData.cell.styles.textColor = [255, 255, 255]
+            hookData.cell.styles.fillColor = isVacationRow
+              ? [5, 150, 105]
+              : isOffRow
+                ? [194, 65, 12]
+                : isNightRow
+                  ? [30, 64, 175]
+                  : [4, 120, 87]
+          }
+        },
         columnStyles: {
           0: { cellWidth: PDF_CONTENT_WIDTH_MM * (42 / 287) },
-          1: { cellWidth: PDF_CONTENT_WIDTH_MM * (90 / 287) },
-          2: { cellWidth: PDF_CONTENT_WIDTH_MM * (46 / 287) },
-          3: { cellWidth: PDF_CONTENT_WIDTH_MM * (30 / 287) },
-          4: { cellWidth: PDF_CONTENT_WIDTH_MM * (35 / 287) },
-          5: { cellWidth: PDF_CONTENT_WIDTH_MM * (44 / 287) },
+          1: { cellWidth: PDF_CONTENT_WIDTH_MM * (82 / 287) },
+          2: { cellWidth: PDF_CONTENT_WIDTH_MM * (44 / 287) },
+          3: { cellWidth: PDF_CONTENT_WIDTH_MM * (28 / 287) },
+          4: { cellWidth: PDF_CONTENT_WIDTH_MM * (46 / 287) },
+          5: { cellWidth: PDF_CONTENT_WIDTH_MM * (45 / 287) },
         },
       })
     }
