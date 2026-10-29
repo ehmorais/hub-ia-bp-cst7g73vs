@@ -1,17 +1,9 @@
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
-
-const A4_LANDSCAPE_WIDTH_MM = 297
-const A4_LANDSCAPE_HEIGHT_MM = 210
-const PDF_CONTENT_WIDTH_RATIO = 0.85
-const PDF_CONTENT_WIDTH_MM = A4_LANDSCAPE_WIDTH_MM * PDF_CONTENT_WIDTH_RATIO
-const PDF_HORIZONTAL_MARGIN_MM = (A4_LANDSCAPE_WIDTH_MM - PDF_CONTENT_WIDTH_MM) / 2
-const PDF_WEEK_COLUMN_WIDTH_MM = PDF_CONTENT_WIDTH_MM / 7
 import { formatCorenLabel } from '@/lib/escala-calendar-formatter'
 import { BPSCS_LOGO_BASE64 } from './bpscsLogo'
 import { SIDEBAR_HOSPITAL_LOGO } from './sidebarHospitalLogo'
 import {
-  renderCalendarPdfTemplate,
   renderMultiPageCalendarHtml,
   type CalendarDayCellData,
   type ShiftItemData,
@@ -62,8 +54,7 @@ function formatDateHeader(dateStr: string): string {
 }
 
 function formatDateDisplay(dateStr?: string): string {
-  if (!dateStr)
-    return 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAA0JCgsKCA0LCgsODg0PEyAVExISEyccHhcgLikxMC4pLSwzOko+MzZGNywtQFdBRkxOUlNSMj5aYVpQYEpRUk//2wBDAQ4ODhMREyYVFSZPNS01T09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT0//wAARCAApAEADASIAAhEBAxEB/8QAGwAAAQUBAQAAAAAAAAAAAAAAAAMEBQYHAQL/xAAxEAACAQMCBAQEBQUAAAAAAAABAgMABBEFIQYSMUETUWGBIjJxkQcUobHBQlJy0fH/xAAYAQADAQEAAAAAAAAAAAAAAAAAAQMEAv/EABsRAAMBAQEBAQAAAAAAAAAAAAABEQIDIRIx/9oADAMBAAIRAxEAPwDTqKKKAELy7t7G1kuruVYoYxl3boBWf8Q8Zakl69rC503l3VuRZRIp6MG8iPIGnv4p3Ukem2VqpISaVmbHflG36n9KqF2wuuC7KeXea0u3tkbuYyvPj2P71o5YUWmR3t2IkbXjXiHT5EkupYr23Y9WUYb0DKBg+h+1aPoesWut6cl5aEgH4XRuqN3BrErK6/KykuniwPtNEeki/wAHyPY1e+BIpNL4qv8ATFkMlvJAJo2/uXYo315WrrrzUqFz26aHRRRWUuFFItcxLcLbs2JGGQMH17+x+1KM6KpZmAAGSSelAFb480SXWNEBtUL3Ns/iIg6uMYYD17+1UOa30+G0trDU9Q8CO2LO8VuniSyStjmJ7KAAFGd9s43rXlnidFcOOVsY7dag9X4T0PVZjNcQeFM53khfkLH17H7VbHSeMnrF9RSrfSOEdVtpo9O1C8t7uONnUXGPiwMnbG/sc1ceGtOQXI1VWDRvZQW8DAY5lVQS3ucD2pGx4Q4c06+TMck02zJ47FlGc46ADsevlVoBUHlBAIHSlvd8QZzP09UVzI86MjzqRQZ3mmwXkheVnBKhfhwOhJ64z337GkDoVmXLfHuCMDGN/THpt5VKUU6xREEtvpv5homklDmUtysAd+nl08vvXhbfTI0K+NMnPhguATsMbYG3TcVNj5vc/vXP6m+v80/oUIxE01wkC3Dsyqkakrn5Scdsd8GkfA0xrcmOScBCQWCjOC3Ukjf/AFU1H1oHQf5D96KEIaw0yG5hYtcMxDEFowBzZHfIz3/7T6DSYILlJ45JAUJITYLuMHbFPIflP1pSh6Y0kf/Z'
+  if (!dateStr) return ''
   const parts = dateStr.split('-')
   if (parts.length >= 3) {
     return `${parts[2]}/${parts[1]}/${parts[0]}`
@@ -72,6 +63,13 @@ function formatDateDisplay(dateStr?: string): string {
 }
 
 export const LOGO_ASSET_PATH = '/assets/logo-bpscs.jpg'
+
+const A4_LANDSCAPE_WIDTH_MM = 297
+const A4_LANDSCAPE_HEIGHT_MM = 210
+const PDF_CONTENT_WIDTH_RATIO = 0.85
+const PDF_CONTENT_WIDTH_MM = A4_LANDSCAPE_WIDTH_MM * PDF_CONTENT_WIDTH_RATIO
+const PDF_HORIZONTAL_MARGIN_MM = (A4_LANDSCAPE_WIDTH_MM - PDF_CONTENT_WIDTH_MM) / 2
+const PDF_WEEK_COLUMN_WIDTH_MM = PDF_CONTENT_WIDTH_MM / 7
 
 // Re-exporta BPSCS_LOGO_BASE64 para compatibilidade retroativa
 export { BPSCS_LOGO_BASE64 } from './bpscsLogo'
@@ -155,10 +153,7 @@ export function exportScalePdf(data: ExportScalePdfParams) {
             },
           })
         } else if (slot) {
-          const typeUpper = String(
-            slot.type ||
-              'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAA4KCw0LCQ4NDA0QDw4RFiQXFhQUFiwgIRokNC43NjMuMjI6QVNGOj1OPjIySGJJTlZYXV5dOEVmbWVabFNbXVn/2wBDAQ8QEBYTFioXFypZOzI7WVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVn/wAARCAAeADADASIAAhEBAxEB/8QAGgAAAwADAQAAAAAAAAAAAAAAAQQFAAMHBv/EACsQAAIBAwIEBgIDAQAAAAAAAAECAwAEEQUhBhIxURMUIkFhcZHBMmOB0fH/xAAYAQADAQEAAAAAAAAAAAAAAAAAAQMEAv/EABcBAAMBAAAAAAAAAAAAAAAAAAACBAP/xAAZEQADAQEBAAAAAAAAAAAAAAAAAREhAjH/2gAMAwEAAhEDEQA/AOkUGYKpZiAAMkn2o0tqMT3GnXUMezyROi/ZBAoA8LrvFd3dW/mNNlaOxEhiZo/TKrexOc7MNxjHQip+mcWarZOJnuGv7QEeIkgHOufn2+9xSGnWl1JpN7bRQO8s8ka8uMcvISWJJ2G5A37ntT2mcN6la39s9zArWcxMUrJIrgKQc5wf9+wKrnKUJ703Tp9rcR3drFcQtzRSqHU/BrbUjhW3kteG7CGYESCPJB6jJJ/dV6leM3XhpNzCJWjaQK64JB261nmoC4QTISRn+VCSzt5X55IlZu5+sUtcWcEKIYbeI4YnDZHf/p/NGBpL1zh7TdbIkN00D/1uCrZ9yp2z81p0XhrT9KmZWvZpyCsnI5Cx5G4OB1Iz3qq0CBsC1hy6gH1Ebfvej4YeIjysOFA5QXJ7Ae3wPxT1yCxWlDx4sA+KmD09QoiWMnAkUnpgMKmGzR7pC0MahuvKx3yN6dSwtUdHWFQyHKkZ2pGkMf/Z',
-          ).toUpperCase()
+          const typeUpper = String(slot.type || '').toUpperCase()
           const isDay = typeUpper === 'D' || typeUpper === 'DAY'
           const isNight = typeUpper === 'N' || typeUpper === 'NIGHT'
 
@@ -497,6 +492,7 @@ export function prepareCalendarTemplateData(params: ExportAutoGenerateCalendarPd
  * o dia completo em páginas adicionais de continuação, garantindo que nenhum nome seja cortado
  * ou comprimido.
  */
+
 export function prepareCalendarMultiPageData(params: ExportAutoGenerateCalendarPdfParams): {
   pages: CalendarPageData[]
   maxChipsPerCell: number
@@ -695,10 +691,111 @@ export function groupWeeksIntoPages(
   return pages
 }
 
-function formatShiftForVectorPdf(shift: ShiftItemData): string {
-  const registration = shift.corenText ? ` — ${shift.corenText}` : ''
-  const time = shift.timeRange ? ` (${shift.timeRange})` : ''
-  return `${shift.periodLetter} • ${shift.name}${registration}${time}`
+type VectorCardColor = [number, number, number]
+
+interface VectorStaffCardPalette {
+  fill: VectorCardColor
+  border: VectorCardColor
+  accent: VectorCardColor
+  badge: VectorCardColor
+}
+
+function getVectorStaffCardPalette(shift: ShiftItemData): VectorStaffCardPalette {
+  const absenceType = String((shift as any).absenceType || '').toUpperCase()
+  const isVacation = Boolean((shift as any).isVacation) || absenceType === 'FÉRIAS'
+  const isOff = Boolean(shift.isWeekendOff) || absenceType === 'FOLGA'
+
+  if (isVacation) {
+    return {
+      fill: [250, 245, 255],
+      border: [168, 85, 247],
+      accent: [126, 34, 206],
+      badge: [126, 34, 206],
+    }
+  }
+  if (isOff) {
+    return {
+      fill: [255, 251, 235],
+      border: [245, 158, 11],
+      accent: [217, 119, 6],
+      badge: [217, 119, 6],
+    }
+  }
+  if (shift.periodLetter === 'N') {
+    return {
+      fill: [241, 245, 249],
+      border: [148, 163, 184],
+      accent: [30, 58, 138],
+      badge: [30, 58, 138],
+    }
+  }
+  return {
+    fill: [255, 255, 255],
+    border: [148, 163, 184],
+    accent: [4, 120, 87],
+    badge: [4, 120, 87],
+  }
+}
+
+/**
+ * Desenha um card vetorial ao redor dos dados de um colaborador.
+ * O contorno arredondado replica no PDF o mesmo agrupamento visual usado
+ * pelos cards dos demais setores, sem rasterizar a página.
+ */
+function drawVectorStaffCard(
+  doc: jsPDF,
+  shift: ShiftItemData,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+): void {
+  const palette = getVectorStaffCardPalette(shift)
+  const radius = 1.6
+  const paddingX = 3.2
+  const absenceType = String((shift as any).absenceType || '').toUpperCase()
+  const statusLabel =
+    absenceType === 'FÉRIAS'
+      ? 'FÉRIAS'
+      : shift.isWeekendOff || absenceType === 'FOLGA'
+        ? 'FOLGA'
+        : shift.periodLetter
+
+  doc.setLineWidth(0.25)
+  doc.setDrawColor(...palette.border)
+  doc.setFillColor(...palette.fill)
+  doc.roundedRect(x, y, width, height, radius, radius, 'FD')
+
+  // Faixa lateral de identificação do plantão, preservando o contorno externo.
+  doc.setFillColor(...palette.accent)
+  doc.roundedRect(x + 0.45, y + 0.45, 1.45, height - 0.9, 0.7, 0.7, 'F')
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(5.7)
+  const badgeWidth = Math.max(6.3, doc.getTextWidth(statusLabel) + 2.4)
+  const badgeX = x + width - badgeWidth - 1.4
+  const badgeY = y + 1.6
+  doc.setFillColor(...palette.badge)
+  doc.roundedRect(badgeX, badgeY, badgeWidth, 4.5, 1.1, 1.1, 'F')
+  doc.setTextColor(255, 255, 255)
+  doc.text(statusLabel, badgeX + badgeWidth / 2, badgeY + 3.05, { align: 'center' })
+
+  const textX = x + paddingX
+  const nameWidth = Math.max(10, badgeX - textX - 1.2)
+  const nameLines = doc.splitTextToSize(shift.name || 'Sem nome', nameWidth).slice(0, 2)
+  doc.setTextColor(15, 23, 42)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(6.2)
+  doc.text(nameLines, textX, y + 4.1)
+
+  const detailsY = y + (nameLines.length > 1 ? 10.1 : 8.1)
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(5.3)
+  doc.setTextColor(71, 85, 105)
+  const detailLines = [shift.corenText, shift.timeRange].filter(Boolean) as string[]
+  if (detailLines.length > 0) {
+    doc.text(detailLines.slice(0, 2), textX, detailsY)
+  }
 }
 
 function drawVectorPageHeader(
@@ -747,20 +844,7 @@ function renderCalendarPagesAsVector(
         20,
       )
 
-      const cells = week.days.map((day) => {
-        if (!day) return ''
-        const orderedLines = [
-          ...day.shifts.map(formatShiftForVectorPdf),
-          ...day.weekendOffs.map((off) => `FDS • ${off.name}`),
-        ]
-        const visibleLines = orderedLines.slice(0, 4)
-        const hiddenCount = orderedLines.length - visibleLines.length
-        return [
-          day.dayFormatted,
-          ...(visibleLines.length > 0 ? visibleLines : ['Sem plantões']),
-          ...(hiddenCount > 0 ? [`+${hiddenCount} na continuação`] : []),
-        ].join('\n')
-      })
+      const cells = week.days.map(() => '')
 
       autoTable(doc, {
         startY: 23,
@@ -791,6 +875,8 @@ function renderCalendarPagesAsVector(
           valign: 'top',
           lineColor: [148, 163, 184],
           lineWidth: 0.15,
+          // 169 mm de corpo + 8 mm de cabeçalho ocupam praticamente toda
+          // a altura útil entre y=23 mm e a margem inferior de 9 mm.
           minCellHeight: 169,
         },
         headStyles: {
@@ -799,6 +885,82 @@ function renderCalendarPagesAsVector(
           fontStyle: 'bold',
           halign: 'center',
           minCellHeight: 8,
+        },
+        didParseCell: (hookData: any) => {
+          if (hookData.section === 'body' && hookData.row.index === 0) {
+            // O conteúdo é desenhado manualmente para permitir cards arredondados vetoriais.
+            hookData.cell.text = []
+          }
+        },
+        didDrawCell: (hookData: any) => {
+          if (hookData.section !== 'body' || hookData.row.index !== 0) return
+          const day = week.days[hookData.column.index]
+          if (!day) return
+
+          const cell = hookData.cell
+          const dateY = cell.y + 5.2
+          doc.setFont('helvetica', 'bold')
+          doc.setFontSize(7.2)
+          doc.setTextColor(15, 23, 42)
+          doc.text(day.dayFormatted, cell.x + cell.width / 2, dateY, { align: 'center' })
+
+          const items: ShiftItemData[] = [
+            ...day.shifts,
+            ...day.weekendOffs.map((off) => ({
+              staffId: off.id,
+              name: off.name,
+              periodLetter: 'D' as const,
+              corenText: '',
+              isWeekendOff: true,
+            })),
+          ]
+          const visibleItems = items.slice(0, 4)
+          const hiddenCount = items.length - visibleItems.length
+
+          if (visibleItems.length === 0) {
+            doc.setFont('helvetica', 'normal')
+            doc.setFontSize(6.3)
+            doc.setTextColor(100, 116, 139)
+            doc.text('Sem plantões', cell.x + cell.width / 2, dateY + 7, { align: 'center' })
+            return
+          }
+
+          const cardX = cell.x + 1.45
+          const cardWidth = cell.width - 2.9
+          const cardGap = 2
+          const cardsTop = cell.y + 8.3
+          const overflowLabelHeight = hiddenCount > 0 ? 5 : 0
+          const availableHeight = cell.height - 10.5 - overflowLabelHeight
+          const cardHeight = Math.min(
+            32,
+            Math.max(
+              18,
+              (availableHeight - cardGap * (visibleItems.length - 1)) / visibleItems.length,
+            ),
+          )
+
+          visibleItems.forEach((shift, itemIndex) => {
+            drawVectorStaffCard(
+              doc,
+              shift,
+              cardX,
+              cardsTop + itemIndex * (cardHeight + cardGap),
+              cardWidth,
+              cardHeight,
+            )
+          })
+
+          if (hiddenCount > 0) {
+            doc.setFont('helvetica', 'bold')
+            doc.setFontSize(5.7)
+            doc.setTextColor(71, 85, 105)
+            doc.text(
+              `+${hiddenCount} na continuação`,
+              cell.x + cell.width / 2,
+              cell.y + cell.height - 2.2,
+              { align: 'center' },
+            )
+          }
         },
       })
     } else {
@@ -966,6 +1128,7 @@ export async function exportAutoGenerateCalendarPdf(
   }
   return filename
 }
+
 /**
  * Parâmetros para exportação do Relatório "Lista por dia" da Escala Gerada por IA
  */
