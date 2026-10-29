@@ -781,11 +781,11 @@ function drawVectorStaffCard(
   doc.text(statusLabel, badgeX + badgeWidth / 2, badgeY + 3.05, { align: 'center' })
 
   const textX = x + paddingX
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(6.2)
   const nameWidth = Math.max(10, badgeX - textX - 1.2)
   const nameLines = doc.splitTextToSize(shift.name || 'Sem nome', nameWidth).slice(0, 2)
   doc.setTextColor(15, 23, 42)
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(6.2)
   doc.text(nameLines, textX, y + 4.1)
 
   const detailsY = y + (nameLines.length > 1 ? 10.1 : 8.1)
