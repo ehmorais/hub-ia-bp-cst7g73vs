@@ -73,6 +73,9 @@ describe('Validação da Exportação PDF do Calendário — Setor UTI 2 (Ciclo 
 
     console.log(`UTI 2 Ciclo 11/2026 páginas geradas: ${multiPageResult.pages.length}`)
 
+    // Total de páginas geradas no ciclo completo da UTI 2
+    expect(multiPageResult.pages.length).toBe(30)
+
     // Critério 1 e 3: Nenhuma página é continuation ou day_continuation
     const contPages = multiPageResult.pages.filter(
       (p) => p.pageType === 'continuation' || p.pageType === 'day_continuation',
