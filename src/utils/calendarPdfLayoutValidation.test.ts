@@ -141,11 +141,27 @@ describe('Validação Avançada de Medição, Wrap e Paginação contra Sobrepos
       weekendOffMap: new Map(),
     })
 
-    // Deve gerar página de semana + página de continuação do dia 08/10
+    // Um dia com 5 colaboradores gera duas páginas do mesmo tipo week (Parte 1 e Parte 2)
     expect(pages.length).toBe(2)
     expect(pages[0].pageType).toBe('week')
-    expect(pages[1].pageType).toBe('day_continuation')
-    expect(pages[1].continuationDay?.shifts.length).toBe(5)
+    expect(pages[0].weekData?.partIndex).toBe(1)
+    expect(pages[0].weekData?.partTotal).toBe(2)
+    expect(pages[1].pageType).toBe('week')
+    expect(pages[1].weekData?.partIndex).toBe(2)
+    expect(pages[1].weekData?.partTotal).toBe(2)
+
+    // Os 5 colaboradores divididos: 4 na Parte 1 e 1 na Parte 2
+    const cellP1 = pages[0].weekData?.days.find((d) => d?.dateKey === '2026-10-08')
+    const cellP2 = pages[1].weekData?.days.find((d) => d?.dateKey === '2026-10-08')
+    expect(cellP1?.shifts.length).toBe(4)
+    expect(cellP2?.shifts.length).toBe(1)
+
+    // Os 5 nomes aparecem exatamente uma vez na data correta
+    const p1Names = cellP1?.shifts.map((s) => s.name) || []
+    const p2Names = cellP2?.shifts.map((s) => s.name) || []
+    const allRenderedNames = [...p1Names, ...p2Names]
+    expect(allRenderedNames.length).toBe(5)
+    expect(new Set(allRenderedNames).size).toBe(5)
   })
 
   it('diferencia turno diurno, noturno, folga FDS e férias com tags discretas sem negrito generalizado', () => {

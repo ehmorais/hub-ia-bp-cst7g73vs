@@ -52,6 +52,8 @@ export interface CalendarWeekData {
   startDateFormatted: string // "DD/MM"
   endDateFormatted: string // "DD/MM"
   days: Array<CalendarDayCellData | null> // Exatamente 7 dias (domingo a sábado)
+  partIndex?: number
+  partTotal?: number
 }
 
 export interface CalendarPageData {
@@ -845,17 +847,8 @@ export function renderWeeklyCellHtml(
   cell.weekendOffs.forEach((off) => allItems.push({ type: 'off', data: off }))
 
   const visibleItems = allItems.slice(0, maxCardsPerCell)
-  const remainingCount = allItems.length - maxCardsPerCell
 
   const cardsHtml = visibleItems.map(renderStaffCardHtml)
-
-  if (remainingCount > 0) {
-    cardsHtml.push(`
-      <div class="day-more-notice">
-        +${remainingCount} profissional(is) na continuação
-      </div>
-    `)
-  }
 
   const contentInside =
     cardsHtml.length > 0
@@ -928,10 +921,14 @@ export function renderSinglePdfPageHtml(options: {
   let pageBadge = `<span class="header-badge">Semanal</span>`
 
   if (isWeek && weekData) {
-    pageBadge = `<span class="header-badge badge-week">Semana ${weekData.weekIndex} de ${weekData.weekTotal}</span>`
+    const hasParts = typeof weekData.partTotal === 'number' && weekData.partTotal > 1
+    const partSuffix = hasParts
+      ? ` (Parte ${weekData.partIndex || 1} de ${weekData.partTotal})`
+      : ''
+    pageBadge = `<span class="header-badge badge-week">Semana ${weekData.weekIndex} de ${weekData.weekTotal}${partSuffix}</span>`
     headlineBarHtml = `
       <div class="week-headline-bar">
-        <span class="week-headline-title">Semana ${weekData.weekIndex} de ${weekData.weekTotal} &mdash; ${weekData.startDateFormatted} a ${weekData.endDateFormatted}</span>
+        <span class="week-headline-title">Semana ${weekData.weekIndex} de ${weekData.weekTotal}${partSuffix} &mdash; ${weekData.startDateFormatted} a ${weekData.endDateFormatted}</span>
         <span class="week-headline-meta">Grade Semanal Paginada A4 Paisagem</span>
       </div>
     `

@@ -369,22 +369,40 @@ describe('Pipeline de Calendário Semanal Paginado em PDF (BPSCS)', () => {
         weekendOffMap,
       })
 
-      // 6 semanas no total no ciclo (26/09 a 25/10 abrange 6 semanas) + 1 página de continuação para 08/10
+      // 6 semanas no total no ciclo (26/09 a 25/10 abrange 6 semanas).
+      // A semana com 08/10 tem 5 plantonistas no mesmo dia -> gera 2 páginas do tipo week (Parte 1 e Parte 2).
+      // Total de páginas = 7 páginas, TODAS do tipo 'week', sem nenhuma 'continuation' ou 'day_continuation'.
       expect(templateData.weeks.length).toBe(6)
       expect(maxChipsPerCell).toBe(4)
-      expect(pages.length).toBe(7) // 6 semanas + 1 continuação
+      expect(pages.length).toBe(7)
+      expect(pages.every((p) => p.pageType === 'week')).toBe(true)
 
       // Verifica tipos de páginas
       expect(pages[0].pageType).toBe('week')
       expect(pages[0].weekData?.weekIndex).toBe(1)
       expect(pages[0].weekData?.days.length).toBe(7)
 
-      // Semana que contém dia 08/10 é a semana 2
-      // e logo após a semana 2 há a página de continuação para 08/10
-      const contPage = pages.find((p) => p.pageType === 'day_continuation')
-      expect(contPage).toBeDefined()
-      expect(contPage?.continuationDay?.dayFormatted).toBe('08/10')
-      expect(contPage?.continuationDay?.shifts.length).toBe(5)
+      // Nenhuma página de continuação/day_continuation
+      const contPage = pages.find(
+        (p) => p.pageType === 'day_continuation' || p.pageType === 'continuation',
+      )
+      expect(contPage).toBeUndefined()
+
+      // Semana com 08/10 dividida em Parte 1 e Parte 2
+      const weekWith08OctPages = pages.filter((p) =>
+        p.weekData?.days.some((d) => d?.dayFormatted === '08/10'),
+      )
+      expect(weekWith08OctPages.length).toBe(2)
+      expect(weekWith08OctPages[0].weekData?.partIndex).toBe(1)
+      expect(weekWith08OctPages[0].weekData?.partTotal).toBe(2)
+      expect(weekWith08OctPages[1].weekData?.partIndex).toBe(2)
+      expect(weekWith08OctPages[1].weekData?.partTotal).toBe(2)
+
+      // Parte 1 tem 4 colaboradores em 08/10 e Parte 2 tem 1 colaborador em 08/10
+      const dayPart1 = weekWith08OctPages[0].weekData?.days.find((d) => d?.dayFormatted === '08/10')
+      const dayPart2 = weekWith08OctPages[1].weekData?.days.find((d) => d?.dayFormatted === '08/10')
+      expect(dayPart1?.shifts.length).toBe(4)
+      expect(dayPart2?.shifts.length).toBe(1)
 
       const fullHtml = buildCalendarHtml({
         title: 'Escala de Plantões — Calendário Semanal',
@@ -399,7 +417,7 @@ describe('Pipeline de Calendário Semanal Paginado em PDF (BPSCS)', () => {
         weekendOffMap,
       })
 
-      // Presença de nomes COMPLETOS sem compressão
+      // Presença de nomes COMPLETOS sem compressão dentro da grade
       expect(fullHtml).toContain('Laodiceia da Silva Goes Dias')
       expect(fullHtml).toContain('Marcia Ferreira Sales Silva')
       expect(fullHtml).toContain('Matheus Rodrigues Avelar')
@@ -413,18 +431,108 @@ describe('Pipeline de Calendário Semanal Paginado em PDF (BPSCS)', () => {
       expect(fullHtml).toContain('COREN 538627')
       expect(fullHtml).toContain('COREN 1928664')
 
-      // Título claro de semanas
+      // Título claro de semanas com partes
       expect(fullHtml).toContain('Semana 1 de 6')
-      expect(fullHtml).toContain('Semana 2 de 6')
+      expect(fullHtml).toContain('Parte 1 de 2')
+      expect(fullHtml).toContain('Parte 2 de 2')
       expect(fullHtml).toContain('Semana 6 de 6')
 
-      // Continuação de 08/10
-      expect(fullHtml).toContain('Continuação &mdash; Quinta-feira, 08/10')
-      expect(fullHtml).toContain('Dia de Alta Densidade')
+      // Sem tabelas de continuação
+      expect(fullHtml).not.toContain('continuation-wrapper')
+      expect(fullHtml).not.toContain('continuation-columns')
+      expect(fullHtml).not.toContain('+1 profissional(is) na continuação')
 
       // Rodapé com numeração total
       expect(fullHtml).toContain('Página 1 de 7')
       expect(fullHtml).toContain('Página 7 de 7')
+    })
+
+    it('regressão de alta densidade semelhante à UTI 2 (dias com 20+ colaboradores): todas as páginas são week e sem continuação', () => {
+      // Cria cenário com 24 colaboradores escalados no mesmo dia (ex: 26/10)
+      const testDays = [
+        {
+          date: new Date(2026, 9, 26),
+          key: '2026-10-26',
+          dayOfWeek: 1, // segunda-feira
+        },
+      ]
+
+      const denseStaff = Array.from({ length: 24 }, (_, i) => ({
+        id: `sp-uti-${i + 1}`,
+        name: `Colaborador UTI ${String(i + 1).padStart(2, '0')}`,
+        professional_id: `COREN ${100000 + i}`,
+      }))
+
+      const denseShifts = denseStaff.map((st, i) => ({
+        id: `sh-uti-${i + 1}`,
+        staff_profile: st.id,
+        start_time: '2026-10-26 07:00:00',
+        end_time: '2026-10-26 19:00:00',
+      }))
+
+      const { pages } = prepareCalendarMultiPageData({
+        title: 'Escala de Plantões — UTI 2',
+        sectorName: 'UTI 2',
+        cycleName: 'Ciclo 11/2026',
+        cycleStart: '2026-10-26',
+        cycleEnd: '2026-11-25',
+        days: testDays,
+        shifts: denseShifts,
+        contracts: [],
+        staffProfiles: denseStaff,
+        weekendOffMap: new Map(),
+      })
+
+      // 24 colaboradores / 4 por página = 6 páginas para esta semana
+      expect(pages.length).toBe(6)
+      expect(pages.every((p) => p.pageType === 'week')).toBe(true)
+
+      // Nenhuma página continuation/day_continuation
+      const contPage = pages.find(
+        (p) => p.pageType === 'day_continuation' || p.pageType === 'continuation',
+      )
+      expect(contPage).toBeUndefined()
+
+      // Cada página tem partTotal = 6 e partIndex 1..6
+      pages.forEach((p, idx) => {
+        expect(p.weekData?.partTotal).toBe(6)
+        expect(p.weekData?.partIndex).toBe(idx + 1)
+        const dayCell = p.weekData?.days.find((d) => d?.dateKey === '2026-10-26')
+        expect(dayCell).toBeDefined()
+        expect(dayCell?.shifts.length).toBe(4)
+      })
+
+      // Todos os 24 nomes aparecem exatamente UMA vez na data correta (26/10)
+      const namesCollected: string[] = []
+      pages.forEach((p) => {
+        const dayCell = p.weekData?.days.find((d) => d?.dateKey === '2026-10-26')
+        dayCell?.shifts.forEach((s) => namesCollected.push(s.name))
+      })
+      expect(namesCollected.length).toBe(24)
+      expect(new Set(namesCollected).size).toBe(24)
+      denseStaff.forEach((st) => {
+        expect(namesCollected).toContain(st.name)
+      })
+
+      const html = buildCalendarHtml({
+        title: 'Escala de Plantões — UTI 2',
+        sectorName: 'UTI 2',
+        cycleName: 'Ciclo 11/2026',
+        cycleStart: '2026-10-26',
+        cycleEnd: '2026-11-25',
+        days: testDays,
+        shifts: denseShifts,
+        contracts: [],
+        staffProfiles: denseStaff,
+        weekendOffMap: new Map(),
+      })
+
+      // Cabeçalhos com Parte 1 de 6 .. Parte 6 de 6
+      expect(html).toContain('Parte 1 de 6')
+      expect(html).toContain('Parte 6 de 6')
+      expect(html).not.toContain('+20')
+      expect(html).not.toContain('continuation-wrapper')
+      expect(html).not.toContain('na continuação')
     })
   })
 })

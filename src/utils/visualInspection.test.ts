@@ -276,30 +276,34 @@ describe('Inspeção e Verificação Estrutural do HTML do PDF Renderizado — C
       selectedSectorId: 'sec-ps-resp',
     })
 
-    // Validação 1: Total de páginas = 7 (6 semanas + 1 de continuação para o dia 08/10)
+    // Validação 1: Total de páginas = 7 (todas do tipo 'week', semana com 08/10 tem Parte 1 e Parte 2)
     expect(multiPageResult.pages.length).toBe(7)
-    expect(multiPageResult.pages.map((p) => p.pageType)).toEqual([
-      'week',
-      'week',
-      'day_continuation',
-      'week',
-      'week',
-      'week',
-      'week',
-    ])
+    expect(multiPageResult.pages.every((p) => p.pageType === 'week')).toBe(true)
 
-    // Validação 2: Célula diária da semana com 4 cards no máximo e indicação de continuação
-    const week2 = multiPageResult.pages[1].weekData
-    expect(week2).toBeDefined()
-    const cell08Oct = week2?.days.find((d) => d?.dateKey === '2026-10-08')
-    expect(cell08Oct).toBeDefined()
-    expect(cell08Oct?.shifts.length).toBe(5)
+    // Validação 2: A semana do dia 08/10 é desdobrada em Parte 1 e Parte 2, cada dia com até 4 cards
+    const weekPagesWith08Oct = multiPageResult.pages.filter((p) =>
+      p.weekData?.days.some((d) => d?.dateKey === '2026-10-08'),
+    )
+    expect(weekPagesWith08Oct.length).toBe(2)
+    expect(weekPagesWith08Oct[0].weekData?.partIndex).toBe(1)
+    expect(weekPagesWith08Oct[0].weekData?.partTotal).toBe(2)
+    expect(weekPagesWith08Oct[1].weekData?.partIndex).toBe(2)
+    expect(weekPagesWith08Oct[1].weekData?.partTotal).toBe(2)
 
-    // Validação 3: Página de continuação do dia 08/10 tem os 5 plantonistas completos
-    const contPage = multiPageResult.pages[2]
-    expect(contPage.pageType).toBe('day_continuation')
-    expect(contPage.continuationDay?.dayFormatted).toBe('08/10')
-    expect(contPage.continuationDay?.shifts.length).toBe(5)
+    const cell08OctP1 = weekPagesWith08Oct[0].weekData?.days.find(
+      (d) => d?.dateKey === '2026-10-08',
+    )
+    const cell08OctP2 = weekPagesWith08Oct[1].weekData?.days.find(
+      (d) => d?.dateKey === '2026-10-08',
+    )
+    expect(cell08OctP1?.shifts.length).toBe(4)
+    expect(cell08OctP2?.shifts.length).toBe(1)
+
+    // Nenhuma página é do tipo continuation ou day_continuation
+    const contPages = multiPageResult.pages.filter(
+      (p) => p.pageType === 'continuation' || p.pageType === 'day_continuation',
+    )
+    expect(contPages.length).toBe(0)
 
     // Validação 4: Inspeção minuciosa de cada página no HTML renderizado
     const html = buildCalendarHtml({
@@ -350,7 +354,8 @@ describe('Inspeção e Verificação Estrutural do HTML do PDF Renderizado — C
     expect(html).toContain('Semana 4 de 6')
     expect(html).toContain('Semana 5 de 6')
     expect(html).toContain('Semana 6 de 6')
-    expect(html).toContain('Continuação &mdash; Quinta-feira, 08/10')
+    expect(html).toContain('Parte 1 de 2')
+    expect(html).toContain('Parte 2 de 2')
 
     // 4.7. Inspeção e Renderização Real de TODAS as páginas do PDF via exportAutoGenerateCalendarPdf / renderHtmlToPdfLandscape
     const pdfDoc = await renderHtmlToPdfLandscape(html, {
@@ -380,24 +385,12 @@ describe('Inspeção e Verificação Estrutural do HTML do PDF Renderizado — C
       expect(pageContent).not.toContain('transform: scale')
       expect(pageContent).not.toContain('zoom:')
 
-      if (pageNum === 3) {
-        // Página 3 é a Continuação do dia 08/10 (quinta-feira)
-        expect(pageContent).toContain('Continuação &mdash; Quinta-feira, 08/10')
-        expect(pageContent).toContain('Laodiceia da Silva Goes Dias')
-        expect(pageContent).toContain('Marcia Ferreira Sales Silva')
-        expect(pageContent).toContain('Matheus Rodrigues Avelar')
-        expect(pageContent).toContain('Catia Aperecida da Silva Pirelli')
-        expect(pageContent).toContain('Cristiane Santos Lopes de Oliveira')
-        expect(pageContent).toContain('continuation-columns')
-        expect(pageContent).toContain('Total no dia: 5 plantonista(s)')
-      } else {
-        // Demais páginas são semanas 1, 2, 3, 4, 5, 6
-        expect(pageContent).toContain('calendar-wrapper')
-        expect(pageContent).toContain('calendar-table')
-        expect(pageContent).toContain('legend-bar')
-        expect(pageContent).toContain('week-headline-bar')
-        expect(pageContent).toContain('Semana ')
-      }
+      // Todas as páginas são da grade semanal (week)
+      expect(pageContent).toContain('calendar-wrapper')
+      expect(pageContent).toContain('calendar-table')
+      expect(pageContent).toContain('legend-bar')
+      expect(pageContent).toContain('week-headline-bar')
+      expect(pageContent).toContain('Semana ')
     })
 
     // 4.8. Validação minuciosa de fontes e dimensões tipográficas reais do CSS:

@@ -156,27 +156,25 @@ describe('Inspeção Visual Real do PDF — Ciclo Outubro 2026 / PS RESPIRATÓRI
     expect(pageBlocks[1]).toContain('Semana 2 de 6')
     expect(pageBlocks[1]).toContain('Página 2 de 7')
 
-    // Página 3: Semana 3 de 6 (04/10 a 10/10) - inclui 08/10 com 4 primeiros e aviso
-    expect(pageBlocks[2]).toContain('Semana 3 de 6')
+    // Página 3: Semana 3 de 6 - Parte 1 de 2 (04/10 a 10/10) - inclui primeiros 4 de 08/10
+    expect(pageBlocks[2]).toContain('Semana 3 de 6 (Parte 1 de 2)')
     expect(pageBlocks[2]).toContain('Página 3 de 7')
     expect(pageBlocks[2]).toContain('08/10')
     expect(pageBlocks[2]).toContain('Laodiceia da Silva Goes Dias')
-    expect(pageBlocks[2]).toContain('+1 profissional(is) na continuação')
+    expect(pageBlocks[2]).toContain('Marcia Ferreira Sales Silva')
+    expect(pageBlocks[2]).toContain('Matheus Rodrigues Avelar')
+    expect(pageBlocks[2]).toContain('Catia Aperecida da Silva Pirelli')
 
-    // Página 4: Continuação do dia 08/10 (quinta-feira) - todos os 5 colaboradores com COREN e horários
-    expect(pageBlocks[3]).toContain('Continuação &mdash; Quinta-feira, 08/10')
+    // Página 4: Semana 3 de 6 - Parte 2 de 2 (04/10 a 10/10) - inclui 5º colaborador de 08/10
+    expect(pageBlocks[3]).toContain('Semana 3 de 6 (Parte 2 de 2)')
     expect(pageBlocks[3]).toContain('Página 4 de 7')
-    expect(pageBlocks[3]).toContain('Total no dia: 5 plantonista(s)')
-    expect(pageBlocks[3]).toContain('Laodiceia da Silva Goes Dias')
-    expect(pageBlocks[3]).toContain('Marcia Ferreira Sales Silva')
-    expect(pageBlocks[3]).toContain('Matheus Rodrigues Avelar')
-    expect(pageBlocks[3]).toContain('Catia Aperecida da Silva Pirelli')
+    expect(pageBlocks[3]).toContain('08/10')
     expect(pageBlocks[3]).toContain('Cristiane Santos Lopes de Oliveira')
-    expect(pageBlocks[3]).toContain('COREN 9470010')
-    expect(pageBlocks[3]).toContain('COREN 835384')
-    expect(pageBlocks[3]).toContain('COREN 1911297')
-    expect(pageBlocks[3]).toContain('COREN 538627')
     expect(pageBlocks[3]).toContain('COREN 1928664')
+
+    // Sem páginas de continuação
+    expect(fullHtml).not.toContain('continuation-wrapper')
+    expect(fullHtml).not.toContain('continuation-columns')
 
     // Página 5: Semana 4 de 6 (11/10 a 17/10) - inclui dia 17/10
     expect(pageBlocks[4]).toContain('Semana 4 de 6')

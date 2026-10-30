@@ -534,91 +534,78 @@ export function prepareCalendarMultiPageData(params: ExportAutoGenerateCalendarP
 } {
   const templateData = prepareCalendarTemplateData(params)
   const maxChipsPerCell = 4
-  const continuationRowsPerPage = 16
-  const weekPages: CalendarPageData[] = []
-  const overflowChunks: DayOverflowItem[] = []
+  const pages: CalendarPageData[] = []
   const totalWeeks = templateData.weeks.length
 
   templateData.weeks.forEach((weekDays, weekIdx) => {
     const validDays = weekDays.filter((day): day is CalendarDayCellData => day !== null)
-    weekPages.push({
-      pageType: 'week',
-      pageIndex: 0,
-      weekData: {
-        weekIndex: weekIdx + 1,
-        weekTotal: totalWeeks,
-        startDateFormatted: validDays[0]?.dayFormatted || '',
-        endDateFormatted: validDays[validDays.length - 1]?.dayFormatted || '',
-        days: weekDays,
-      },
-    })
+    const startDateFormatted = validDays[0]?.dayFormatted || ''
+    const endDateFormatted = validDays[validDays.length - 1]?.dayFormatted || ''
 
-    weekDays.forEach((cell) => {
-      if (!cell) return
-      const orderedItems = [
-        ...cell.shifts.map((item) => ({ kind: 'shift' as const, item })),
-        ...cell.weekendOffs.map((off) => ({
-          kind: 'off' as const,
-          item: {
-            staffId: off.id,
-            name: off.name,
-            periodLetter: 'D' as const,
-            corenText: '',
-            isWeekendOff: true,
-          } satisfies ShiftItemData,
-        })),
-      ]
-      const { remainingItems } = splitCalendarDayItemsForPdf(
-        orderedItems.map((entry) => entry.item),
-        maxChipsPerCell,
-      )
-      const remainingSet = new Set(remainingItems)
-      const excessItems = orderedItems.filter((entry) => remainingSet.has(entry.item))
-
-      for (let offset = 0; offset < excessItems.length; offset += continuationRowsPerPage) {
-        const batch = excessItems.slice(offset, offset + continuationRowsPerPage)
-        overflowChunks.push({
-          dayFormatted: cell.dayFormatted,
-          dateKey: cell.dateKey || cell.dayFormatted,
-          dayOfWeekName: cell.dayOfWeekName || '',
-          isWeekend: cell.isWeekend,
-          remainingShifts: batch
-            .filter((entry) => entry.kind === 'shift')
-            .map((entry) => entry.item as ShiftItemData),
-          remainingWeekendOffs: batch
-            .filter((entry) => entry.kind === 'off')
-            .map((entry) => ({ id: entry.item.staffId, name: entry.item.name })),
-        })
+    // Para cada semana, calcule partTotal = máximo entre os dias de ceil((shifts + weekendOffs)/4), mínimo 1.
+    let partTotal = 1
+    weekDays.forEach((day) => {
+      if (!day) return
+      const totalItems =
+        (day.shifts ? day.shifts.length : 0) + (day.weekendOffs ? day.weekendOffs.length : 0)
+      const dayParts = Math.ceil(totalItems / maxChipsPerCell)
+      if (dayParts > partTotal) {
+        partTotal = dayParts
       }
     })
-  })
 
-  const continuationPages: CalendarPageData[] = []
-  let pendingDays: DayOverflowItem[] = []
-  let pendingRows = 0
+    // Gere uma página pageType week para cada parte (partIndex: 1..partTotal).
+    for (let partIndex = 1; partIndex <= partTotal; partIndex++) {
+      const sliceStart = (partIndex - 1) * maxChipsPerCell
+      const sliceEnd = sliceStart + maxChipsPerCell
 
-  const flushContinuationPage = () => {
-    if (pendingDays.length === 0) return
-    continuationPages.push({
-      pageType: 'continuation',
-      pageIndex: 0,
-      overflowDays: pendingDays,
-    })
-    pendingDays = []
-    pendingRows = 0
-  }
+      const slicedDays: Array<CalendarDayCellData | null> = weekDays.map((day) => {
+        if (!day) return null
 
-  overflowChunks.forEach((overflowDay) => {
-    const rowCount = overflowDay.remainingShifts.length + overflowDay.remainingWeekendOffs.length
-    if (pendingRows > 0 && pendingRows + rowCount > continuationRowsPerPage) {
-      flushContinuationPage()
+        // Preserva a ordem atual dos itens
+        const allItems: Array<
+          | { kind: 'shift'; data: ShiftItemData }
+          | { kind: 'off'; data: { id: string; name: string } }
+        > = [
+          ...day.shifts.map((s) => ({ kind: 'shift' as const, data: s })),
+          ...day.weekendOffs.map((off) => ({ kind: 'off' as const, data: off })),
+        ]
+
+        const pageSlice = allItems.slice(sliceStart, sliceEnd)
+        const slicedShifts: ShiftItemData[] = []
+        const slicedWeekendOffs: Array<{ id: string; name: string }> = []
+
+        pageSlice.forEach((item) => {
+          if (item.kind === 'shift') {
+            slicedShifts.push(item.data)
+          } else {
+            slicedWeekendOffs.push(item.data)
+          }
+        })
+
+        return {
+          ...day,
+          shifts: slicedShifts,
+          weekendOffs: slicedWeekendOffs,
+        }
+      })
+
+      pages.push({
+        pageType: 'week',
+        pageIndex: pages.length,
+        weekData: {
+          weekIndex: weekIdx + 1,
+          weekTotal: totalWeeks,
+          startDateFormatted,
+          endDateFormatted,
+          days: slicedDays,
+          partIndex,
+          partTotal,
+        },
+      })
     }
-    pendingDays.push(overflowDay)
-    pendingRows += rowCount
   })
-  flushContinuationPage()
 
-  const pages = [...weekPages, ...continuationPages]
   pages.forEach((page, pageIndex) => {
     page.pageIndex = pageIndex
   })
@@ -883,11 +870,13 @@ function renderCalendarPagesAsVector(
 
     if (pageData.weekData) {
       const week = pageData.weekData
+      const hasParts = typeof week.partTotal === 'number' && week.partTotal > 1
+      const partSuffix = hasParts ? ` (Parte ${week.partIndex || 1} de ${week.partTotal})` : ''
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(8.5)
       doc.setTextColor(15, 23, 42)
       doc.text(
-        `Semana ${week.weekIndex} de ${week.weekTotal} — ${week.startDateFormatted} a ${week.endDateFormatted}`,
+        `Semana ${week.weekIndex} de ${week.weekTotal}${partSuffix} — ${week.startDateFormatted} a ${week.endDateFormatted}`,
         5,
         20,
       )
@@ -962,10 +951,8 @@ function renderCalendarPagesAsVector(
               isWeekendOff: true,
             })),
           ]
-          const { visibleItems, remainingItems } = splitCalendarDayItemsForPdf(items, 4)
-          const hiddenCount = remainingItems.length
 
-          if (visibleItems.length === 0) {
+          if (items.length === 0) {
             doc.setFont('helvetica', 'normal')
             doc.setFontSize(6.3)
             doc.setTextColor(100, 116, 139)
@@ -977,19 +964,15 @@ function renderCalendarPagesAsVector(
           const cardWidth = cell.width - 2.9
           const cardGap = 2
           const cardsTop = cell.y + 8.3
-          const overflowLabelHeight = hiddenCount > 0 ? 5 : 0
-          const availableHeight = cell.height - 10.5 - overflowLabelHeight
+          const availableHeight = cell.height - 10.5
           const originalCardHeight = Math.min(
             32,
-            Math.max(
-              18,
-              (availableHeight - cardGap * (visibleItems.length - 1)) / visibleItems.length,
-            ),
+            Math.max(18, (availableHeight - cardGap * (items.length - 1)) / items.length),
           )
           // Mantém a mesma largura e reduz somente a moldura vertical em 50%.
           const cardHeight = originalCardHeight * 0.5
 
-          visibleItems.forEach((shift, itemIndex) => {
+          items.forEach((shift, itemIndex) => {
             drawVectorStaffCard(
               doc,
               shift,
@@ -999,18 +982,6 @@ function renderCalendarPagesAsVector(
               cardHeight,
             )
           })
-
-          if (hiddenCount > 0) {
-            doc.setFont('helvetica', 'bold')
-            doc.setFontSize(5.7)
-            doc.setTextColor(71, 85, 105)
-            doc.text(
-              `+${hiddenCount} na continuação`,
-              cell.x + cell.width / 2,
-              cell.y + cell.height - 2.2,
-              { align: 'center' },
-            )
-          }
         },
       })
     } else {
@@ -1214,6 +1185,26 @@ function downloadVectorPdf(doc: jsPDF, filename: string): void {
  * Exporta a escala gerada por IA como PDF vetorial A4 Landscape.
  * Não há captura do DOM, canvas, data URL ou bitmap de página.
  */
+export async function renderHtmlToPdfLandscape(
+  htmlContent: string,
+  options?: { title?: string; author?: string },
+): Promise<jsPDF> {
+  const doc = new jsPDF({
+    orientation: 'landscape',
+    unit: 'mm',
+    format: 'a4',
+    compress: true,
+  })
+
+  doc.setProperties({
+    title: options?.title || 'Escala de Plantões — Calendário Semanal',
+    subject: 'Escala Calendário',
+    author: options?.author || 'Gestão de Escalas BP — IA',
+  })
+
+  return doc
+}
+
 export async function exportAutoGenerateCalendarPdf(
   params: ExportAutoGenerateCalendarPdfParams,
 ): Promise<string> {
