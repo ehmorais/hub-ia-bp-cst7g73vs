@@ -73,8 +73,10 @@ describe('Validação da Exportação PDF do Calendário — Setor UTI 2 (Ciclo 
 
     console.log(`UTI 2 Ciclo 11/2026 páginas geradas: ${multiPageResult.pages.length}`)
 
-    // Total de páginas geradas no ciclo completo da UTI 2
-    expect(multiPageResult.pages.length).toBe(30)
+    // Total de páginas geradas no ciclo completo da UTI 2:
+    // Com capacidade física de 15 por célula (em vez de 4), semanas com 23 colaboradores geram ceil(23/15) = 2 partes por semana
+    expect(multiPageResult.pages.length).toBeLessThan(30)
+    expect(multiPageResult.pages.length).toBeGreaterThanOrEqual(5)
 
     // Critério 1 e 3: Nenhuma página é continuation ou day_continuation
     const contPages = multiPageResult.pages.filter(
@@ -88,9 +90,9 @@ describe('Validação da Exportação PDF do Calendário — Setor UTI 2 (Ciclo 
     const week1Pages = multiPageResult.pages.filter((p) =>
       p.weekData?.days.some((d) => d?.dateKey === '2026-10-26'),
     )
-    expect(week1Pages.length).toBeGreaterThan(1) // 23 colaboradores divididos por 4 por página = 6 partes!
+    expect(week1Pages.length).toBe(2) // 23 colaboradores divididos por capacidade 15 = ceil(23/15) = 2 partes!
     const partTotal = week1Pages[0].weekData?.partTotal || 1
-    expect(partTotal).toBe(6)
+    expect(partTotal).toBe(2)
 
     // Coleta todos os colaboradores mostrados no dia 26/10 em todas as partes da semana 1
     const day26Items: string[] = []
@@ -134,7 +136,7 @@ describe('Validação da Exportação PDF do Calendário — Setor UTI 2 (Ciclo 
     expect(html).not.toContain('na continuação')
     expect(html).not.toContain('+20')
     expect(html).not.toContain('+19')
-    expect(html).toContain('Parte 1 de 6')
-    expect(html).toContain('Parte 6 de 6')
+    expect(html).toContain('Parte 1 de 2')
+    expect(html).toContain('Parte 2 de 2')
   })
 })

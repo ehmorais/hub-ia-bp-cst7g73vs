@@ -87,7 +87,7 @@ describe('Validação Avançada de Medição, Wrap e Paginação contra Sobrepos
     expect(CALENDAR_PDF_COMMON_STYLES).not.toMatch(/\.staff-entry\s*\{[^}]*height:\s*\d+px/)
   })
 
-  it('paginação por conteúdo: limita a 4 itens na grade semanal e move excesso para página de continuação dedicada', () => {
+  it('paginação por conteúdo: capacidade física 15 na grade semanal (sem páginas de continuação)', () => {
     const days: Array<{ date: Date; key: string; dayOfWeek: number }> = [
       { date: new Date(2026, 9, 8), key: '2026-10-08', dayOfWeek: 4 }, // Quinta 08/10
     ]
@@ -141,27 +141,20 @@ describe('Validação Avançada de Medição, Wrap e Paginação contra Sobrepos
       weekendOffMap: new Map(),
     })
 
-    // Um dia com 5 colaboradores gera duas páginas do mesmo tipo week (Parte 1 e Parte 2)
-    expect(pages.length).toBe(2)
+    // Um dia com 5 colaboradores cabe na capacidade física de 15 da célula: gera 1 página semana
+    expect(pages.length).toBe(1)
     expect(pages[0].pageType).toBe('week')
     expect(pages[0].weekData?.partIndex).toBe(1)
-    expect(pages[0].weekData?.partTotal).toBe(2)
-    expect(pages[1].pageType).toBe('week')
-    expect(pages[1].weekData?.partIndex).toBe(2)
-    expect(pages[1].weekData?.partTotal).toBe(2)
+    expect(pages[0].weekData?.partTotal).toBe(1)
 
-    // Os 5 colaboradores divididos: 4 na Parte 1 e 1 na Parte 2
+    // Os 5 colaboradores aparecem juntos na célula do dia
     const cellP1 = pages[0].weekData?.days.find((d) => d?.dateKey === '2026-10-08')
-    const cellP2 = pages[1].weekData?.days.find((d) => d?.dateKey === '2026-10-08')
-    expect(cellP1?.shifts.length).toBe(4)
-    expect(cellP2?.shifts.length).toBe(1)
+    expect(cellP1?.shifts.length).toBe(5)
 
     // Os 5 nomes aparecem exatamente uma vez na data correta
     const p1Names = cellP1?.shifts.map((s) => s.name) || []
-    const p2Names = cellP2?.shifts.map((s) => s.name) || []
-    const allRenderedNames = [...p1Names, ...p2Names]
-    expect(allRenderedNames.length).toBe(5)
-    expect(new Set(allRenderedNames).size).toBe(5)
+    expect(p1Names.length).toBe(5)
+    expect(new Set(p1Names).size).toBe(5)
   })
 
   it('diferencia turno diurno, noturno, folga FDS e férias com tags discretas sem negrito generalizado', () => {

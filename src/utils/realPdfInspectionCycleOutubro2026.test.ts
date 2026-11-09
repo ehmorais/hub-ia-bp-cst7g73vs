@@ -126,7 +126,9 @@ describe('Inspeção Visual Real do PDF — Ciclo Outubro 2026 / PS RESPIRATÓRI
       selectedSectorId: 'qrrh9pfkq090hlo',
     })
 
-    expect(pages.length).toBe(7)
+    // Com a capacidade física de 15 da célula, o dia 08/10 (5 colaboradores) cabe em 1 página por semana.
+    // Total de páginas = 6 semanas = 6 páginas.
+    expect(pages.length).toBe(6)
 
     const fullHtml = buildCalendarHtml({
       title: 'Escala de Plantões — Calendário',
@@ -143,62 +145,57 @@ describe('Inspeção Visual Real do PDF — Ciclo Outubro 2026 / PS RESPIRATÓRI
     })
 
     const pageBlocks = fullHtml.split('<div class="page-container"').slice(1)
-    expect(pageBlocks.length).toBe(7)
+    expect(pageBlocks.length).toBe(6)
 
     // EVIDÊNCIA DE INSPEÇÃO PÁGINA A PÁGINA (100% dos blocos):
     // Página 1: Semana 1 de 6 (26/09 a 26/09)
     expect(pageBlocks[0]).toContain('Semana 1 de 6')
-    expect(pageBlocks[0]).toContain('Página 1 de 7')
+    expect(pageBlocks[0]).toContain('Página 1 de 6')
     expect(pageBlocks[0]).toContain('PS RESPIRATÓRIO')
     expect(pageBlocks[0]).toContain('26/09')
 
     // Página 2: Semana 2 de 6 (27/09 a 03/10)
     expect(pageBlocks[1]).toContain('Semana 2 de 6')
-    expect(pageBlocks[1]).toContain('Página 2 de 7')
+    expect(pageBlocks[1]).toContain('Página 2 de 6')
 
-    // Página 3: Semana 3 de 6 - Parte 1 de 2 (04/10 a 10/10) - inclui primeiros 4 de 08/10
-    expect(pageBlocks[2]).toContain('Semana 3 de 6 (Parte 1 de 2)')
-    expect(pageBlocks[2]).toContain('Página 3 de 7')
+    // Página 3: Semana 3 de 6 (04/10 a 10/10) - inclui todos os 5 colaboradores de 08/10 na mesma página
+    expect(pageBlocks[2]).toContain('Semana 3 de 6')
+    expect(pageBlocks[2]).toContain('Página 3 de 6')
     expect(pageBlocks[2]).toContain('08/10')
     expect(pageBlocks[2]).toContain('Laodiceia da Silva Goes Dias')
     expect(pageBlocks[2]).toContain('Marcia Ferreira Sales Silva')
     expect(pageBlocks[2]).toContain('Matheus Rodrigues Avelar')
     expect(pageBlocks[2]).toContain('Catia Aperecida da Silva Pirelli')
-
-    // Página 4: Semana 3 de 6 - Parte 2 de 2 (04/10 a 10/10) - inclui 5º colaborador de 08/10
-    expect(pageBlocks[3]).toContain('Semana 3 de 6 (Parte 2 de 2)')
-    expect(pageBlocks[3]).toContain('Página 4 de 7')
-    expect(pageBlocks[3]).toContain('08/10')
-    expect(pageBlocks[3]).toContain('Cristiane Santos Lopes de Oliveira')
-    expect(pageBlocks[3]).toContain('COREN 1928664')
+    expect(pageBlocks[2]).toContain('Cristiane Santos Lopes de Oliveira')
+    expect(pageBlocks[2]).toContain('COREN 1928664')
 
     // Sem páginas de continuação
     expect(fullHtml).not.toContain('continuation-wrapper')
     expect(fullHtml).not.toContain('continuation-columns')
 
-    // Página 5: Semana 4 de 6 (11/10 a 17/10) - inclui dia 17/10
-    expect(pageBlocks[4]).toContain('Semana 4 de 6')
-    expect(pageBlocks[4]).toContain('Página 5 de 7')
-    expect(pageBlocks[4]).toContain('17/10')
-    expect(pageBlocks[4]).toContain('Laodiceia da Silva Goes Dias')
+    // Página 4: Semana 4 de 6 (11/10 a 17/10) - inclui dia 17/10
+    expect(pageBlocks[3]).toContain('Semana 4 de 6')
+    expect(pageBlocks[3]).toContain('Página 4 de 6')
+    expect(pageBlocks[3]).toContain('17/10')
+    expect(pageBlocks[3]).toContain('Laodiceia da Silva Goes Dias')
+    expect(pageBlocks[3]).toContain('tag-d')
+    expect(pageBlocks[3]).toContain('tag-fds')
+    expect(pageBlocks[3]).toContain('Folga Fim de Semana')
+
+    // Página 5: Semana 5 de 6 (18/10 a 24/10) - inclui dias 18/10 e 19/10
+    expect(pageBlocks[4]).toContain('Semana 5 de 6')
+    expect(pageBlocks[4]).toContain('Página 5 de 6')
+    expect(pageBlocks[4]).toContain('18/10')
+    expect(pageBlocks[4]).toContain('19/10')
+    expect(pageBlocks[4]).toContain('Cristiane Santos Lopes de Oliveira')
+    expect(pageBlocks[4]).toContain('tag-n')
+    expect(pageBlocks[4]).toContain('Marcia Ferreira Sales Silva')
     expect(pageBlocks[4]).toContain('tag-d')
-    expect(pageBlocks[4]).toContain('tag-fds')
-    expect(pageBlocks[4]).toContain('Folga Fim de Semana')
 
-    // Página 6: Semana 5 de 6 (18/10 a 24/10) - inclui dias 18/10 e 19/10
-    expect(pageBlocks[5]).toContain('Semana 5 de 6')
-    expect(pageBlocks[5]).toContain('Página 6 de 7')
-    expect(pageBlocks[5]).toContain('18/10')
-    expect(pageBlocks[5]).toContain('19/10')
-    expect(pageBlocks[5]).toContain('Cristiane Santos Lopes de Oliveira')
-    expect(pageBlocks[5]).toContain('tag-n')
-    expect(pageBlocks[5]).toContain('Marcia Ferreira Sales Silva')
-    expect(pageBlocks[5]).toContain('tag-d')
-
-    // Página 7: Semana 6 de 6 (25/10 a 25/10)
-    expect(pageBlocks[6]).toContain('Semana 6 de 6')
-    expect(pageBlocks[6]).toContain('Página 7 de 7')
-    expect(pageBlocks[6]).toContain('25/10')
+    // Página 6: Semana 6 de 6 (25/10 a 25/10)
+    expect(pageBlocks[5]).toContain('Semana 6 de 6')
+    expect(pageBlocks[5]).toContain('Página 6 de 6')
+    expect(pageBlocks[5]).toContain('25/10')
 
     // Salva arquivo com HTML real final renderizado
     const outPath = path.resolve(process.cwd(), 'ps-respiratorio-outubro-2026-inspecao.html')

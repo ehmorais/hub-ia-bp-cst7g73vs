@@ -13,6 +13,8 @@ import {
   CALENDAR_CARD_COMPACT_THRESHOLD,
   CALENDAR_CARD_MIN_HEIGHT_MM,
   CALENDAR_CARD_GAP_MM,
+  CALENDAR_CARDS_TOP_OFFSET_MM,
+  CALENDAR_CARDS_BOTTOM_PADDING_MM,
 } from '@/templates/calendarPdfTemplate'
 import { buildClassifiedDayItems } from '@/lib/escala-calendar-order'
 
@@ -84,6 +86,8 @@ export {
   CALENDAR_CARD_COMPACT_THRESHOLD,
   CALENDAR_CARD_MIN_HEIGHT_MM,
   CALENDAR_CARD_GAP_MM,
+  CALENDAR_CARDS_TOP_OFFSET_MM,
+  CALENDAR_CARDS_BOTTOM_PADDING_MM,
 } from '@/templates/calendarPdfTemplate'
 
 // Re-exporta BPSCS_LOGO_BASE64 para compatibilidade retroativa

@@ -119,8 +119,8 @@ describe('Inspeção e Verificação Estrutural do HTML do PDF Renderizado — C
       selectedSectorId: 'qrrh9pfkq090hlo',
     })
 
-    // 6 semanas + 1 continuação do dia 08/10 = 7 páginas
-    expect(pages.length).toBe(7)
+    // 6 semanas, dia 08/10 tem 5 plantonistas que cabem na capacidade de 15 = 6 páginas
+    expect(pages.length).toBe(6)
 
     const html = buildCalendarHtml({
       title: 'Escala de Plantões — Calendário Semanal',
@@ -145,17 +145,16 @@ describe('Inspeção e Verificação Estrutural do HTML do PDF Renderizado — C
     expect(html).toContain('Cristiane Santos Lopes de Oliveira')
 
     // Verificação de rodapé com paginação
-    expect(html).toContain('Página 1 de 7')
-    expect(html).toContain('Página 7 de 7')
+    expect(html).toContain('Página 1 de 6')
+    expect(html).toContain('Página 6 de 6')
 
     // Verificação das 7 colunas iguais
     expect(html).toContain('width: 14.285714%')
     expect(html).toContain('size: 297mm 210mm landscape')
 
-    // Verificação das semanas e continuação
+    // Verificação das semanas
     expect(html).toContain('Semana 1 de 6')
     expect(html).toContain('Semana 2 de 6')
-    expect(html).toContain('Continuação &mdash; Quinta-feira, 08/10')
 
     // Verificação dos tags sem negrito
     expect(html).toContain('tag-d')
@@ -276,28 +275,22 @@ describe('Inspeção e Verificação Estrutural do HTML do PDF Renderizado — C
       selectedSectorId: 'sec-ps-resp',
     })
 
-    // Validação 1: Total de páginas = 7 (todas do tipo 'week', semana com 08/10 tem Parte 1 e Parte 2)
-    expect(multiPageResult.pages.length).toBe(7)
+    // Validação 1: Total de páginas = 6 (todas do tipo 'week', semana com 08/10 tem 5 plantonistas que cabem na capacidade 15)
+    expect(multiPageResult.pages.length).toBe(6)
     expect(multiPageResult.pages.every((p) => p.pageType === 'week')).toBe(true)
 
-    // Validação 2: A semana do dia 08/10 é desdobrada em Parte 1 e Parte 2, cada dia com até 4 cards
+    // Validação 2: A semana do dia 08/10 cabe em 1 página única (partTotal 1)
     const weekPagesWith08Oct = multiPageResult.pages.filter((p) =>
       p.weekData?.days.some((d) => d?.dateKey === '2026-10-08'),
     )
-    expect(weekPagesWith08Oct.length).toBe(2)
+    expect(weekPagesWith08Oct.length).toBe(1)
     expect(weekPagesWith08Oct[0].weekData?.partIndex).toBe(1)
-    expect(weekPagesWith08Oct[0].weekData?.partTotal).toBe(2)
-    expect(weekPagesWith08Oct[1].weekData?.partIndex).toBe(2)
-    expect(weekPagesWith08Oct[1].weekData?.partTotal).toBe(2)
+    expect(weekPagesWith08Oct[0].weekData?.partTotal).toBe(1)
 
     const cell08OctP1 = weekPagesWith08Oct[0].weekData?.days.find(
       (d) => d?.dateKey === '2026-10-08',
     )
-    const cell08OctP2 = weekPagesWith08Oct[1].weekData?.days.find(
-      (d) => d?.dateKey === '2026-10-08',
-    )
-    expect(cell08OctP1?.shifts.length).toBe(4)
-    expect(cell08OctP2?.shifts.length).toBe(1)
+    expect(cell08OctP1?.shifts.length).toBe(5)
 
     // Nenhuma página é do tipo continuation ou day_continuation
     const contPages = multiPageResult.pages.filter(
@@ -324,12 +317,12 @@ describe('Inspeção e Verificação Estrutural do HTML do PDF Renderizado — C
     expect(html).not.toContain('transform: scale')
     expect(html).not.toContain('zoom:')
 
-    // 4.2. Rodapé correto em todas as 7 páginas: "Gerado em:" e "Página X de 7"
-    for (let p = 1; p <= 7; p++) {
-      expect(html).toContain(`Página ${p} de 7`)
+    // 4.2. Rodapé correto em todas as 6 páginas: "Gerado em:" e "Página X de 6"
+    for (let p = 1; p <= 6; p++) {
+      expect(html).toContain(`Página ${p} de 6`)
     }
     const generatedAtCount = (html.match(/Gerado em:/g) || []).length
-    expect(generatedAtCount).toBe(7)
+    expect(generatedAtCount).toBe(6)
 
     // 4.3. Presença legível e integral de todos os nomes exigidos
     expect(html).toContain('Laodiceia da Silva Goes Dias')
@@ -354,8 +347,6 @@ describe('Inspeção e Verificação Estrutural do HTML do PDF Renderizado — C
     expect(html).toContain('Semana 4 de 6')
     expect(html).toContain('Semana 5 de 6')
     expect(html).toContain('Semana 6 de 6')
-    expect(html).toContain('Parte 1 de 2')
-    expect(html).toContain('Parte 2 de 2')
 
     // 4.7. Inspeção e Renderização Real de TODAS as páginas do PDF via exportAutoGenerateCalendarPdf / renderHtmlToPdfLandscape
     const pdfDoc = await renderHtmlToPdfLandscape(html, {
@@ -370,7 +361,7 @@ describe('Inspeção e Verificação Estrutural do HTML do PDF Renderizado — C
 
     // Conferência visual e tipográfica por regex em cada página gerada do HTML (escala 100%)
     const pageHtmlBlocks = html.split('<div class="page-container"').slice(1)
-    expect(pageHtmlBlocks.length).toBe(7)
+    expect(pageHtmlBlocks.length).toBe(6)
 
     pageHtmlBlocks.forEach((pageContent, idx) => {
       const pageNum = idx + 1
@@ -379,7 +370,7 @@ describe('Inspeção e Verificação Estrutural do HTML do PDF Renderizado — C
       expect(pageContent).toContain('alt="Logo Institucional BPSCS"')
       // Rodapé com "Gerado em:" e paginação exata
       expect(pageContent).toContain('Gerado em:')
-      expect(pageContent).toContain(`Página ${pageNum} de 7`)
+      expect(pageContent).toContain(`Página ${pageNum} de 6`)
 
       // Nenhuma página deve conter scale/transform CSS ou fontes compactadas
       expect(pageContent).not.toContain('transform: scale')
@@ -407,8 +398,8 @@ describe('Inspeção e Verificação Estrutural do HTML do PDF Renderizado — C
 
     // 4.9. Inspeção visual minuciosa dos dias 17/10, 18/10 e 19/10
     // No ciclo 26/09/2026 a 25/10/2026:
-    // 17/10 (sábado) está na Semana 4 (dias 11/10 a 17/10, Página 4 de 7)
-    // 18/10 (domingo) e 19/10 (segunda) estão na Semana 5 (dias 18/10 a 24/10, Página 5 de 7)
+    // 17/10 (sábado) está na Semana 4 (dias 11/10 a 17/10, Página 4 de 6)
+    // 18/10 (domingo) e 19/10 (segunda) estão na Semana 5 (dias 18/10 a 24/10, Página 5 de 6)
     const week4Html = pageHtmlBlocks[3] // Página 4 = Semana 4
     const week5Html = pageHtmlBlocks[4] // Página 5 = Semana 5
 

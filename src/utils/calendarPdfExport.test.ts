@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import {
   CALENDAR_PDF_COMMON_STYLES,
   CALENDAR_PDF_HTML_TEMPLATE,
+  CALENDAR_CELL_CAPACITY,
   renderCalendarPdfTemplate,
   renderMultiPageCalendarHtml,
   renderWeeklyCellHtml,
@@ -370,11 +371,12 @@ describe('Pipeline de Calendário Semanal Paginado em PDF (BPSCS)', () => {
       })
 
       // 6 semanas no total no ciclo (26/09 a 25/10 abrange 6 semanas).
-      // A semana com 08/10 tem 5 plantonistas no mesmo dia -> gera 2 páginas do tipo week (Parte 1 e Parte 2).
-      // Total de páginas = 7 páginas, TODAS do tipo 'week', sem nenhuma 'continuation' ou 'day_continuation'.
+      // A semana com 08/10 tem 5 plantonistas no mesmo dia -> cabem na capacidade de 15 da célula.
+      // Total de páginas = 6 páginas (1 por semana), TODAS do tipo 'week', sem nenhuma 'continuation' ou 'day_continuation'.
       expect(templateData.weeks.length).toBe(6)
-      expect(maxChipsPerCell).toBe(4)
-      expect(pages.length).toBe(7)
+      expect(maxChipsPerCell).toBe(CALENDAR_CELL_CAPACITY)
+      expect(CALENDAR_CELL_CAPACITY).toBe(15)
+      expect(pages.length).toBe(6)
       expect(pages.every((p) => p.pageType === 'week')).toBe(true)
 
       // Verifica tipos de páginas
@@ -388,21 +390,16 @@ describe('Pipeline de Calendário Semanal Paginado em PDF (BPSCS)', () => {
       )
       expect(contPage).toBeUndefined()
 
-      // Semana com 08/10 dividida em Parte 1 e Parte 2
+      // Semana com 08/10 (5 colaboradores <= 15) cabe integralmente em 1 página (partTotal 1)
       const weekWith08OctPages = pages.filter((p) =>
         p.weekData?.days.some((d) => d?.dayFormatted === '08/10'),
       )
-      expect(weekWith08OctPages.length).toBe(2)
-      expect(weekWith08OctPages[0].weekData?.partIndex).toBe(1)
-      expect(weekWith08OctPages[0].weekData?.partTotal).toBe(2)
-      expect(weekWith08OctPages[1].weekData?.partIndex).toBe(2)
-      expect(weekWith08OctPages[1].weekData?.partTotal).toBe(2)
+      expect(weekWith08OctPages.length).toBe(1)
+      expect(weekWith08OctPages[0].weekData?.partTotal ?? 1).toBe(1)
 
-      // Parte 1 tem 4 colaboradores em 08/10 e Parte 2 tem 1 colaborador em 08/10
-      const dayPart1 = weekWith08OctPages[0].weekData?.days.find((d) => d?.dayFormatted === '08/10')
-      const dayPart2 = weekWith08OctPages[1].weekData?.days.find((d) => d?.dayFormatted === '08/10')
-      expect(dayPart1?.shifts.length).toBe(4)
-      expect(dayPart2?.shifts.length).toBe(1)
+      // Todos os 5 colaboradores constam na célula do dia 08/10
+      const dayCell = weekWith08OctPages[0].weekData?.days.find((d) => d?.dayFormatted === '08/10')
+      expect(dayCell?.shifts.length).toBe(5)
 
       const fullHtml = buildCalendarHtml({
         title: 'Escala de Plantões — Calendário Semanal',
@@ -431,10 +428,8 @@ describe('Pipeline de Calendário Semanal Paginado em PDF (BPSCS)', () => {
       expect(fullHtml).toContain('COREN 538627')
       expect(fullHtml).toContain('COREN 1928664')
 
-      // Título claro de semanas com partes
+      // Semanas 1 a 6
       expect(fullHtml).toContain('Semana 1 de 6')
-      expect(fullHtml).toContain('Parte 1 de 2')
-      expect(fullHtml).toContain('Parte 2 de 2')
       expect(fullHtml).toContain('Semana 6 de 6')
 
       // Sem tabelas de continuação
@@ -442,12 +437,12 @@ describe('Pipeline de Calendário Semanal Paginado em PDF (BPSCS)', () => {
       expect(fullHtml).not.toContain('continuation-columns')
       expect(fullHtml).not.toContain('+1 profissional(is) na continuação')
 
-      // Rodapé com numeração total
-      expect(fullHtml).toContain('Página 1 de 7')
-      expect(fullHtml).toContain('Página 7 de 7')
+      // Rodapé com numeração total: 6 páginas no total
+      expect(fullHtml).toContain('Página 1 de 6')
+      expect(fullHtml).toContain('Página 6 de 6')
     })
 
-    it('regressão de alta densidade semelhante à UTI 2 (dias com 20+ colaboradores): todas as páginas são week e sem continuação', () => {
+    it('regressão de alta densidade semelhante à UTI 2 (dias com 24 colaboradores): com capacidade física 15, divide em 2 partes (15 + 9)', () => {
       // Cria cenário com 24 colaboradores escalados no mesmo dia (ex: 26/10)
       const testDays = [
         {
@@ -483,8 +478,8 @@ describe('Pipeline de Calendário Semanal Paginado em PDF (BPSCS)', () => {
         weekendOffMap: new Map(),
       })
 
-      // 24 colaboradores / 4 por página = 6 páginas para esta semana
-      expect(pages.length).toBe(6)
+      // 24 colaboradores / 15 por página = ceil(24/15) = 2 páginas para esta semana
+      expect(pages.length).toBe(2)
       expect(pages.every((p) => p.pageType === 'week')).toBe(true)
 
       // Nenhuma página continuation/day_continuation
@@ -493,20 +488,22 @@ describe('Pipeline de Calendário Semanal Paginado em PDF (BPSCS)', () => {
       )
       expect(contPage).toBeUndefined()
 
-      // Cada página tem partTotal = 6 e partIndex 1..6
-      pages.forEach((p, idx) => {
-        expect(p.weekData?.partTotal).toBe(6)
-        expect(p.weekData?.partIndex).toBe(idx + 1)
-        const dayCell = p.weekData?.days.find((d) => d?.dateKey === '2026-10-26')
-        expect(dayCell).toBeDefined()
-        expect(dayCell?.shifts.length).toBe(4)
-      })
+      // Cada página tem partTotal = 2 e partIndex 1..2
+      expect(pages[0].weekData?.partTotal).toBe(2)
+      expect(pages[0].weekData?.partIndex).toBe(1)
+      expect(pages[1].weekData?.partTotal).toBe(2)
+      expect(pages[1].weekData?.partIndex).toBe(2)
+
+      const dayCellP1 = pages[0].weekData?.days.find((d) => d?.dateKey === '2026-10-26')
+      const dayCellP2 = pages[1].weekData?.days.find((d) => d?.dateKey === '2026-10-26')
+      expect(dayCellP1?.shifts.length).toBe(15)
+      expect(dayCellP2?.shifts.length).toBe(9)
 
       // Todos os 24 nomes aparecem exatamente UMA vez na data correta (26/10)
       const namesCollected: string[] = []
       pages.forEach((p) => {
-        const dayCell = p.weekData?.days.find((d) => d?.dateKey === '2026-10-26')
-        dayCell?.shifts.forEach((s) => namesCollected.push(s.name))
+        const dCell = p.weekData?.days.find((d) => d?.dateKey === '2026-10-26')
+        dCell?.shifts.forEach((s) => namesCollected.push(s.name))
       })
       expect(namesCollected.length).toBe(24)
       expect(new Set(namesCollected).size).toBe(24)
@@ -527,12 +524,388 @@ describe('Pipeline de Calendário Semanal Paginado em PDF (BPSCS)', () => {
         weekendOffMap: new Map(),
       })
 
-      // Cabeçalhos com Parte 1 de 6 .. Parte 6 de 6
-      expect(html).toContain('Parte 1 de 6')
-      expect(html).toContain('Parte 6 de 6')
+      // Cabeçalhos com Parte 1 de 2 e Parte 2 de 2
+      expect(html).toContain('Parte 1 de 2')
+      expect(html).toContain('Parte 2 de 2')
       expect(html).not.toContain('+20')
       expect(html).not.toContain('continuation-wrapper')
       expect(html).not.toContain('na continuação')
+    })
+
+    describe('Centro Cirúrgico e Capacidade Física de 15 Cartões — Regras Estritas', () => {
+      it('(a) 15 itens cobrindo os seis grupos cabem em 1 única página week', () => {
+        const testDays = [
+          {
+            date: new Date(2026, 9, 10), // 10/10/2026 Sábado
+            key: '2026-10-10',
+            dayOfWeek: 6,
+          },
+        ]
+
+        // 15 colaboradores cobrindo os 6 grupos:
+        // a) 3 plantonistas diurnos
+        // b) 2 folgas diurnas
+        // c) 2 férias diurnas
+        // d) 3 plantonistas noturnos
+        // e) 2 folgas noturnas
+        // f) 3 férias noturnas
+        // Total = 3 + 2 + 2 + 3 + 2 + 3 = 15
+        const staffProfiles = [
+          // Grupo a (D escalados): D1, D2, D3
+          { id: 'sp-d1', name: 'Alana Diurno', professional_id: 'COREN 101' },
+          { id: 'sp-d2', name: 'Bruna Diurno', professional_id: 'COREN 102' },
+          { id: 'sp-d3', name: 'Carlos Diurno', professional_id: 'COREN 103' },
+          // Grupo b (D folga): D4, D5
+          { id: 'sp-d4', name: 'Daniela Folga D', professional_id: 'COREN 104' },
+          { id: 'sp-d5', name: 'Eduardo Folga D', professional_id: 'COREN 105' },
+          // Grupo c (D férias): D6, D7
+          {
+            id: 'sp-d6',
+            name: 'Fabiana Férias D',
+            professional_id: 'COREN 106',
+            vacation_enabled: true,
+            vacation_start: '2026-10-01',
+            vacation_end: '2026-10-20',
+          },
+          {
+            id: 'sp-d7',
+            name: 'Gabriel Férias D',
+            professional_id: 'COREN 107',
+            vacation_enabled: true,
+            vacation_start: '2026-10-01',
+            vacation_end: '2026-10-20',
+          },
+          // Grupo d (N escalados): N1, N2, N3
+          { id: 'sp-n1', name: 'Helena Noturno', professional_id: 'COREN 201' },
+          { id: 'sp-n2', name: 'Igor Noturno', professional_id: 'COREN 202' },
+          { id: 'sp-n3', name: 'Juliana Noturno', professional_id: 'COREN 203' },
+          // Grupo e (N folga): N4, N5
+          { id: 'sp-n4', name: 'Kleber Folga N', professional_id: 'COREN 204' },
+          { id: 'sp-n5', name: 'Larissa Folga N', professional_id: 'COREN 205' },
+          // Grupo f (N férias): N6, N7, N8
+          {
+            id: 'sp-n6',
+            name: 'Marcos Férias N',
+            professional_id: 'COREN 206',
+            vacation_enabled: true,
+            vacation_start: '2026-10-01',
+            vacation_end: '2026-10-20',
+          },
+          {
+            id: 'sp-n7',
+            name: 'Natália Férias N',
+            professional_id: 'COREN 207',
+            vacation_enabled: true,
+            vacation_start: '2026-10-01',
+            vacation_end: '2026-10-20',
+          },
+          {
+            id: 'sp-n8',
+            name: 'Otávio Férias N',
+            professional_id: 'COREN 208',
+            vacation_enabled: true,
+            vacation_start: '2026-10-01',
+            vacation_end: '2026-10-20',
+          },
+        ]
+
+        const contracts = [
+          // D contracts
+          {
+            staff_profile: 'sp-d1',
+            shift_type_detail: { name: '12X36D', start_time: '07:00', end_time: '19:00' },
+          },
+          {
+            staff_profile: 'sp-d2',
+            shift_type_detail: { name: '12X36D', start_time: '07:00', end_time: '19:00' },
+          },
+          {
+            staff_profile: 'sp-d3',
+            shift_type_detail: { name: '12X36D', start_time: '07:00', end_time: '19:00' },
+          },
+          {
+            staff_profile: 'sp-d4',
+            shift_type_detail: { name: '12X36D', start_time: '07:00', end_time: '19:00' },
+          },
+          {
+            staff_profile: 'sp-d5',
+            shift_type_detail: { name: '12X36D', start_time: '07:00', end_time: '19:00' },
+          },
+          {
+            staff_profile: 'sp-d6',
+            shift_type_detail: { name: '12X36D', start_time: '07:00', end_time: '19:00' },
+          },
+          {
+            staff_profile: 'sp-d7',
+            shift_type_detail: { name: '12X36D', start_time: '07:00', end_time: '19:00' },
+          },
+          // N contracts
+          {
+            staff_profile: 'sp-n1',
+            shift_type_detail: { name: '12X36N', start_time: '19:00', end_time: '07:00' },
+          },
+          {
+            staff_profile: 'sp-n2',
+            shift_type_detail: { name: '12X36N', start_time: '19:00', end_time: '07:00' },
+          },
+          {
+            staff_profile: 'sp-n3',
+            shift_type_detail: { name: '12X36N', start_time: '19:00', end_time: '07:00' },
+          },
+          {
+            staff_profile: 'sp-n4',
+            shift_type_detail: { name: '12X36N', start_time: '19:00', end_time: '07:00' },
+          },
+          {
+            staff_profile: 'sp-n5',
+            shift_type_detail: { name: '12X36N', start_time: '19:00', end_time: '07:00' },
+          },
+          {
+            staff_profile: 'sp-n6',
+            shift_type_detail: { name: '12X36N', start_time: '19:00', end_time: '07:00' },
+          },
+          {
+            staff_profile: 'sp-n7',
+            shift_type_detail: { name: '12X36N', start_time: '19:00', end_time: '07:00' },
+          },
+          {
+            staff_profile: 'sp-n8',
+            shift_type_detail: { name: '12X36N', start_time: '19:00', end_time: '07:00' },
+          },
+        ]
+
+        // Shifts for D1, D2, D3 and N1, N2, N3
+        const shifts = [
+          {
+            id: 'sh-1',
+            staff_profile: 'sp-d1',
+            start_time: '2026-10-10 07:00:00',
+            end_time: '2026-10-10 19:00:00',
+          },
+          {
+            id: 'sh-2',
+            staff_profile: 'sp-d2',
+            start_time: '2026-10-10 07:00:00',
+            end_time: '2026-10-10 19:00:00',
+          },
+          {
+            id: 'sh-3',
+            staff_profile: 'sp-d3',
+            start_time: '2026-10-10 07:00:00',
+            end_time: '2026-10-10 19:00:00',
+          },
+          {
+            id: 'sh-4',
+            staff_profile: 'sp-n1',
+            start_time: '2026-10-10 19:00:00',
+            end_time: '2026-10-11 07:00:00',
+          },
+          {
+            id: 'sh-5',
+            staff_profile: 'sp-n2',
+            start_time: '2026-10-10 19:00:00',
+            end_time: '2026-10-11 07:00:00',
+          },
+          {
+            id: 'sh-6',
+            staff_profile: 'sp-n3',
+            start_time: '2026-10-10 19:00:00',
+            end_time: '2026-10-11 07:00:00',
+          },
+        ]
+
+        // Weekend off for D4, D5 and N4, N5
+        const weekendOffMap = new Map<string, Set<string>>()
+        weekendOffMap.set('sp-d4', new Set(['2026-10-10']))
+        weekendOffMap.set('sp-d5', new Set(['2026-10-10']))
+        weekendOffMap.set('sp-n4', new Set(['2026-10-10']))
+        weekendOffMap.set('sp-n5', new Set(['2026-10-10']))
+
+        const { pages } = prepareCalendarMultiPageData({
+          title: 'Escala Centro Cirúrgico',
+          sectorName: 'CC - Centro Cirúrgico',
+          cycleName: 'Outubro 2026',
+          cycleStart: '2026-10-10',
+          cycleEnd: '2026-10-10',
+          days: testDays,
+          shifts,
+          contracts,
+          staffProfiles,
+          weekendOffMap,
+        })
+
+        // EXATAMENTE 1 PÁGINA (15 itens cabem inteiros)
+        expect(pages.length).toBe(1)
+        expect(pages[0].pageType).toBe('week')
+        expect(pages[0].weekData?.partTotal).toBe(1)
+        expect(pages[0].weekData?.partIndex).toBe(1)
+
+        const dayCell = pages[0].weekData?.days.find((d) => d?.dateKey === '2026-10-10')
+        expect(dayCell?.shifts.length).toBe(15)
+
+        // Ordem estrita dos 6 grupos verificada:
+        // a) D escalados (3)
+        expect(dayCell?.shifts[0].name).toBe('Alana Diurno')
+        expect(dayCell?.shifts[1].name).toBe('Bruna Diurno')
+        expect(dayCell?.shifts[2].name).toBe('Carlos Diurno')
+        // b) D folga (2)
+        expect(dayCell?.shifts[3].name).toBe('Daniela Folga D')
+        expect(dayCell?.shifts[4].name).toBe('Eduardo Folga D')
+        // c) D férias (2)
+        expect(dayCell?.shifts[5].name).toBe('Fabiana Férias D')
+        expect(dayCell?.shifts[6].name).toBe('Gabriel Férias D')
+        // d) N escalados (3)
+        expect(dayCell?.shifts[7].name).toBe('Helena Noturno')
+        expect(dayCell?.shifts[8].name).toBe('Igor Noturno')
+        expect(dayCell?.shifts[9].name).toBe('Juliana Noturno')
+        // e) N folga (2)
+        expect(dayCell?.shifts[10].name).toBe('Kleber Folga N')
+        expect(dayCell?.shifts[11].name).toBe('Larissa Folga N')
+        // f) N férias (3)
+        expect(dayCell?.shifts[12].name).toBe('Marcos Férias N')
+        expect(dayCell?.shifts[13].name).toBe('Natália Férias N')
+        expect(dayCell?.shifts[14].name).toBe('Otávio Férias N')
+      })
+
+      it('(b) 16 itens geram exatamente 2 páginas week com 15 + 1 (nunca 4 + 12 nem continuação)', () => {
+        const testDays = [
+          {
+            date: new Date(2026, 9, 10),
+            key: '2026-10-10',
+            dayOfWeek: 6,
+          },
+        ]
+
+        // 16 colaboradores escalados no mesmo dia
+        const staffProfiles = Array.from({ length: 16 }, (_, i) => ({
+          id: `sp-cc-${i + 1}`,
+          name: `Profissional CC ${String(i + 1).padStart(2, '0')}`,
+          professional_id: `COREN ${200000 + i}`,
+        }))
+
+        const contracts = staffProfiles.map((sp) => ({
+          staff_profile: sp.id,
+          shift_type_detail: { name: '12X36D', start_time: '07:00', end_time: '19:00' },
+        }))
+
+        const shifts = staffProfiles.map((sp) => ({
+          id: `sh-${sp.id}`,
+          staff_profile: sp.id,
+          start_time: '2026-10-10 07:00:00',
+          end_time: '2026-10-10 19:00:00',
+        }))
+
+        const { pages } = prepareCalendarMultiPageData({
+          title: 'Escala Centro Cirúrgico',
+          sectorName: 'CC - Centro Cirúrgico',
+          cycleName: 'Outubro 2026',
+          cycleStart: '2026-10-10',
+          cycleEnd: '2026-10-10',
+          days: testDays,
+          shifts,
+          contracts,
+          staffProfiles,
+          weekendOffMap: new Map(),
+        })
+
+        // Exatamente 2 páginas, ambas 'week' (NUNCA continuation)
+        expect(pages.length).toBe(2)
+        expect(pages.every((p) => p.pageType === 'week')).toBe(true)
+        expect(pages[0].weekData?.partTotal).toBe(2)
+        expect(pages[0].weekData?.partIndex).toBe(1)
+        expect(pages[1].weekData?.partTotal).toBe(2)
+        expect(pages[1].weekData?.partIndex).toBe(2)
+
+        // Divisão estrita 15 + 1 (NUNCA 4 + 12)
+        const cellP1 = pages[0].weekData?.days.find((d) => d?.dateKey === '2026-10-10')
+        const cellP2 = pages[1].weekData?.days.find((d) => d?.dateKey === '2026-10-10')
+        expect(cellP1?.shifts.length).toBe(15)
+        expect(cellP2?.shifts.length).toBe(1)
+        expect(cellP2?.shifts[0].name).toBe('Profissional CC 16')
+      })
+
+      it('(c) fila única contínua preserva ordem e não reagrupa por categoria entre páginas', () => {
+        const testDays = [
+          {
+            date: new Date(2026, 9, 10),
+            key: '2026-10-10',
+            dayOfWeek: 6,
+          },
+        ]
+
+        // 17 colaboradores: 10 D escalados, 7 N escalados
+        // Parte 1 (capacidade 15) deve receber: 10 D escalados + primeiros 5 N escalados
+        // Parte 2 deve receber: restantes 2 N escalados (continuidade da fila única)
+        const staffD = Array.from({ length: 10 }, (_, i) => ({
+          id: `sp-d-${i + 1}`,
+          name: `Diurno ${String.fromCharCode(65 + i)}`,
+          professional_id: `COREN ${1000 + i}`,
+        }))
+
+        const staffN = Array.from({ length: 7 }, (_, i) => ({
+          id: `sp-n-${i + 1}`,
+          name: `Noturno ${String.fromCharCode(65 + i)}`,
+          professional_id: `COREN ${2000 + i}`,
+        }))
+
+        const allStaff = [...staffD, ...staffN]
+
+        const contracts = [
+          ...staffD.map((sp) => ({
+            staff_profile: sp.id,
+            shift_type_detail: { name: '12X36D', start_time: '07:00', end_time: '19:00' },
+          })),
+          ...staffN.map((sp) => ({
+            staff_profile: sp.id,
+            shift_type_detail: { name: '12X36N', start_time: '19:00', end_time: '07:00' },
+          })),
+        ]
+
+        const shifts = [
+          ...staffD.map((sp) => ({
+            id: `sh-${sp.id}`,
+            staff_profile: sp.id,
+            start_time: '2026-10-10 07:00:00',
+            end_time: '2026-10-10 19:00:00',
+          })),
+          ...staffN.map((sp) => ({
+            id: `sh-${sp.id}`,
+            staff_profile: sp.id,
+            start_time: '2026-10-10 19:00:00',
+            end_time: '2026-10-11 07:00:00',
+          })),
+        ]
+
+        const { pages } = prepareCalendarMultiPageData({
+          title: 'Escala Centro Cirúrgico',
+          sectorName: 'CC - Centro Cirúrgico',
+          cycleName: 'Outubro 2026',
+          cycleStart: '2026-10-10',
+          cycleEnd: '2026-10-10',
+          days: testDays,
+          shifts,
+          contracts,
+          staffProfiles: allStaff,
+          weekendOffMap: new Map(),
+        })
+
+        expect(pages.length).toBe(2)
+        const cellP1 = pages[0].weekData?.days.find((d) => d?.dateKey === '2026-10-10')
+        const cellP2 = pages[1].weekData?.days.find((d) => d?.dateKey === '2026-10-10')
+
+        expect(cellP1?.shifts.length).toBe(15)
+        expect(cellP2?.shifts.length).toBe(2)
+
+        // P1 tem todos os 10 Diurnos + primeiros 5 Noturnos
+        expect(cellP1?.shifts.slice(0, 10).map((s) => s.periodLetter)).toEqual(Array(10).fill('D'))
+        expect(cellP1?.shifts.slice(10, 15).map((s) => s.periodLetter)).toEqual(Array(5).fill('N'))
+        expect(cellP1?.shifts[14].name).toBe('Noturno E')
+
+        // P2 tem os 2 Noturnos restantes como continuação exata da fila única
+        expect(cellP2?.shifts[0].name).toBe('Noturno F')
+        expect(cellP2?.shifts[1].name).toBe('Noturno G')
+        expect(cellP2?.shifts.map((s) => s.periodLetter)).toEqual(['N', 'N'])
+      })
     })
   })
 })
