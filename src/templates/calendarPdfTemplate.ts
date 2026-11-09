@@ -1,5 +1,25 @@
 import { BPSCS_LOGO_BASE64 } from '@/utils/bpscsLogo'
 
+// ===== Capacidade física da célula do calendário (fonte ÚNICA de verdade) =====
+// Grade A4 paisagem: corpo útil da célula com 169 mm de altura. Com o layout
+// vetorial compacto (altura mínima do cartão ~9,4 mm e gap ~0,7 mm), a
+// capacidade física validada é:
+//   floor((169 - 8,3 - 2,2 + 0,7) / (9,4 + 0,7)) = floor(159,2 / 10,1) = 15 cartões
+// por célula/página. Nenhum outro número de capacidade deve existir no código.
+export const CALENDAR_CELL_BODY_HEIGHT_MM = 169
+export const CALENDAR_CARD_MIN_HEIGHT_MM = 9.4
+export const CALENDAR_CARD_GAP_MM = 0.7
+const CALENDAR_CARDS_TOP_OFFSET_MM = 8.3
+const CALENDAR_CARDS_BOTTOM_PADDING_MM = 2.2
+const CALENDAR_CARDS_AVAILABLE_HEIGHT_MM =
+  CALENDAR_CELL_BODY_HEIGHT_MM - CALENDAR_CARDS_TOP_OFFSET_MM - CALENDAR_CARDS_BOTTOM_PADDING_MM
+export const CALENDAR_CELL_CAPACITY = Math.floor(
+  (CALENDAR_CARDS_AVAILABLE_HEIGHT_MM + CALENDAR_CARD_GAP_MM) /
+    (CALENDAR_CARD_MIN_HEIGHT_MM + CALENDAR_CARD_GAP_MM),
+)
+// Acima deste número de cartões na célula, ativa-se o modo compacto.
+export const CALENDAR_CARD_COMPACT_THRESHOLD = 10
+
 export interface CalendarDayItem {
   date: Date
   key: string // "YYYY-MM-DD"
@@ -833,7 +853,7 @@ export function renderStaffCardHtml(item: {
  */
 export function renderWeeklyCellHtml(
   cell: CalendarDayCellData | null,
-  maxCardsPerCell = 4,
+  maxCardsPerCell: number = CALENDAR_CELL_CAPACITY,
 ): string {
   if (!cell) {
     return `<td class="empty-day"><div class="empty-day-notice">&mdash;</div></td>`
@@ -871,7 +891,7 @@ export function renderWeeklyCellHtml(
  */
 export function renderWeeklyTableBody(
   days: Array<CalendarDayCellData | null>,
-  maxCardsPerCell = 4,
+  maxCardsPerCell: number = CALENDAR_CELL_CAPACITY,
 ): string {
   const cellsHtml = days.map((day) => renderWeeklyCellHtml(day, maxCardsPerCell)).join('\n')
   return `<tr>\n${cellsHtml}\n</tr>`
@@ -934,7 +954,7 @@ export function renderSinglePdfPageHtml(options: {
     `
 
     const theadThs = weekDayHeaders.map((hdr) => `<th>${escapeHtml(hdr)}</th>`).join('')
-    const tbodyRows = renderWeeklyTableBody(weekData.days, 4)
+    const tbodyRows = renderWeeklyTableBody(weekData.days, CALENDAR_CELL_CAPACITY)
 
     mainContentHtml = `
       <main class="calendar-wrapper">
@@ -1124,7 +1144,7 @@ export function renderMultiPageCalendarHtml(options: {
         continuationDay: page.continuationDay,
         continuationBatchIndex: page.continuationBatchIndex,
         continuationBatchTotal: page.continuationBatchTotal,
-        weeksHtml: page.weeks ? renderWeeklyTableBody(page.weeks[0] || [], 4) : undefined,
+        weeksHtml: page.weeks ? renderWeeklyTableBody(page.weeks[0] || []) : undefined,
         overflowDays: page.overflowDays,
       })
     })
@@ -1201,7 +1221,7 @@ export const CALENDAR_PDF_HTML_TEMPLATE = `<!DOCTYPE html>
 
 export function renderWeeksHtml(
   weeks: Array<Array<CalendarDayCellData | null>>,
-  maxCardsPerCell = 4,
+  maxCardsPerCell: number = CALENDAR_CELL_CAPACITY,
 ): string {
   return weeks
     .map((week) => {
@@ -1252,7 +1272,7 @@ export function renderCalendarPdfTemplate(data: {
     .map((header) => `<th>${escapeHtml(header)}</th>`)
     .join('\n            ')
 
-  const weeksHtml = renderWeeksHtml(data.weeks, data.maxChipsPerCell ?? 4)
+  const weeksHtml = renderWeeksHtml(data.weeks, data.maxChipsPerCell ?? CALENDAR_CELL_CAPACITY)
 
   let html = CALENDAR_PDF_HTML_TEMPLATE
   html = html.replace(/{{TITLE}}/g, escapeHtml(title))

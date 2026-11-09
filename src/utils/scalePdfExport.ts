@@ -9,6 +9,10 @@ import {
   type ShiftItemData,
   type DayOverflowItem,
   type CalendarPageData,
+  CALENDAR_CELL_CAPACITY,
+  CALENDAR_CARD_COMPACT_THRESHOLD,
+  CALENDAR_CARD_MIN_HEIGHT_MM,
+  CALENDAR_CARD_GAP_MM,
 } from '@/templates/calendarPdfTemplate'
 import { buildClassifiedDayItems } from '@/lib/escala-calendar-order'
 
@@ -70,6 +74,17 @@ const PDF_CONTENT_WIDTH_RATIO = 0.85
 const PDF_CONTENT_WIDTH_MM = A4_LANDSCAPE_WIDTH_MM * PDF_CONTENT_WIDTH_RATIO
 const PDF_HORIZONTAL_MARGIN_MM = (A4_LANDSCAPE_WIDTH_MM - PDF_CONTENT_WIDTH_MM) / 2
 const PDF_WEEK_COLUMN_WIDTH_MM = PDF_CONTENT_WIDTH_MM / 7
+
+// Capacidade física da célula (CALENDAR_CELL_CAPACITY) e constantes do modo
+// compacto vêm da fonte ÚNICA de verdade: src/templates/calendarPdfTemplate.ts.
+
+// Re-exporta para compatibilidade retroativa
+export {
+  CALENDAR_CELL_CAPACITY,
+  CALENDAR_CARD_COMPACT_THRESHOLD,
+  CALENDAR_CARD_MIN_HEIGHT_MM,
+  CALENDAR_CARD_GAP_MM,
+} from '@/templates/calendarPdfTemplate'
 
 // Re-exporta BPSCS_LOGO_BASE64 para compatibilidade retroativa
 export { BPSCS_LOGO_BASE64 } from './bpscsLogo'
@@ -482,49 +497,15 @@ export function prepareCalendarTemplateData(params: ExportAutoGenerateCalendarPd
   }
 }
 
-function splitCalendarDayItemsForPdf(
-  items: ShiftItemData[],
-  maxVisible = 4,
-): { visibleItems: ShiftItemData[]; remainingItems: ShiftItemData[] } {
-  const categoryOf = (item: ShiftItemData): 'day' | 'night' | 'off' | 'vacation' => {
-    const absenceType = String((item as any).absenceType || '').toUpperCase()
-    if (Boolean((item as any).isVacation) || absenceType === 'FÉRIAS') return 'vacation'
-    if (Boolean(item.isWeekendOff) || absenceType === 'FOLGA') return 'off'
-    return item.periodLetter === 'N' ? 'night' : 'day'
-  }
-
-  const selectedIndexes = new Set<number>()
-  ;(['day', 'night', 'off', 'vacation'] as const).forEach((category) => {
-    const categoryIndex = items.findIndex(
-      (item, itemIndex) => !selectedIndexes.has(itemIndex) && categoryOf(item) === category,
-    )
-    if (categoryIndex >= 0 && selectedIndexes.size < maxVisible) {
-      selectedIndexes.add(categoryIndex)
-    }
-  })
-
-  for (
-    let itemIndex = 0;
-    itemIndex < items.length && selectedIndexes.size < maxVisible;
-    itemIndex += 1
-  ) {
-    selectedIndexes.add(itemIndex)
-  }
-
-  const visibleItems = items.filter((_, itemIndex) => selectedIndexes.has(itemIndex))
-  const remainingItems = items.filter((_, itemIndex) => !selectedIndexes.has(itemIndex))
-  return { visibleItems, remainingItems }
-}
-
 /**
- * Prepara páginas do documento de calendário com paginação SEMANAL (exatamente 1 semana por página)
- * e continuações dedicadas para dias com excesso de plantonistas (alta densidade).
+ * Prepara páginas do documento de calendário com paginação SEMANAL (exatamente 1 semana por página).
  *
- * Cada semana (domingo a sábado, 7 colunas iguais) ganha sua própria página A4 Paisagem,
- * com células espaçosas e fontes legíveis (mínimo 9.5pt para nomes, 8.5pt para COREN/metadados).
- * Dias com mais de 4 profissionais mantêm até 4 representantes na grade semanal,
- * priorizando a presença visual de plantão diurno, plantão noturno, folga e férias.
- * Os demais seguem para páginas de continuação, sem cortes ou duplicidades.
+ * Cada semana (domingo a sábado, 7 colunas iguais) ganha sua própria página A4 Paisagem.
+ * Cada dia forma UMA única fila ordenada e contínua (diurno escalado; folgas diurnas;
+ * férias diurnas; noturno escalado; folgas noturnas; férias noturnas), preenchida até a
+ * capacidade física da célula (CALENDAR_CELL_CAPACITY). Somente o item que excede a
+ * capacidade inicia a próxima parte ("Parte X de Y") — nunca páginas por categoria
+ * nem tabelas de continuação.
  */
 
 export function prepareCalendarMultiPageData(params: ExportAutoGenerateCalendarPdfParams): {
@@ -533,7 +514,8 @@ export function prepareCalendarMultiPageData(params: ExportAutoGenerateCalendarP
   templateData: ReturnType<typeof prepareCalendarTemplateData>
 } {
   const templateData = prepareCalendarTemplateData(params)
-  const maxChipsPerCell = 4
+  // Capacidade física derivada (15 cartões) — sem limite fixo arbitrário.
+  const maxChipsPerCell = CALENDAR_CELL_CAPACITY
   const pages: CalendarPageData[] = []
   const totalWeeks = templateData.weeks.length
 
@@ -542,7 +524,7 @@ export function prepareCalendarMultiPageData(params: ExportAutoGenerateCalendarP
     const startDateFormatted = validDays[0]?.dayFormatted || ''
     const endDateFormatted = validDays[validDays.length - 1]?.dayFormatted || ''
 
-    // Para cada semana, calcule partTotal = máximo entre os dias de ceil((shifts + weekendOffs)/4), mínimo 1.
+    // partTotal = máximo entre os dias de ceil(total da fila única / capacidade física), mínimo 1.
     let partTotal = 1
     weekDays.forEach((day) => {
       if (!day) return
@@ -784,6 +766,7 @@ function drawVectorStaffCard(
   y: number,
   width: number,
   height: number,
+  compact = false,
 ): void {
   const palette = getVectorStaffCardPalette(shift)
   const radius = 1.6
@@ -804,6 +787,39 @@ function drawVectorStaffCard(
   // Faixa lateral de identificação do plantão, preservando o contorno externo.
   doc.setFillColor(...palette.accent)
   doc.roundedRect(x + 0.45, y + 0.45, 1.45, height - 0.9, 0.7, 0.7, 'F')
+
+  if (compact) {
+    // Modo compacto: nome em UMA linha e detalhes em UMA linha.
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(5.7)
+    const badgeWidth = Math.max(5.8, doc.getTextWidth(statusLabel) + 2)
+    const badgeX = x + width - badgeWidth - 1.2
+    const badgeHeight = Math.min(4.2, height - 1.4)
+    const badgeY = y + 1.2
+    doc.setFillColor(...palette.badge)
+    doc.roundedRect(badgeX, badgeY, badgeWidth, badgeHeight, 1, 1, 'F')
+    doc.setTextColor(255, 255, 255)
+    doc.text(statusLabel, badgeX + badgeWidth / 2, badgeY + badgeHeight / 2 + 0.6, {
+      align: 'center',
+    })
+
+    const textX = x + paddingX
+    const textWidth = Math.max(10, badgeX - textX - 1)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(5.9)
+    doc.setTextColor(15, 23, 42)
+    const nameOneLine = doc.splitTextToSize(shift.name || 'Sem nome', textWidth)[0] || ''
+    doc.text(nameOneLine, textX, y + Math.min(4.4, height * 0.5))
+
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(4.9)
+    doc.setTextColor(71, 85, 105)
+    const detailsOneLine = [shift.corenText, shift.timeRange].filter(Boolean).join('  •  ')
+    if (detailsOneLine) {
+      doc.text(detailsOneLine, textX, y + height - 1.5)
+    }
+    return
+  }
 
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(5.7)
@@ -962,15 +978,20 @@ function renderCalendarPagesAsVector(
 
           const cardX = cell.x + 1.45
           const cardWidth = cell.width - 2.9
-          const cardGap = 2
-          const cardsTop = cell.y + 8.3
-          const availableHeight = cell.height - 10.5
-          const originalCardHeight = Math.min(
-            32,
-            Math.max(18, (availableHeight - cardGap * (items.length - 1)) / items.length),
-          )
-          // Mantém a mesma largura e reduz somente a moldura vertical em 50%.
-          const cardHeight = originalCardHeight * 0.5
+          const cardsTop = cell.y + CALENDAR_CARDS_TOP_OFFSET_MM
+          const availableHeight =
+            cell.height - CALENDAR_CARDS_TOP_OFFSET_MM - CALENDAR_CARDS_BOTTOM_PADDING_MM
+          const compact = items.length > CALENDAR_CARD_COMPACT_THRESHOLD
+
+          // Modo compacto (> 10 cartões): gap ~0,7 mm e altura mínima ~9,4 mm,
+          // preenchendo a célula até a capacidade física — até 15 cartões cabem
+          // sem sobreposição, corte ou sair da célula.
+          const cardGap = compact ? CALENDAR_CARD_GAP_MM : 2
+          const naturalCardHeight = (availableHeight - cardGap * (items.length - 1)) / items.length
+          const cardHeight = compact
+            ? Math.max(CALENDAR_CARD_MIN_HEIGHT_MM, Math.min(naturalCardHeight, 32))
+            : // Modo normal mantém a mesma largura e reduz somente a moldura vertical em 50%.
+              Math.min(32, Math.max(18, naturalCardHeight)) * 0.5
 
           items.forEach((shift, itemIndex) => {
             drawVectorStaffCard(
@@ -980,6 +1001,7 @@ function renderCalendarPagesAsVector(
               cardsTop + itemIndex * (cardHeight + cardGap),
               cardWidth,
               cardHeight,
+              compact,
             )
           })
         },
